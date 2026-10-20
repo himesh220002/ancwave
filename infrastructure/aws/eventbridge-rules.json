@@ -1,0 +1,42 @@
+{
+  "EventBusName": "ancwave-event-bus",
+  "Rules": [
+    {
+      "Name": "ancwave-order-placed-rule",
+      "Description": "Triggers Lambda order processor and Next.js ISR on-demand revalidation when an order is completed",
+      "EventPattern": {
+        "source": ["aws.eventbridge.ancwave"],
+        "detail-type": ["OrderPlaced"]
+      },
+      "State": "ENABLED",
+      "Targets": [
+        {
+          "Id": "target-lambda-order-processor",
+          "Arn": "arn:aws:lambda:us-east-1:123456789012:function:ancwave-order-processor"
+        },
+        {
+          "Id": "target-api-revalidate-webhook",
+          "Arn": "arn:aws:events:us-east-1:123456789012:api-destination/ancwave-revalidate-webhook"
+        }
+      ]
+    },
+    {
+      "Name": "ancwave-stock-low-alert-rule",
+      "Description": "Notifies inventory logistics when stock falls to or below threshold",
+      "EventPattern": {
+        "source": ["aws.eventbridge.ancwave"],
+        "detail-type": ["StockUpdated"],
+        "detail": {
+          "newStock": [{ "numeric": ["<=", 5] }]
+        }
+      },
+      "State": "ENABLED",
+      "Targets": [
+        {
+          "Id": "target-sns-stock-alert",
+          "Arn": "arn:aws:sns:us-east-1:123456789012:ancwave-inventory-alerts"
+        }
+      ]
+    }
+  ]
+}

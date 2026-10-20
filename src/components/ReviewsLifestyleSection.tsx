@@ -1,0 +1,235 @@
+"use client";
+
+import React, { useState } from "react";
+import Image from "next/image";
+import { Star, ArrowLeft, ArrowRight, Play, Check, X } from "lucide-react";
+import { sampleReviews } from "@/lib/store";
+
+export function ReviewsLifestyleSection() {
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+
+  const lifestyleCards = [
+    {
+      id: "life-1",
+      title: "A slower start.",
+      handle: "@maya.studio",
+      tag: "PHOTO",
+      image: "/images/lifestyle-cafe.jpg",
+      hasVideo: false,
+    },
+    {
+      id: "life-2",
+      title: "Room to focus.",
+      handle: "@theo.frames",
+      tag: "VIDEO · 0:18",
+      image: "/images/lifestyle-workspace.jpg",
+      hasVideo: true,
+    },
+    {
+      id: "life-3",
+      title: "Take the long way.",
+      handle: "@nina.in.motion",
+      tag: "PHOTO",
+      image: "/images/lifestyle-city.jpg",
+      hasVideo: false,
+    },
+  ];
+
+  const handleNext = () => {
+    setActiveSlide((prev) => (prev + 1) % lifestyleCards.length);
+  };
+
+  const handlePrev = () => {
+    setActiveSlide((prev) => (prev - 1 + lifestyleCards.length) % lifestyleCards.length);
+  };
+
+  return (
+    <section id="reviews" className="py-20 md:py-24 bg-white border-t border-[#EAEAE5]">
+      <div className="max-w-7xl mx-auto px-6 sm:px-10 space-y-20">
+        {/* Section Header */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+            <span className="text-[11px] font-mono tracking-[0.16em] text-zinc-500 uppercase">
+              03 / LISTENING, LIVED IN
+            </span>
+          </div>
+
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <h2 className="text-5xl sm:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.05]">
+              A place in your everyday.
+            </h2>
+            <p className="text-xs text-zinc-400 max-w-xs md:text-right font-normal leading-relaxed">
+              Illustrative reviews and community scenes created for this concept. Not real customer evidence.
+            </p>
+          </div>
+        </div>
+
+        {/* 3 Review Cards matching Figma Screenshot 4 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {sampleReviews.map((rev) => (
+            <div
+              key={rev.id}
+              className="p-8 rounded-2xl bg-white border border-[#EAEAE5] flex flex-col justify-between space-y-6"
+            >
+              <div className="space-y-4">
+                {/* 5 Blue Stars & Sample review badge */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1 text-blue-600">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-3.5 h-3.5 fill-blue-600 text-blue-600" />
+                    ))}
+                  </div>
+                  <span className="text-[11px] text-zinc-400 font-sans flex items-center gap-1">
+                    <Check className="w-3 h-3 text-zinc-400" />
+                    Sample review
+                  </span>
+                </div>
+
+                {/* Quote Text */}
+                <p className="text-sm sm:text-[15px] text-[#222222] font-normal leading-relaxed">
+                  {rev.comment}
+                </p>
+              </div>
+
+              {/* Author & Avatar */}
+              <div className="flex items-center gap-3 pt-2">
+                <div className="w-8 h-8 rounded-full bg-[#EAEAE5] text-zinc-700 flex items-center justify-center text-[11px] font-medium font-sans">
+                  {rev.initials}
+                </div>
+                <div>
+                  <h4 className="font-semibold text-xs text-[#111111]">
+                    {rev.author}
+                  </h4>
+                  <p className="text-[11px] text-zinc-500">{rev.role}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Lifestyle Gallery matching Figma Screenshot 4 */}
+        <div className="space-y-8 pt-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111111]">
+              Different days. Same good feeling.
+            </h3>
+
+            {/* Slider Controls (01 / 03 with arrow buttons) */}
+            <div className="flex items-center gap-4">
+              <span className="text-xs font-mono text-zinc-400">
+                0{activeSlide + 1} / 03
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrev}
+                  className="w-8 h-8 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-100 transition-colors"
+                  aria-label="Previous scene"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={handleNext}
+                  className="w-8 h-8 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-100 transition-colors"
+                  aria-label="Next scene"
+                >
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 3 Lifestyle Visual Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {lifestyleCards.map((card, idx) => (
+              <div
+                key={card.id}
+                className={`space-y-3 cursor-pointer transition-opacity ${
+                  activeSlide === idx ? "opacity-100" : "opacity-90 hover:opacity-100"
+                }`}
+                onClick={() => setActiveSlide(idx)}
+              >
+                <div className="relative aspect-4/3 rounded-2xl overflow-hidden bg-[#ECECE7]">
+                  <Image
+                    src={card.image}
+                    alt={card.title}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                  />
+
+                  {/* Top Badge (PHOTO / VIDEO) */}
+                  <div className="absolute top-3 left-3">
+                    <span className="px-2 py-0.5 rounded bg-white/90 text-[10px] font-mono font-medium text-zinc-800">
+                      {card.tag}
+                    </span>
+                  </div>
+
+                  {/* Play Button for Video Card */}
+                  {card.hasVideo && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsVideoModalOpen(true);
+                      }}
+                      className="absolute inset-0 m-auto w-11 h-11 rounded-full bg-white/90 flex items-center justify-center text-zinc-900 shadow-md hover:scale-105 transition-transform"
+                      aria-label="Play video"
+                    >
+                      <Play className="w-4 h-4 fill-zinc-900 ml-0.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Subtitle & Social Handle */}
+                <div className="flex items-center justify-between text-xs px-1">
+                  <span className="font-medium text-[#111111]">{card.title}</span>
+                  <span className="font-mono text-[11px] text-zinc-400">
+                    {card.handle}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Video Modal */}
+      {isVideoModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="relative max-w-xl w-full bg-zinc-900 text-white rounded-2xl overflow-hidden border border-zinc-800 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold">Room to focus — Soundstage Film</h3>
+                <p className="text-xs text-zinc-400">Adaptive ANC cancelling background distraction.</p>
+              </div>
+              <button
+                onClick={() => setIsVideoModalOpen(false)}
+                className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-950 flex items-center justify-center">
+              <Image
+                src="/images/lifestyle-workspace.jpg"
+                alt="Workspace focus preview"
+                fill
+                className="object-cover opacity-60"
+              />
+              <div className="relative z-10 text-center space-y-2 px-6">
+                <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center mx-auto text-white shadow-lg">
+                  <Play className="w-5 h-5 fill-white ml-0.5" />
+                </div>
+                <p className="text-xs font-medium text-zinc-200">
+                  40mm Custom Drivers · Active Silence
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
