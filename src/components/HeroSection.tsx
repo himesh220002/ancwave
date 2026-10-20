@@ -70,7 +70,7 @@ export function HeroSection({
             )} */}
 
             {/* Headline matching Figma */}
-            <h1 className="text-6xl sm:text-7xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.05]">
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.08] sm:leading-[1.05]">
               Less noise. <br />
               More you.
             </h1>
@@ -137,7 +137,7 @@ export function HeroSection({
               </div>
 
               {/* Bottom: Pill Switcher & Dash Indicators */}
-              <div className="flex items-center justify-between px-6 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2">
                 {/* Variant Switcher Pill matching Figma: ⚪ Silver mist / 01 */}
                 <div className="flex items-center gap-2">
                   {product.variants.map((v) => (

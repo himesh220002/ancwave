@@ -57,7 +57,7 @@ export function ReviewsLifestyleSection() {
           </div>
 
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <h2 className="text-5xl sm:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.05]">
+            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.08] sm:leading-[1.05]">
               A place in your everyday.
             </h2>
             <p className="text-xs text-zinc-400 max-w-xs md:text-right font-normal leading-relaxed">

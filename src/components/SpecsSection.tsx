@@ -63,7 +63,7 @@ export function SpecsSection({ product }: SpecsSectionProps) {
                 02 / UNDER THE SURFACE
               </span>
             </div>
-            <h2 className="text-5xl sm:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.05]">
+            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.08] sm:leading-[1.05]">
               Good form. <br />
               Better engineering.
             </h2>

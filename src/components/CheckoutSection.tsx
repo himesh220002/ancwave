@@ -65,8 +65,8 @@ export function CheckoutSection({
             </span>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
-            <h2 className="text-5xl sm:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.05]">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
+            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.08] sm:leading-[1.05]">
               Your next favorite thing.
             </h2>
             <span className="text-[10px] font-mono tracking-[0.18em] text-zinc-400 uppercase sm:text-right">
