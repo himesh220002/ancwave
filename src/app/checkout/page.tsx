@@ -308,31 +308,31 @@ export default function CheckoutPage() {
             </div>
 
             <div className="space-y-2">
-              <span className="text-[11px] font-mono tracking-widest text-emerald-600 uppercase font-semibold">
+              <span className="text-[10px] sm:text-[11px] font-mono tracking-widest text-emerald-600 uppercase font-semibold">
                 PAYMENT AUTHORIZED & VERIFIED
               </span>
-              <h1 className="text-3xl sm:text-4xl font-bold text-zinc-900">
+              <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 break-words">
                 Thank you, {confirmedOrder.customer.fullName.split(" ")[0]}!
               </h1>
-              <p className="text-xs text-zinc-500 font-mono">
+              <p className="text-xs text-zinc-500 font-mono break-all">
                 ORDER NUMBER: {confirmedOrder.orderNumber}
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 text-xs text-zinc-600 space-y-2 text-left">
-              <div className="flex justify-between items-center">
+            <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50 border border-zinc-200/80 text-xs text-zinc-600 space-y-2.5 text-left">
+              <div className="flex flex-col xs:flex-row xs:justify-between xs:items-center gap-1">
                 <span className="text-zinc-500">Razorpay Payment ID:</span>
-                <span className="font-mono font-semibold text-blue-600">
+                <span className="font-mono font-semibold text-blue-600 break-all">
                   {confirmedOrder.razorpayPaymentId}
                 </span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col xs:flex-row xs:justify-between xs:items-center gap-1">
                 <span className="text-zinc-500">Receipt delivered to:</span>
-                <span className="font-medium text-zinc-900">{confirmedOrder.customer.email}</span>
+                <span className="font-medium text-zinc-900 break-words">{confirmedOrder.customer.email}</span>
               </div>
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-1.5 border-t border-zinc-200/60 gap-1">
-                <span className="text-zinc-500">Shipping destination:</span>
-                <span className="text-zinc-900 sm:text-right">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start pt-2 border-t border-zinc-200/60 gap-1">
+                <span className="text-zinc-500 shrink-0">Shipping destination:</span>
+                <span className="text-zinc-900 sm:text-right break-words">
                   {confirmedOrder.customer.address}, {confirmedOrder.customer.city},{" "}
                   {confirmedOrder.customer.state} {confirmedOrder.customer.zipCode},{" "}
                   {confirmedOrder.customer.country || "United States"}
@@ -359,12 +359,12 @@ export default function CheckoutPage() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
             {/* Left Column (7 cols): Shipping Details & Direct Razorpay Action */}
-            <div className="lg:col-span-7 space-y-6">
+            <div className="lg:col-span-7 space-y-5 sm:space-y-6">
               <div className="space-y-1">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#111111]">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-[#111111] break-words">
                   Shipping & Payment
                 </h1>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-zinc-500 break-words">
                   Enter your delivery address to proceed with Razorpay checkout.
                 </p>
               </div>
@@ -431,7 +431,7 @@ export default function CheckoutPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-0.5">
                       <label className="text-xs font-medium text-zinc-700">
                         Phone / Contact number <span className="text-red-500">*</span>
                       </label>
@@ -537,9 +537,9 @@ export default function CheckoutPage() {
                           : "bg-white/80 border-zinc-200 hover:border-zinc-300"
                       }`}
                     >
-                      <div className="flex justify-between items-center text-xs font-bold text-zinc-900">
+                      <div className="flex flex-col xs:flex-row xs:items-center justify-between text-xs font-bold text-zinc-900 gap-1">
                         <span>Standard Tracked Courier</span>
-                        <span>$12.00</span>
+                        <span className="text-blue-600">{isIndia ? "₹996" : "$12.00"}</span>
                       </div>
                       <p className="text-[11px] text-zinc-500 mt-0.5">
                         3–5 business days insured delivery.
@@ -555,9 +555,9 @@ export default function CheckoutPage() {
                           : "bg-white/80 border-zinc-200 hover:border-zinc-300"
                       }`}
                     >
-                      <div className="flex justify-between items-center text-xs font-bold text-zinc-900">
+                      <div className="flex flex-col xs:flex-row xs:items-center justify-between text-xs font-bold text-zinc-900 gap-1">
                         <span>Priority Express Dispatch</span>
-                        <span>$24.00</span>
+                        <span className="text-blue-600">{isIndia ? "₹1,992" : "$24.00"}</span>
                       </div>
                       <p className="text-[11px] text-zinc-500 mt-0.5">
                         1–2 business days expedited air dispatch.
@@ -604,9 +604,9 @@ export default function CheckoutPage() {
                   {items.map((item) => (
                     <div
                       key={`${item.productId}-${item.variant}`}
-                      className="flex gap-4 pb-4 border-b border-zinc-100 last:border-b-0"
+                      className="flex gap-3 sm:gap-4 pb-4 border-b border-zinc-100 last:border-b-0"
                     >
-                      <div className="relative w-16 h-16 rounded-xl bg-[#F0EFEA] p-1 shrink-0 overflow-hidden border border-zinc-100">
+                      <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-[#F0EFEA] p-1 shrink-0 overflow-hidden border border-zinc-100">
                         <Image
                           src={item.image}
                           alt={item.name}
@@ -614,19 +614,19 @@ export default function CheckoutPage() {
                           className="object-contain"
                         />
                       </div>
-                      <div className="flex-1 flex flex-col justify-between">
+                      <div className="flex-1 min-w-0 flex flex-col justify-between">
                         <div>
-                          <div className="flex justify-between items-start">
-                            <h4 className="font-bold text-xs text-zinc-900">
+                          <div className="flex justify-between items-start gap-2">
+                            <h4 className="font-bold text-xs text-zinc-900 truncate">
                               {item.name}
                             </h4>
-                            <span className="font-semibold text-xs text-zinc-900">
+                            <span className="font-semibold text-xs text-zinc-900 shrink-0">
                               {isIndia
                                 ? `₹${Math.round(item.price * item.quantity * 83).toLocaleString("en-IN")}`
                                 : `$${(item.price * item.quantity).toFixed(2)}`}
                             </span>
                           </div>
-                          <p className="text-[11px] text-zinc-500 mt-0.5">
+                          <p className="text-[11px] text-zinc-500 mt-0.5 truncate">
                             {item.variantName} · {item.fit}
                           </p>
                         </div>
@@ -709,23 +709,23 @@ export default function CheckoutPage() {
 
       {/* Razorpay Standard Popup Modal */}
       {isRazorpayModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
-          <div className="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-zinc-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-zinc-200 my-auto">
             {/* Razorpay Brand Header */}
-            <div className="bg-[#0C2340] text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-base tracking-tighter">
+            <div className="bg-[#0C2340] text-white p-4 sm:p-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-sm sm:text-base tracking-tighter shrink-0">
                   ||
                 </div>
-                <div>
-                  <h4 className="font-bold text-sm tracking-tight">ancwave Acoustics</h4>
-                  <p className="text-xs text-blue-200">
+                <div className="min-w-0">
+                  <h4 className="font-bold text-xs sm:text-sm tracking-tight truncate">ancwave Acoustics</h4>
+                  <p className="text-[11px] sm:text-xs text-blue-200 truncate">
                     Order: Form 01 / Wireless Over-Ear
                   </p>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-lg font-bold">
+              <div className="text-right shrink-0">
+                <div className="text-base sm:text-lg font-bold">
                   {formattedTotal}
                 </div>
                 <button
@@ -814,7 +814,7 @@ export default function CheckoutPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-4 gap-2 text-xs">
+                      <div className="grid grid-cols-2 xs:grid-cols-4 gap-2 text-xs">
                         {["Google Pay", "PhonePe", "Paytm", "CRED"].map((app) => (
                           <button
                             key={app}
@@ -826,19 +826,19 @@ export default function CheckoutPage() {
                                 description: "UPI intent initiated",
                               });
                             }}
-                            className="p-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-center font-medium text-[11px] text-zinc-700 hover:border-blue-500 transition-all shadow-2xs"
+                            className="p-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-center font-medium text-[11px] text-zinc-700 hover:border-blue-500 transition-all shadow-2xs truncate"
                           >
                             {app}
                           </button>
                         ))}
                       </div>
 
-                      <div className="flex gap-2 pt-1">
+                      <div className="flex flex-col xs:flex-row gap-2 pt-1">
                         <input
                           type="text"
                           value={upiIdInput}
                           onChange={(e) => setUpiIdInput(e.target.value)}
-                          className="flex-1 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-mono text-zinc-800 focus:outline-none focus:border-blue-600"
+                          className="flex-1 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-mono text-zinc-800 focus:outline-none focus:border-blue-600 min-w-0"
                           placeholder="username@okhdfcbank"
                         />
                         <button
@@ -850,7 +850,7 @@ export default function CheckoutPage() {
                               description: `${upiIdInput} is active`,
                             })
                           }
-                          className="px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium"
+                          className="px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium shrink-0"
                         >
                           Verify
                         </button>
@@ -892,13 +892,13 @@ export default function CheckoutPage() {
                   {/* NetBanking */}
                   {activeIndiaTab === "netbanking" && (
                     <div className="space-y-3 pt-1">
-                      <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="grid grid-cols-2 xs:grid-cols-3 gap-2 text-xs">
                         {["HDFC Bank", "ICICI Bank", "SBI", "Axis Bank", "Kotak", "PNB"].map((bank) => (
                           <button
                             key={bank}
                             type="button"
                             onClick={() => setSelectedBank(bank)}
-                            className={`p-2 rounded-lg border text-xs font-medium transition-all ${
+                            className={`p-2 rounded-lg border text-xs font-medium transition-all truncate ${
                               selectedBank === bank
                                 ? "border-blue-600 bg-blue-50/60 text-blue-700 font-semibold shadow-2xs"
                                 : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"

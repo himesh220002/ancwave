@@ -37,9 +37,9 @@ export function FeaturesSection() {
 
   return (
     <section id="features" className="py-20 md:py-24 bg-white border-t border-[#EAEAE5]">
-      <div className="max-w-7xl mx-auto px-6 sm:px-10 space-y-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-12 sm:space-y-16">
         {/* Section Header */}
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
             <span className="text-[11px] font-mono tracking-[0.16em] text-zinc-500 uppercase">
@@ -47,12 +47,12 @@ export function FeaturesSection() {
             </span>
           </div>
 
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.08] sm:leading-[1.05]">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6">
+            <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#111111] leading-tight break-words">
               Nothing extra. <br />
               Everything considered.
             </h2>
-            <p className="text-sm sm:text-base text-[#555555] max-w-sm font-normal leading-relaxed md:text-right">
+            <p className="text-xs sm:text-sm md:text-base text-[#555555] max-w-sm font-normal leading-relaxed md:text-right break-words">
               Precision where it matters. Softness where it counts. Built around the way you listen.
             </p>
           </div>
@@ -134,14 +134,14 @@ export function FeaturesSection() {
         </div>
 
         {/* Acoustic Soundwave Banner matching Figma Screenshot 2 */}
-        <div className="rounded-2xl bg-[#22252A] text-white p-6 sm:p-8 overflow-hidden shadow-xs">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        <div className="rounded-2xl bg-[#22252A] text-white p-5 sm:p-8 overflow-hidden shadow-xs">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-center">
             {/* Left title & Tag */}
             <div className="lg:col-span-4 space-y-1">
               <span className="text-[10px] font-mono tracking-[0.18em] text-zinc-400 uppercase block">
                 40 MM / CUSTOM DYNAMIC DRIVER
               </span>
-              <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+              <h3 className="text-lg sm:text-2xl font-bold tracking-tight text-white break-words">
                 Closer to the original.
               </h3>
             </div>
@@ -154,7 +154,7 @@ export function FeaturesSection() {
             >
               <svg
                 viewBox="0 0 200 40"
-                className="w-full max-w-[220px] h-10 text-white stroke-current fill-none stroke-[1.2]"
+                className="w-full max-w-[200px] h-10 text-white stroke-current fill-none stroke-[1.2]"
               >
                 <path d="M 0 20 L 40 20 Q 45 20 48 10 Q 52 35 56 5 Q 60 38 64 8 Q 68 32 72 12 Q 76 28 80 16 Q 84 24 88 20 L 200 20" />
               </svg>
@@ -162,7 +162,7 @@ export function FeaturesSection() {
 
             {/* Right: Description */}
             <div className="lg:col-span-4">
-              <p className="text-xs sm:text-[13px] text-zinc-300 leading-relaxed font-normal">
+              <p className="text-xs sm:text-[13px] text-zinc-300 leading-relaxed font-normal break-words">
                 Deep, controlled lows. Open, natural vocals. A finely balanced soundstage that gives every track room to breathe.
               </p>
             </div>

@@ -40,7 +40,7 @@ export function Navbar({}: NavbarProps = {}) {
               ancwave
             </span>
           </Link>
-          <span className="text-[11px] sm:text-xs font-mono font-medium text-zinc-400 tracking-wider">
+          <span className="text-[11px] sm:text-xs font-mono font-medium text-zinc-400 tracking-wider hidden xs:inline truncate">
             / FORM 01
           </span>
         </div>

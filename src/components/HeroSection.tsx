@@ -70,19 +70,19 @@ export function HeroSection({
             )} */}
 
             {/* Headline matching Figma */}
-            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.08] sm:leading-[1.05]">
+            <h1 className="text-3xl sm:text-5xl lg:text-7xl font-bold tracking-tight text-[#111111] leading-[1.1] sm:leading-[1.05] break-words">
               Less noise. <br />
               More you.
             </h1>
 
             {/* Subtitle matching Figma */}
-            <p className="text-base sm:text-[17px] text-[#555555] max-w-lg font-normal leading-relaxed">
+            <p className="text-sm sm:text-base text-[#555555] max-w-lg font-normal leading-relaxed break-words">
               {product.description}
             </p>
 
             {/* Action Row matching Figma: [Get Yours Now ↗]  $349 */}
             <div className="space-y-4 pt-1">
-              <div className="flex items-center gap-6">
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
                 <button
                   onClick={handleAddToCart}
                   className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-medium text-sm transition-all shadow-xs"
@@ -97,15 +97,15 @@ export function HeroSection({
               </div>
 
               {/* Trust Badges matching Figma: ✓ 30-day returns  ✓ 2-year warranty */}
-              <div className="flex items-center gap-6 text-xs text-zinc-500 pt-2">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs text-zinc-500 pt-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-full border border-zinc-400 flex items-center justify-center">
+                  <span className="w-3.5 h-3.5 rounded-full border border-zinc-400 flex items-center justify-center shrink-0">
                     <Check className="w-2.5 h-2.5 text-zinc-600 stroke-[2.5]" />
                   </span>
                   <span>{product.returnDays}-day returns</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-full border border-zinc-400 flex items-center justify-center">
+                  <span className="w-3.5 h-3.5 rounded-full border border-zinc-400 flex items-center justify-center shrink-0">
                     <Check className="w-2.5 h-2.5 text-zinc-600 stroke-[2.5]" />
                   </span>
                   <span>{product.warrantyYears}-year warranty</span>
@@ -176,45 +176,45 @@ export function HeroSection({
         </div>
 
         {/* Metrics Bar matching Figma Screenshot 1 */}
-        <div className="mt-20 pt-10 border-t border-[#EAEAE5] grid grid-cols-2 md:grid-cols-5 gap-6 items-start">
+        <div className="mt-12 sm:mt-20 pt-8 sm:pt-10 border-t border-[#EAEAE5] grid grid-cols-2 md:grid-cols-5 gap-4 sm:gap-6 items-start">
           {/* Label: TUNED FOR FEELING. BUILT FOR EVERY DAY. */}
           <div className="col-span-2 md:col-span-1">
             <span className="text-[10px] font-mono tracking-[0.18em] text-zinc-400 uppercase leading-relaxed block">
-              TUNED FOR FEELING. <br />
+              TUNED FOR FEELING. <br className="hidden sm:inline" />
               BUILT FOR EVERY DAY.
             </span>
           </div>
 
           {/* Metric 1 */}
-          <div className="space-y-0.5">
-            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[#111111]">
+          <div className="space-y-0.5 min-w-0">
+            <div className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-[#111111] break-words">
               40 h
             </div>
-            <div className="text-xs text-zinc-500">Playtime, ANC on</div>
+            <div className="text-[11px] sm:text-xs text-zinc-500 break-words">Playtime, ANC on</div>
           </div>
 
           {/* Metric 2 */}
-          <div className="space-y-0.5">
-            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[#111111]">
+          <div className="space-y-0.5 min-w-0">
+            <div className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-[#111111] break-words">
               40 mm
             </div>
-            <div className="text-xs text-zinc-500">Precision dynamic drivers</div>
+            <div className="text-[11px] sm:text-xs text-zinc-500 break-words">Precision dynamic drivers</div>
           </div>
 
           {/* Metric 3 */}
-          <div className="space-y-0.5">
-            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[#111111]">
+          <div className="space-y-0.5 min-w-0">
+            <div className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-[#111111] break-words">
               256 g
             </div>
-            <div className="text-xs text-zinc-500">Light on your mind</div>
+            <div className="text-[11px] sm:text-xs text-zinc-500 break-words">Light on your mind</div>
           </div>
 
           {/* Metric 4 */}
-          <div className="space-y-0.5">
-            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-[#111111]">
-              Bluetooth 5.3
+          <div className="space-y-0.5 min-w-0">
+            <div className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-[#111111] break-words">
+              BT 5.3
             </div>
-            <div className="text-xs text-zinc-500">Two devices. One flow.</div>
+            <div className="text-[11px] sm:text-xs text-zinc-500 break-words">Two devices. One flow.</div>
           </div>
         </div>
       </div>

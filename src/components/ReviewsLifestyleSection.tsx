@@ -48,7 +48,7 @@ export function ReviewsLifestyleSection() {
     <section id="reviews" className="py-20 md:py-24 bg-white border-t border-[#EAEAE5]">
       <div className="max-w-7xl mx-auto px-6 sm:px-10 space-y-20">
         {/* Section Header */}
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
             <span className="text-[11px] font-mono tracking-[0.16em] text-zinc-500 uppercase">
@@ -56,24 +56,24 @@ export function ReviewsLifestyleSection() {
             </span>
           </div>
 
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.08] sm:leading-[1.05]">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6">
+            <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#111111] leading-tight break-words">
               A place in your everyday.
             </h2>
-            <p className="text-xs text-zinc-400 max-w-xs md:text-right font-normal leading-relaxed">
+            <p className="text-xs text-zinc-400 max-w-xs md:text-right font-normal leading-relaxed break-words">
               Illustrative reviews and community scenes created for this concept. Not real customer evidence.
             </p>
           </div>
         </div>
 
         {/* 3 Review Cards matching Figma Screenshot 4 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
           {sampleReviews.map((rev) => (
             <div
               key={rev.id}
-              className="p-8 rounded-2xl bg-white border border-[#EAEAE5] flex flex-col justify-between space-y-6"
+              className="p-5 sm:p-8 rounded-2xl bg-white border border-[#EAEAE5] flex flex-col justify-between space-y-5 sm:space-y-6"
             >
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {/* 5 Blue Stars & Sample review badge */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1 text-blue-600">
@@ -88,21 +88,21 @@ export function ReviewsLifestyleSection() {
                 </div>
 
                 {/* Quote Text */}
-                <p className="text-sm sm:text-[15px] text-[#222222] font-normal leading-relaxed">
+                <p className="text-sm sm:text-[15px] text-[#222222] font-normal leading-relaxed break-words">
                   {rev.comment}
                 </p>
               </div>
 
               {/* Author & Avatar */}
               <div className="flex items-center gap-3 pt-2">
-                <div className="w-8 h-8 rounded-full bg-[#EAEAE5] text-zinc-700 flex items-center justify-center text-[11px] font-medium font-sans">
+                <div className="w-8 h-8 rounded-full bg-[#EAEAE5] text-zinc-700 flex items-center justify-center text-[11px] font-medium font-sans shrink-0">
                   {rev.initials}
                 </div>
-                <div>
-                  <h4 className="font-semibold text-xs text-[#111111]">
+                <div className="min-w-0">
+                  <h4 className="font-semibold text-xs text-[#111111] truncate">
                     {rev.author}
                   </h4>
-                  <p className="text-[11px] text-zinc-500">{rev.role}</p>
+                  <p className="text-[11px] text-zinc-500 truncate">{rev.role}</p>
                 </div>
               </div>
             </div>
@@ -110,14 +110,14 @@ export function ReviewsLifestyleSection() {
         </div>
 
         {/* Lifestyle Gallery matching Figma Screenshot 4 */}
-        <div className="space-y-8 pt-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111111]">
+        <div className="space-y-6 sm:space-y-8 pt-2 sm:pt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <h3 className="text-lg sm:text-2xl font-bold tracking-tight text-[#111111] break-words">
               Different days. Same good feeling.
             </h3>
 
             {/* Slider Controls (01 / 03 with arrow buttons) */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 self-end sm:self-auto">
               <span className="text-xs font-mono text-zinc-400">
                 0{activeSlide + 1} / 03
               </span>

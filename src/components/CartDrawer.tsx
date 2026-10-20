@@ -46,10 +46,10 @@ export function CartDrawer() {
         className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in"
       />
 
-      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-250">
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
+        <div className="w-screen max-w-full sm:max-w-md bg-white shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-250">
           {/* Header matching Screenshot 6 */}
-          <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
+          <div className="p-4 sm:p-6 border-b border-zinc-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold tracking-tight text-[#111111]">
                 Your bag
@@ -70,7 +70,7 @@ export function CartDrawer() {
           </div>
 
           {/* Scrollable Item Body matching Screenshot 6 */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
             {/* Flash Alert Banner matching Screenshot 6 */}
             {recentAddedFlash && (
               <div className="p-3 rounded-xl bg-blue-50/90 border border-blue-100 flex items-center justify-between text-blue-700 text-xs font-medium animate-in fade-in">
@@ -115,22 +115,22 @@ export function CartDrawer() {
                   </div>
 
                   {/* Details */}
-                  <div className="flex-1 flex flex-col justify-between">
+                  <div className="flex-1 min-w-0 flex flex-col justify-between">
                     <div>
-                      <div className="flex justify-between items-start">
-                        <h3 className="font-bold text-[#111111] text-sm">
+                      <div className="flex justify-between items-start gap-2">
+                        <h3 className="font-bold text-[#111111] text-xs sm:text-sm truncate">
                           {item.name}
                         </h3>
-                        <span className="font-semibold text-[#111111] text-xs">
+                        <span className="font-semibold text-[#111111] text-xs shrink-0">
                           ${(item.price * item.quantity).toFixed(2)}
                         </span>
                       </div>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                      <p className="text-[11px] text-zinc-500 mt-0.5 truncate">
                         Wireless over-ear headphones
                       </p>
-                      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-600">
-                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
-                        <span>{item.variantName} · {item.fit}</span>
+                      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-600 min-w-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0"></span>
+                        <span className="truncate">{item.variantName} · {item.fit}</span>
                       </div>
                     </div>
 
@@ -202,7 +202,7 @@ export function CartDrawer() {
 
           {/* Checkout Footer matching Screenshot 6 */}
           {items.length > 0 && (
-            <div className="p-6 border-t border-zinc-100 bg-[#FAFAFA] space-y-4">
+            <div className="p-4 sm:p-6 border-t border-zinc-100 bg-[#FAFAFA] space-y-3 sm:space-y-4">
               <div className="space-y-1 text-xs text-zinc-600">
                 <div className="flex justify-between">
                   <span>Subtotal</span>

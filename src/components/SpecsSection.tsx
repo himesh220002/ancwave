@@ -53,17 +53,17 @@ export function SpecsSection({ product }: SpecsSectionProps) {
 
   return (
     <section id="specs" className="py-20 md:py-24 bg-white border-t border-[#EAEAE5]">
-      <div className="max-w-7xl mx-auto px-6 sm:px-10 space-y-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-8 sm:space-y-12">
         {/* Section Header with Metric/Imperial Toggle */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
-          <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
+          <div className="space-y-3 sm:space-y-4">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
               <span className="text-[11px] font-mono tracking-[0.16em] text-zinc-500 uppercase">
                 02 / UNDER THE SURFACE
               </span>
             </div>
-            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.08] sm:leading-[1.05]">
+            <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#111111] leading-tight break-words">
               Good form. <br />
               Better engineering.
             </h2>
@@ -119,7 +119,7 @@ export function SpecsSection({ product }: SpecsSectionProps) {
             </div>
 
             {/* Labels below */}
-            <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500 px-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-zinc-500 px-1">
               <div><span className="text-zinc-400">01</span> Aluminum shell</div>
               <div><span className="text-zinc-400">02</span> Dynamic driver</div>
               <div><span className="text-zinc-400">03</span> Memory foam</div>
@@ -132,10 +132,10 @@ export function SpecsSection({ product }: SpecsSectionProps) {
               {specRows.map((row, idx) => (
                 <div
                   key={idx}
-                  className="py-3.5 flex items-center justify-between text-xs sm:text-[13px] gap-4"
+                  className="py-3 flex flex-col xs:flex-row xs:items-center justify-between text-xs sm:text-[13px] gap-1 xs:gap-4"
                 >
-                  <span className="text-zinc-500 font-normal">{row.label}</span>
-                  <span className="font-medium text-[#111111] text-right">
+                  <span className="text-zinc-500 font-normal shrink-0">{row.label}</span>
+                  <span className="font-medium text-[#111111] xs:text-right break-words">
                     {row.value}
                   </span>
                 </div>

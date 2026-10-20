@@ -54,10 +54,10 @@ export function CheckoutSection({
   };
 
   return (
-    <section id="checkout" className="py-20 md:py-24 bg-white border-t border-[#EAEAE5]">
-      <div className="max-w-7xl mx-auto px-6 sm:px-10 space-y-12">
+    <section id="checkout" className="py-16 md:py-24 bg-white border-t border-[#EAEAE5]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-8 sm:space-y-12">
         {/* Section Header matching Figma Screenshot 5 */}
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
             <span className="text-[11px] font-mono tracking-[0.16em] text-zinc-500 uppercase">
@@ -65,40 +65,40 @@ export function CheckoutSection({
             </span>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
-            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-[-0.03em] text-[#111111] leading-[1.08] sm:leading-[1.05]">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-6">
+            <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#111111] leading-tight break-words">
               Your next favorite thing.
             </h2>
-            <span className="text-[10px] font-mono tracking-[0.18em] text-zinc-400 uppercase sm:text-right">
+            <span className="text-[10px] font-mono tracking-[0.18em] text-zinc-400 uppercase sm:text-right shrink-0">
               CONFIGURE & PURCHASE / ALL PRICES IN USD
             </span>
           </div>
         </div>
 
         {/* 2-Column Layout matching Figma Screenshot 5 */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Left Column: Suspended Floating Headphone Render */}
-          <div className="lg:col-span-6 space-y-6">
-            <div className="relative aspect-4/3 rounded-2xl bg-[#F0EFEA] p-6 overflow-hidden flex items-center justify-center border border-[#EAEAE5]">
+          <div className="lg:col-span-6 space-y-4 sm:space-y-6">
+            <div className="relative aspect-4/3 rounded-2xl bg-[#F0EFEA] p-4 sm:p-6 overflow-hidden flex items-center justify-center border border-[#EAEAE5]">
               <Image
                 src="/images/checkout-floating.jpg"
                 alt="Form 01 floating"
                 fill
-                className="object-contain p-4"
+                className="object-contain p-2 sm:p-4"
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 priority
               />
-              <div className="absolute top-5 left-6 text-[10px] font-mono tracking-[0.18em] text-zinc-400 uppercase">
+              <div className="absolute top-4 left-4 sm:top-5 sm:left-6 text-[10px] font-mono tracking-[0.18em] text-zinc-400 uppercase">
                 FORM 01 / {currentVariant.name.toUpperCase()}
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-xs text-zinc-500 px-1">
+            <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2 text-xs text-zinc-500 px-1">
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
                 In Stock & Ready to Ship
               </span>
-              <span className="font-mono text-zinc-400">
+              <span className="font-mono text-zinc-400 text-[11px]">
                 DISPATCHES WITHIN 24 HOURS
               </span>
             </div>
@@ -106,11 +106,11 @@ export function CheckoutSection({
 
           {/* Right Column: Product Configuration & Actions (Add to Cart / Buy Now) */}
           <div className="lg:col-span-6">
-            <div className="rounded-2xl bg-white p-6 sm:p-8 border border-[#EAEAE5] shadow-xs space-y-6">
+            <div className="rounded-2xl bg-white p-5 sm:p-8 border border-[#EAEAE5] shadow-xs space-y-6">
               {/* Product Title & Pricing */}
-              <div className="space-y-2 pb-4 border-b border-zinc-200/80">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+              <div className="space-y-3 pb-4 border-b border-zinc-200/80">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-mono tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-semibold">
                       FLAGSHIP WIRELESS
                     </span>
@@ -121,20 +121,20 @@ export function CheckoutSection({
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-zinc-400 font-mono">MODEL 01</span>
+                  <span className="text-xs text-zinc-400 font-mono shrink-0">MODEL 01</span>
                 </div>
 
-                <div className="flex items-baseline justify-between pt-1">
-                  <div>
-                    <h3 className="text-3xl font-bold tracking-tight text-[#111111]">
+                <div className="flex flex-col xs:flex-row xs:items-baseline justify-between gap-2 pt-1">
+                  <div className="min-w-0">
+                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111111] break-words">
                       {product.name}
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-zinc-500 mt-0.5 break-words">
                       Wireless Over-Ear Active Noise Cancelling Headphones
                     </p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-bold text-[#111111]">
+                  <div className="xs:text-right shrink-0">
+                    <div className="text-2xl sm:text-3xl font-bold text-[#111111]">
                       ${product.price.toFixed(2)}
                     </div>
                     <div className="text-[10px] text-zinc-400">Free delivery included</div>
@@ -144,7 +144,7 @@ export function CheckoutSection({
 
               {/* Finish Selector */}
               <div className="space-y-3">
-                <div className="flex justify-between items-center text-xs">
+                <div className="flex justify-between items-center text-xs flex-wrap gap-1">
                   <span className="font-semibold text-zinc-900">
                     Finish — <span className="text-zinc-500 font-normal">{currentVariant.name}</span>
                   </span>
@@ -152,7 +152,7 @@ export function CheckoutSection({
                     MATTE ANODIZED FINISH
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   {product.variants.map((v) => (
                     <button
                       key={v.id}
@@ -163,10 +163,10 @@ export function CheckoutSection({
                         }`}
                     >
                       <span
-                        className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-2xs"
+                        className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-2xs shrink-0"
                         style={{ backgroundColor: v.hex }}
                       />
-                      <span>{v.name}</span>
+                      <span className="truncate">{v.name}</span>
                     </button>
                   ))}
                 </div>
@@ -174,23 +174,23 @@ export function CheckoutSection({
 
               {/* Fit Option */}
               <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs">
+                <div className="flex justify-between items-center text-xs flex-wrap gap-1">
                   <span className="font-semibold text-zinc-900">Acoustic Fit</span>
                   <span className="text-[11px] text-zinc-400">SLOW-RECOVERY MEMORY FOAM</span>
                 </div>
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-white border border-zinc-200 text-zinc-800 text-xs font-medium shadow-2xs">
-                  <Check className="w-3.5 h-3.5 text-blue-600 stroke-[2.5]" />
-                  <span>One size · Ergonomically adjustable headband</span>
+                <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white border border-zinc-200 text-zinc-800 text-xs font-medium shadow-2xs max-w-full break-words">
+                  <Check className="w-3.5 h-3.5 text-blue-600 stroke-[2.5] shrink-0" />
+                  <span className="truncate">One size · Ergonomically adjustable headband</span>
                 </div>
               </div>
 
               {/* What's In The Box */}
               <div className="p-3.5 rounded-xl bg-white border border-zinc-200/80 space-y-1.5">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-800">
-                  <Box className="w-3.5 h-3.5 text-blue-600" />
+                  <Box className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                   <span>Good Things, Included:</span>
                 </div>
-                <p className="text-xs text-zinc-600 leading-relaxed pl-5">
+                <p className="text-xs text-zinc-600 leading-relaxed sm:pl-5 break-words">
                   Protective hardshell travel case, USB-C braided charging cable, and gold-plated 3.5 mm auxiliary audio cable.
                 </p>
               </div>
@@ -235,17 +235,17 @@ export function CheckoutSection({
               </div>
 
               {/* Trust Badges */}
-              <div className="pt-3 border-t border-zinc-200/80 grid grid-cols-3 gap-2 text-center text-[11px] text-zinc-500">
-                <div className="flex flex-col items-center gap-1">
-                  <Truck className="w-4 h-4 text-zinc-600" />
+              <div className="pt-3 border-t border-zinc-200/80 grid grid-cols-1 xs:grid-cols-3 gap-2.5 sm:gap-2 text-center text-[11px] text-zinc-500">
+                <div className="flex xs:flex-col items-center justify-center gap-2 xs:gap-1">
+                  <Truck className="w-4 h-4 text-zinc-600 shrink-0" />
                   <span>Free Express Delivery</span>
                 </div>
-                <div className="flex flex-col items-center gap-1">
-                  <RotateCcw className="w-4 h-4 text-zinc-600" />
+                <div className="flex xs:flex-col items-center justify-center gap-2 xs:gap-1">
+                  <RotateCcw className="w-4 h-4 text-zinc-600 shrink-0" />
                   <span>30-Day Risk-Free Trial</span>
                 </div>
-                <div className="flex flex-col items-center gap-1">
-                  <ShieldCheck className="w-4 h-4 text-zinc-600" />
+                <div className="flex xs:flex-col items-center justify-center gap-2 xs:gap-1">
+                  <ShieldCheck className="w-4 h-4 text-zinc-600 shrink-0" />
                   <span>2-Year Full Warranty</span>
                 </div>
               </div>
