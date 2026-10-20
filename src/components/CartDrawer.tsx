@@ -101,7 +101,7 @@ export function CartDrawer() {
             ) : (
               items.map((item) => (
                 <div
-                  key={`${item.productId}-${item.variant}`}
+                  key={`${item.productId}-${item.variant}-${item.component || "std"}`}
                   className="flex gap-4 pb-6 border-b border-zinc-100"
                 >
                   {/* Thumbnail Image */}
@@ -125,21 +125,23 @@ export function CartDrawer() {
                           ${(item.price * item.quantity).toFixed(2)}
                         </span>
                       </div>
-                      <p className="text-[11px] text-zinc-500 mt-0.5 truncate">
-                        Wireless over-ear headphones
-                      </p>
+                      {item.component && (
+                        <span className="inline-block px-1.5 py-0.5 mt-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-700 border border-blue-100">
+                          {item.component}
+                        </span>
+                      )}
                       <div className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-600 min-w-0">
                         <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0"></span>
                         <span className="truncate">{item.variantName} · {item.fit}</span>
                       </div>
                     </div>
 
-                    {/* Quantity counter [- 1 +] and Remove matching Screenshot 6 */}
+                    {/* Quantity counter [- 1 +] and Remove */}
                     <div className="flex items-center justify-between mt-3">
                       <div className="flex items-center border border-zinc-200 rounded-md overflow-hidden bg-white">
                         <button
                           onClick={() =>
-                            updateQuantity(item.productId, item.variant, -1)
+                            updateQuantity(item.productId, item.variant, -1, item.component)
                           }
                           className="px-2 py-0.5 text-zinc-500 hover:text-black transition-colors"
                           aria-label="Decrease quantity"
@@ -151,7 +153,7 @@ export function CartDrawer() {
                         </span>
                         <button
                           onClick={() =>
-                            updateQuantity(item.productId, item.variant, 1)
+                            updateQuantity(item.productId, item.variant, 1, item.component)
                           }
                           className="px-2 py-0.5 text-zinc-500 hover:text-black transition-colors"
                           aria-label="Increase quantity"
@@ -161,7 +163,7 @@ export function CartDrawer() {
                       </div>
 
                       <button
-                        onClick={() => removeItem(item.productId, item.variant)}
+                        onClick={() => removeItem(item.productId, item.variant, item.component)}
                         className="text-[11px] text-zinc-400 hover:text-zinc-800 underline transition-colors"
                       >
                         Remove

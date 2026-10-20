@@ -30,8 +30,8 @@ interface CartContextType {
   isCartOpen: boolean;
   setIsCartOpen: (open: boolean) => void;
   addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
-  removeItem: (productId: string, variant: ProductColor) => void;
-  updateQuantity: (productId: string, variant: ProductColor, delta: number) => void;
+  removeItem: (productId: string, variant: ProductColor, component?: string) => void;
+  updateQuantity: (productId: string, variant: ProductColor, delta: number, component?: string) => void;
   clearCart: () => void;
   totalItemsCount: number;
   subtotal: number;
@@ -102,7 +102,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const addItem = (item: Omit<CartItem, "quantity">, quantity = 1) => {
     setItems((prev) => {
       const existingIndex = prev.findIndex(
-        (i) => i.productId === item.productId && i.variant === item.variant
+        (i) =>
+          i.productId === item.productId &&
+          i.variant === item.variant &&
+          (i.component || "") === (item.component || "")
       );
 
       if (existingIndex > -1) {
@@ -120,21 +123,33 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setIsCartOpen(true);
   };
 
-  const removeItem = (productId: string, variant: ProductColor) => {
+  const removeItem = (productId: string, variant: ProductColor, component?: string) => {
     setItems((prev) =>
-      prev.filter((i) => !(i.productId === productId && i.variant === variant))
+      prev.filter(
+        (i) =>
+          !(
+            i.productId === productId &&
+            i.variant === variant &&
+            (i.component || "") === (component || "")
+          )
+      )
     );
   };
 
   const updateQuantity = (
     productId: string,
     variant: ProductColor,
-    delta: number
+    delta: number,
+    component?: string
   ) => {
     setItems((prev) =>
       prev
         .map((it) => {
-          if (it.productId === productId && it.variant === variant) {
+          if (
+            it.productId === productId &&
+            it.variant === variant &&
+            (it.component || "") === (component || "")
+          ) {
             const newQty = it.quantity + delta;
             return newQty > 0 ? { ...it, quantity: newQty } : null;
           }

@@ -1,4 +1,4 @@
-export type ProductColor = "silver" | "graphite" | "sandstone";
+export type ProductColor = "silver" | "graphite" | "sandstone" | "white" | "black" | "teal" | string;
 
 export interface ColorVariant {
   id: ProductColor;
@@ -11,9 +11,76 @@ export interface ColorVariant {
 
 export type ProductVariant = ColorVariant;
 
+export type TwsComponentType = "full-set" | "left-bud" | "right-bud" | "charging-case";
+
+export interface TwsComponentOption {
+  id: TwsComponentType;
+  label: string;
+  description: string;
+  sku: string;
+  price: number;
+  originalPrice: number;
+  stock: number;
+}
+
+export interface MediaGalleryItem {
+  id: string;
+  url: string;
+  alt: string;
+  type: "hero" | "macro" | "lifestyle" | "360";
+  label: string;
+}
+
+export interface ValueCallout {
+  tag: string;
+  title: string;
+  subtitle: string;
+  description: string;
+}
+
+export interface TabbedSpecRow {
+  label: string;
+  value: string;
+  badge?: string;
+}
+
+export interface TabbedSpecs {
+  core: TabbedSpecRow[];
+  battery: TabbedSpecRow[];
+  connectivity: TabbedSpecRow[];
+}
+
+export interface ExplodedViewData {
+  image: string;
+  caption: string;
+  badge: string;
+  callouts: {
+    number: string;
+    title: string;
+    description: string;
+  }[];
+}
+
+export interface HygienePolicyData {
+  title: string;
+  badge: string;
+  description: string;
+  exemptionNotice: string;
+}
+
+export interface ProductQnA {
+  id: string;
+  question: string;
+  answer: string;
+  author: string;
+  date: string;
+}
+
 export interface ProductData {
   _id?: string;
   id: string;
+  slug: string;
+  categorySlug: "headphones" | "earbuds" | "earphones";
   name: string;
   model: string;
   category: string;
@@ -28,6 +95,17 @@ export interface ProductData {
   warrantyYears: number;
   returnDays: number;
   deliveryEstimate: string;
+  rating: number;
+  reviewCount: number;
+  sku: string;
+  isTws?: boolean;
+  twsComponents?: TwsComponentOption[];
+  mediaGallery?: MediaGalleryItem[];
+  primaryValueCallouts?: ValueCallout[];
+  explodedView?: ExplodedViewData;
+  tabbedSpecs?: TabbedSpecs;
+  hygienePolicy?: HygienePolicyData;
+  qna?: ProductQnA[];
   variants: ColorVariant[];
   specs: {
     dimensionsMetric: string;
@@ -61,6 +139,8 @@ export interface Review {
   rating: number;
   comment: string;
   verified: boolean;
+  tags?: string[];
+  createdAt?: string;
 }
 
 export interface CartItem {
@@ -68,6 +148,8 @@ export interface CartItem {
   name: string;
   variant: ProductColor;
   variantName: string;
+  component?: string;
+  componentSku?: string;
   price: number;
   quantity: number;
   image: string;

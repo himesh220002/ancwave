@@ -235,7 +235,7 @@ export function CheckoutSection({
               </div>
 
               {/* Trust Badges */}
-              <div className="pt-3 border-t border-zinc-200/80 grid grid-cols-1 xs:grid-cols-3 gap-2.5 sm:gap-2 text-center text-[11px] text-zinc-500">
+              <div className="pt-3 border-t border-zinc-200/80 grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-2 text-center text-[11px] text-zinc-500">
                 <div className="flex xs:flex-col items-center justify-center gap-2 xs:gap-1">
                   <Truck className="w-4 h-4 text-zinc-600 shrink-0" />
                   <span>Free Express Delivery</span>

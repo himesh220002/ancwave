@@ -5,10 +5,23 @@ import { ProductModel } from "@/lib/models";
 import { revalidatePath } from "next/cache";
 import { dispatchEventBridgeEvent } from "@/lib/aws-services";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await connectDB();
-    const product = store.getProduct();
+    const { searchParams } = new URL(req.url);
+    const slug = searchParams.get("slug");
+    const all = searchParams.get("all");
+
+    if (all === "true") {
+      const products = store.getAllProducts();
+      return NextResponse.json({
+        success: true,
+        products,
+        cachedAt: new Date().toISOString(),
+      });
+    }
+
+    const product = store.getProduct(slug || "form-01");
 
     // Cache-Control header simulating CloudFront edge cache behavior
     const response = NextResponse.json(
@@ -38,12 +51,13 @@ export async function GET() {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { stock, activeDiscount, isFlashSale } = body;
+    const { stock, activeDiscount, isFlashSale, slug } = body;
+    const targetSlug = slug || "form-01";
 
-    let updatedProduct = store.getProduct();
+    let updatedProduct = store.getProduct(targetSlug);
 
     if (typeof stock === "number") {
-      updatedProduct = store.updateStock(stock, activeDiscount);
+      updatedProduct = store.updateStock(stock, activeDiscount, targetSlug);
     }
 
     if (typeof isFlashSale === "boolean") {
@@ -54,7 +68,7 @@ export async function PATCH(req: NextRequest) {
     const db = await connectDB();
     if (db) {
       await ProductModel.findOneAndUpdate(
-        { model: "WIRELESS OVER-EAR" },
+        { slug: targetSlug },
         { ...updatedProduct },
         { upsert: true, new: true }
       );
@@ -63,6 +77,8 @@ export async function PATCH(req: NextRequest) {
     // On-demand revalidation
     try {
       revalidatePath("/");
+      revalidatePath("/products");
+      revalidatePath(`/products/${targetSlug}`);
       revalidatePath("/api/product");
     } catch {
       // ignore outside request context
@@ -70,6 +86,7 @@ export async function PATCH(req: NextRequest) {
 
     // Dispatch EventBridge event
     await dispatchEventBridgeEvent("StockUpdated", {
+      slug: targetSlug,
       newStock: updatedProduct.stock,
       activeDiscount: updatedProduct.activeDiscount,
       trigger: "AdminInventoryAdjustment",

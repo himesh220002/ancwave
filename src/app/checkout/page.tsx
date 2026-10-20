@@ -603,7 +603,7 @@ export default function CheckoutPage() {
                 <div className="space-y-4">
                   {items.map((item) => (
                     <div
-                      key={`${item.productId}-${item.variant}`}
+                      key={`${item.productId}-${item.variant}-${item.component || "std"}`}
                       className="flex gap-3 sm:gap-4 pb-4 border-b border-zinc-100 last:border-b-0"
                     >
                       <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-[#F0EFEA] p-1 shrink-0 overflow-hidden border border-zinc-100">
@@ -626,6 +626,11 @@ export default function CheckoutPage() {
                                 : `$${(item.price * item.quantity).toFixed(2)}`}
                             </span>
                           </div>
+                          {item.component && (
+                            <span className="inline-block px-1.5 py-0.5 mt-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-700 border border-blue-100">
+                              {item.component}
+                            </span>
+                          )}
                           <p className="text-[11px] text-zinc-500 mt-0.5 truncate">
                             {item.variantName} · {item.fit}
                           </p>
@@ -636,7 +641,7 @@ export default function CheckoutPage() {
                             <button
                               type="button"
                               onClick={() =>
-                                updateQuantity(item.productId, item.variant, -1)
+                                updateQuantity(item.productId, item.variant, -1, item.component)
                               }
                               className="px-2 py-0.5 text-zinc-500 hover:text-black"
                               aria-label="Decrease quantity"
@@ -649,7 +654,7 @@ export default function CheckoutPage() {
                             <button
                               type="button"
                               onClick={() =>
-                                updateQuantity(item.productId, item.variant, 1)
+                                updateQuantity(item.productId, item.variant, 1, item.component)
                               }
                               className="px-2 py-0.5 text-zinc-500 hover:text-black"
                               aria-label="Increase quantity"
