@@ -1,8 +1,9 @@
-import { ProductData, Order, AWSEventLog, Review } from "@/types";
+import { ProductData, Order, AWSEventLog, Review, IVariant, IProduct, IReview } from "@/types";
 
 export const initialProductData: ProductData = {
   id: "form-01",
   slug: "form-01",
+  productId: "ANC-FORM-01",
   categorySlug: "headphones",
   name: "Form 01",
   model: "WIRELESS OVER-EAR",
@@ -11,8 +12,11 @@ export const initialProductData: ProductData = {
   description:
     "Meet Form 01. Beautifully balanced sound, adaptive silence, and a lighter way to get lost in what you love.",
   price: 349,
+  basePrice: 349,
   originalPrice: 399,
   activeDiscount: 0,
+  baseDiscount: 0,
+  type: "Over-Ear Headphones",
   stock: 4, // Initial stock is 4, triggering "🔥 Few left!" alert
   lowStockThreshold: 5,
   isFlashSale: true,
@@ -20,9 +24,48 @@ export const initialProductData: ProductData = {
   returnDays: 30,
   deliveryEstimate: "Ready to ship · US delivery in 3–5 business days",
   rating: 4.9,
+  averageRating: 4.9,
   reviewCount: 128,
   sku: "FORM-01-ANC",
   isTws: false,
+  globalSpecs: {
+    "Acoustic Architecture": "40 mm Bio-Cellulose Transducer",
+    "ANC Attenuation": "-42 dB Vector Adaptive ANC",
+    "Clamping Force": "4.2 N Ergonomic Equilibrium",
+    "Battery Runtime": "38 Hours (ANC On)",
+    "Bluetooth": "5.4 LE Audio / LC3 & LDAC",
+    "Weight": "242 grams",
+    "Fast Charging": "10 min = 5 hours playback",
+  },
+  childVariants: [
+    {
+      sku: "ANC-FORM01-SILVER-BOOM",
+      color: "Silver mist",
+      specOverride: "Detachable Boom Microphone",
+      price: 349,
+      discount: 0,
+      stock: 4,
+      images: ["/images/hero-silver.jpg", "/images/feature-aluminum.jpg"],
+    },
+    {
+      sku: "ANC-FORM01-GRAPHITE-INT",
+      color: "Graphite",
+      specOverride: "Integrated Dual Beamforming Mic",
+      price: 349,
+      discount: 0,
+      stock: 6,
+      images: ["/images/hero-graphite.jpg", "/images/lifestyle-workspace.jpg"],
+    },
+    {
+      sku: "ANC-FORM01-SANDSTONE-STUDIO",
+      color: "Sandstone",
+      specOverride: "Dual Studio MEMS Mic Array",
+      price: 369,
+      discount: 0,
+      stock: 2,
+      images: ["/images/hero-sandstone.jpg", "/images/exploded-assembly.jpg"],
+    },
+  ],
   variants: [
     {
       id: "silver",
@@ -209,6 +252,7 @@ export const initialProductData: ProductData = {
 export const earbudProductData: ProductData = {
   id: "form-air-tws",
   slug: "form-air-tws",
+  productId: "ANC-AIR-TWS",
   categorySlug: "earbuds",
   name: "Form Air TWS",
   model: "TRUE WIRELESS STEREO",
@@ -217,8 +261,11 @@ export const earbudProductData: ProductData = {
   description:
     "Ultra-compact true wireless earbuds with custom 11 mm graphene drivers, Qi wireless fast-charging case, and modular fractional replacement support.",
   price: 199,
+  basePrice: 199,
   originalPrice: 229,
   activeDiscount: 0,
+  baseDiscount: 0,
+  type: "TWS Earbuds",
   stock: 12,
   lowStockThreshold: 5,
   isFlashSale: false,
@@ -226,9 +273,37 @@ export const earbudProductData: ProductData = {
   returnDays: 30,
   deliveryEstimate: "Ready to ship · Worldwide express delivery in 2–4 days",
   rating: 4.8,
+  averageRating: 4.8,
   reviewCount: 94,
   sku: "AIR-TWS-SET",
   isTws: true,
+  globalSpecs: {
+    "Driver": "11 mm Liquid Silicone Graphene",
+    "ANC Attenuation": "-38 dB Hybrid Acoustic Shield",
+    "Battery Life": "8 hrs buds / 32 hrs with Qi case",
+    "Bluetooth": "5.4 Multi-Point Connect",
+    "Water Resistance": "IPX5 Splashproof",
+  },
+  childVariants: [
+    {
+      sku: "ANC-AIRTWS-WHITE-QI",
+      color: "Polar White",
+      specOverride: "Qi Wireless Fast Charging Case",
+      price: 199,
+      discount: 0,
+      stock: 12,
+      images: ["/images/earbuds-white.jpg"],
+    },
+    {
+      sku: "ANC-AIRTWS-BLACK-PRO",
+      color: "Midnight Black",
+      specOverride: "Acoustic Vent Case + Comply Foam Tips",
+      price: 219,
+      discount: 0,
+      stock: 5,
+      images: ["/images/earbuds-black.jpg"],
+    },
+  ],
   twsComponents: [
     {
       id: "full-set",
@@ -442,6 +517,7 @@ export const earbudProductData: ProductData = {
 export const earphoneProductData: ProductData = {
   id: "form-pulse-iem",
   slug: "form-pulse-iem",
+  productId: "ANC-SPORT-PRO",
   categorySlug: "earphones",
   name: "Form Pulse IEM",
   model: "WIRELESS SPORTS IN-EAR",
@@ -450,8 +526,11 @@ export const earphoneProductData: ProductData = {
   description:
     "High-performance sports earphones with ErgoLock titanium earhooks, IPX7 submersible waterproofing, and 18-hour endurance battery.",
   price: 149,
+  basePrice: 149,
   originalPrice: 179,
   activeDiscount: 0,
+  baseDiscount: 0,
+  type: "Wireless Earphones",
   stock: 8,
   lowStockThreshold: 5,
   isFlashSale: false,
@@ -459,9 +538,36 @@ export const earphoneProductData: ProductData = {
   returnDays: 30,
   deliveryEstimate: "Ready to ship · Worldwide express delivery in 2–4 days",
   rating: 4.9,
+  averageRating: 4.9,
   reviewCount: 62,
   sku: "PULSE-IEM-SPORTS",
   isTws: false,
+  globalSpecs: {
+    "Driver": "10 mm Diamond Graphene",
+    "ANC Isolation": "-30 dB Passive & Active Shield",
+    "Battery Life": "18 Hours Continuous",
+    "Waterproofing": "IPX7 Submersible",
+  },
+  childVariants: [
+    {
+      sku: "ANC-PULSE-BLACK-WING",
+      color: "Midnight Black",
+      specOverride: "Ergonomic Secure-Fit Wings",
+      price: 149,
+      discount: 0,
+      stock: 8,
+      images: ["/images/earphones-black.jpg"],
+    },
+    {
+      sku: "ANC-PULSE-TEAL-CORD",
+      color: "Glacier Teal",
+      specOverride: "Kevlar Braided Anti-Tangle Cord",
+      price: 149,
+      discount: 0,
+      stock: 6,
+      images: ["/images/earphones-teal.jpg"],
+    },
+  ],
   variants: [
     {
       id: "black",
@@ -632,83 +738,204 @@ export const sampleCatalog: ProductData[] = [
   earphoneProductData,
 ];
 
-export const sampleReviews: Review[] = [
+export const sampleReviews: (Review & IReview)[] = [
   {
     id: "rev-1",
+    reviewId: "rev-1",
+    productId: "ANC-FORM-01",
+    userId: "usr-cust-01",
     author: "Maya R.",
+    userName: "Maya R.",
     role: "Architect · Silver mist",
+    userRole: "Architect · Silver mist",
     initials: "MR",
+    userInitials: "MR",
     variant: "Silver mist",
+    variantSku: "ANC-FORM01-SILVER-BOOM",
     rating: 5,
     comment:
       "“The world gets quieter, but the music opens up. The 4.2 N clamping force is miraculously comfortable—I wear them 7 hours a day while drafting without temporal pressure.”",
     verified: true,
+    images: ["/images/lifestyle-cafe.jpg", "/images/hero-silver.jpg"],
     tags: ["ANC performance", "Clamping force & comfort", "Flight travel"],
     createdAt: "2 days ago",
   },
   {
     id: "rev-2",
+    reviewId: "rev-2",
+    productId: "ANC-FORM-01",
+    userId: "usr-demo-02",
     author: "Theo L.",
+    userName: "Theo L.",
     role: "Sound Engineer · Graphite",
+    userRole: "Sound Engineer · Graphite",
     initials: "TL",
+    userInitials: "TL",
     variant: "Graphite",
+    variantSku: "ANC-FORM01-GRAPHITE-INT",
     rating: 5,
     comment:
       "“Beautifully flat transient response. Bio-cellulose cones are noticeably faster than conventional Mylar diaphragms. The knurled dial has the exact mechanical dampening of a high-end stereo amp.”",
     verified: true,
+    images: ["/images/lifestyle-workspace.jpg"],
     tags: ["Bass response", "ANC performance"],
     createdAt: "1 week ago",
   },
   {
     id: "rev-3",
+    reviewId: "rev-3",
+    productId: "ANC-AIR-TWS",
+    userId: "usr-demo-03",
     author: "Elena Rostova",
+    userName: "Elena Rostova",
     role: "Ultra-Runner · Polar White",
+    userRole: "Ultra-Runner · Polar White",
     initials: "ER",
+    userInitials: "ER",
     variant: "Polar White",
+    variantSku: "ANC-AIRTWS-WHITE-QI",
     rating: 5,
     comment:
       "“Form Air TWS stay locked in my ears during half-marathons. The barometric pressure relief vent completely kills the 'footstep thumping' you get in cheap earbuds. Call clarity in the wind is astonishing.”",
     verified: true,
+    images: ["/images/lifestyle-city.jpg"],
     tags: ["Fit during running", "Call clarity", "Charging case battery"],
     createdAt: "3 days ago",
   },
   {
     id: "rev-4",
+    reviewId: "rev-4",
+    productId: "ANC-SPORT-PRO",
+    userId: "usr-demo-04",
     author: "Marcus Chen",
+    userName: "Marcus Chen",
     role: "Cycling Coach · Midnight Black",
+    userRole: "Cycling Coach · Midnight Black",
     initials: "MC",
+    userInitials: "MC",
     variant: "Midnight Black",
+    variantSku: "ANC-PULSE-BLACK-WING",
     rating: 5,
     comment:
       "“Pulse IEM survived torrential rain in the Pacific Northwest without a glitch. The physical raised buttons are so much better than finicky touch sensors when your fingers are soaked or gloved.”",
     verified: true,
+    images: [],
     tags: ["Fit during running", "Sweat & rain resistance", "Bass response"],
     createdAt: "5 days ago",
   },
   {
     id: "rev-5",
+    reviewId: "rev-5",
+    productId: "ANC-FORM-01",
+    userId: "usr-demo-05",
     author: "Nina K.",
+    userName: "Nina K.",
     role: "Product Designer · Sandstone",
+    userRole: "Product Designer · Sandstone",
     initials: "NK",
+    userInitials: "NK",
     variant: "Sandstone",
+    variantSku: "ANC-FORM01-SANDSTONE-STUDIO",
     rating: 5,
     comment:
       "“Multipoint switching between my iPad and ThinkPad is instant. Best-in-class industrial design that doesn't scream 'gamer' or 'tech nerd'.”",
     verified: true,
+    images: ["/images/feature-aluminum.jpg"],
     tags: ["ANC performance", "Clamping force & comfort"],
     createdAt: "2 weeks ago",
   },
 ];
+
+export interface InStoreUser {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  role: "owner" | "admin" | "user" | "customer";
+  createdAt: string;
+}
 
 // In-Memory store for fast fallback & caching demonstration
 class AncWaveStore {
   private products: Map<string, ProductData> = new Map();
   private orders: Order[] = [];
   private eventLogs: AWSEventLog[] = [];
+  private reviews: (Review & IReview)[] = [];
+  private users: Map<string, InStoreUser> = new Map();
 
   constructor() {
     sampleCatalog.forEach((p) => {
       this.products.set(p.slug, { ...p });
+    });
+
+    this.reviews = [...sampleReviews];
+
+    // Seed default accounts
+    this.users.set("owner@ancwave.com", {
+      id: "usr-owner-01",
+      email: "owner@ancwave.com",
+      name: "Marcus Vance (Founder & Owner)",
+      passwordHash: "",
+      role: "owner",
+      createdAt: new Date().toISOString(),
+    });
+
+    this.users.set("admin@ancwave.com", {
+      id: "usr-admin-01",
+      email: "admin@ancwave.com",
+      name: "Alexander Vance (Lead Architect)",
+      passwordHash: "",
+      role: "admin",
+      createdAt: new Date().toISOString(),
+    });
+
+    this.users.set("alex@example.com", {
+      id: "usr-cust-01",
+      email: "alex@example.com",
+      name: "Alex Morgan",
+      passwordHash: "",
+      role: "user",
+      createdAt: new Date().toISOString(),
+    });
+
+    // Seed an initial completed order for demo customer alex@example.com (usr-cust-01)
+    // so they are immediately eligible to review Form 01 out of the box!
+    this.orders.push({
+      id: "ord-demo-seed-01",
+      orderNumber: "ANC-914820",
+      userId: "usr-cust-01",
+      customer: {
+        fullName: "Alex Morgan",
+        email: "alex@example.com",
+        address: "1420 NW Johnson Street",
+        city: "Portland",
+        state: "Oregon",
+        zipCode: "97209",
+      },
+      items: [
+        {
+          productId: "form-01",
+          name: "Form 01",
+          variant: "silver",
+          variantName: "Silver mist",
+          componentSku: "ANC-FORM01-SILVER-BOOM",
+          price: 349,
+          quantity: 1,
+          image: "/images/hero-silver.jpg",
+          fit: "One size · adjustable",
+        },
+      ],
+      subtotal: 349,
+      shipping: 12,
+      tax: 0,
+      total: 361,
+      paymentMethod: "razorpay",
+      paymentStatus: "paid",
+      razorpayPaymentId: "pay_demo_seed_verified",
+      razorpayOrderId: "order_demo_seed",
+      createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+      awsEventBridgeDispatched: true,
+      cacheRevalidated: true,
     });
 
     // Seed an initial event log to showcase AWS EventBridge integration
@@ -743,7 +970,7 @@ class AncWaveStore {
 
   getProductById(id: string): ProductData | undefined {
     for (const p of this.products.values()) {
-      if (p.id === id || p.slug === id) return { ...p };
+      if (p.id === id || p.slug === id || p.productId === id) return { ...p };
     }
     return undefined;
   }
@@ -767,6 +994,39 @@ class AncWaveStore {
     return { ...p };
   }
 
+  updateVariantStock(productIdOrSlug: string, sku: string, newStock: number): ProductData {
+    const p = this.products.get(productIdOrSlug) || this.getProductById(productIdOrSlug) || { ...initialProductData };
+    if (p.childVariants) {
+      p.childVariants = p.childVariants.map((v) =>
+        v.sku === sku ? { ...v, stock: Math.max(0, newStock) } : v
+      );
+      // Aggregate total master stock from variants if configured
+      p.stock = p.childVariants.reduce((sum, v) => sum + v.stock, 0);
+    }
+    p.lastRevalidatedAt = new Date().toISOString();
+    this.products.set(p.slug, p);
+    return { ...p };
+  }
+
+  updateProductWithVariants(updated: Partial<ProductData> & { productId?: string; slug?: string }): ProductData {
+    const targetSlug = updated.slug || (updated.productId ? this.getProductById(updated.productId)?.slug : "form-01") || "form-01";
+    const existing = this.products.get(targetSlug) || { ...initialProductData };
+
+    const merged: ProductData = {
+      ...existing,
+      ...updated,
+      lastRevalidatedAt: new Date().toISOString(),
+    };
+
+    if (updated.childVariants && updated.childVariants.length > 0) {
+      merged.childVariants = updated.childVariants;
+      merged.stock = updated.childVariants.reduce((sum, v) => sum + v.stock, 0);
+    }
+
+    this.products.set(targetSlug, merged);
+    return { ...merged };
+  }
+
   reduceStock(quantity: number, slug = "form-01"): { product: ProductData; previousStock: number } {
     const p = this.products.get(slug) || { ...initialProductData };
     const previousStock = p.stock;
@@ -785,6 +1045,140 @@ class AncWaveStore {
     return [...this.orders];
   }
 
+  hasUserPurchased(userId: string, userEmail: string, productIdOrSlug: string): boolean {
+    const product = this.getProductById(productIdOrSlug) || this.products.get(productIdOrSlug);
+    const validIds = new Set<string>();
+    if (productIdOrSlug) validIds.add(productIdOrSlug.toLowerCase());
+    if (product?.id) validIds.add(product.id.toLowerCase());
+    if (product?.slug) validIds.add(product.slug.toLowerCase());
+    if (product?.productId) validIds.add(product.productId.toLowerCase());
+
+    return this.orders.some((ord) => {
+      if (ord.paymentStatus !== "paid") return false;
+      const isUserMatch =
+        (userId && ord.userId === userId) ||
+        (userEmail && ord.customer?.email?.toLowerCase() === userEmail.toLowerCase());
+      if (!isUserMatch) return false;
+
+      return ord.items.some((item) =>
+        validIds.has(item.productId?.toLowerCase() || "") ||
+        (product && item.name?.toLowerCase().includes(product.name.toLowerCase()))
+      );
+    });
+  }
+
+  addVerifiedOrderForUser(userId: string, email: string, productIdOrSlug = "form-01"): Order {
+    const product = this.getProductById(productIdOrSlug) || this.getProduct(productIdOrSlug);
+    const order: Order = {
+      id: "ord-verified-" + Math.random().toString(36).substring(2, 9),
+      orderNumber: "ANC-" + Math.floor(100000 + Math.random() * 900000),
+      userId,
+      customer: {
+        fullName: email.split("@")[0],
+        email,
+        address: "742 Acoustic Ave",
+        city: "Seattle",
+        state: "WA",
+        zipCode: "98101",
+      },
+      items: [
+        {
+          productId: product.slug,
+          name: product.name,
+          variant: "silver",
+          variantName: product.variants[0]?.name || "Default",
+          price: product.price,
+          quantity: 1,
+          image: product.variants[0]?.image || "/images/hero-silver.jpg",
+          fit: "Standard",
+        },
+      ],
+      subtotal: product.price,
+      shipping: 0,
+      tax: 0,
+      total: product.price,
+      paymentMethod: "razorpay",
+      paymentStatus: "paid",
+      createdAt: new Date().toISOString(),
+      awsEventBridgeDispatched: true,
+      cacheRevalidated: true,
+    };
+    this.orders.unshift(order);
+    return order;
+  }
+
+  getReviews(productIdOrSlug: string): (Review & IReview)[] {
+    const product = this.getProductById(productIdOrSlug) || this.products.get(productIdOrSlug);
+    const validIds = new Set<string>();
+    if (productIdOrSlug) validIds.add(productIdOrSlug.toLowerCase());
+    if (product?.id) validIds.add(product.id.toLowerCase());
+    if (product?.slug) validIds.add(product.slug.toLowerCase());
+    if (product?.productId) validIds.add(product.productId.toLowerCase());
+
+    return this.reviews.filter((r) =>
+      validIds.has(r.productId?.toLowerCase() || "") ||
+      (r.productId === undefined && validIds.has("form-01"))
+    );
+  }
+
+  addReview(reviewData: Partial<Review & IReview>): {
+    review: Review & IReview;
+    averageRating: number;
+    reviewCount: number;
+  } {
+    const productId = reviewData.productId || "ANC-FORM-01";
+    const newReview: Review & IReview = {
+      id: reviewData.id || reviewData.reviewId || "rev-" + Math.random().toString(36).substring(2, 9),
+      reviewId: reviewData.reviewId || "rev-" + Math.random().toString(36).substring(2, 9),
+      productId,
+      userId: reviewData.userId || "anonymous",
+      author: reviewData.author || reviewData.userName || "Verified Buyer",
+      userName: reviewData.userName || reviewData.author || "Verified Buyer",
+      role: reviewData.role || "Verified Acoustic Owner",
+      userRole: reviewData.userRole || "Verified Acoustic Owner",
+      initials:
+        reviewData.initials ||
+        (reviewData.author || reviewData.userName || "VB")
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2),
+      userInitials: reviewData.userInitials || "VB",
+      variant: reviewData.variant || "Standard",
+      variantSku: reviewData.variantSku || "",
+      rating: Math.max(1, Math.min(5, reviewData.rating || 5)),
+      comment: reviewData.comment || "",
+      verified: true,
+      images: (reviewData.images || []).slice(0, 5),
+      tags: reviewData.tags || ["Verified Buyer", "Acoustic Clarity"],
+      createdAt: reviewData.createdAt ? String(reviewData.createdAt) : "Just now",
+    };
+
+    this.reviews.unshift(newReview);
+
+    // Recalculate rating and reviewCount for target product
+    const matchingReviews = this.getReviews(productId);
+    const count = matchingReviews.length;
+    const avg = count > 0 ? matchingReviews.reduce((sum, r) => sum + r.rating, 0) / count : 5.0;
+    const roundedAvg = Math.round(avg * 10) / 10;
+
+    const targetProduct = this.getProductById(productId) || this.products.get(productId);
+    if (targetProduct) {
+      targetProduct.rating = roundedAvg;
+      targetProduct.averageRating = roundedAvg;
+      targetProduct.reviewCount = count;
+      targetProduct.lastRevalidatedAt = new Date().toISOString();
+      this.products.set(targetProduct.slug, targetProduct);
+    }
+
+    return {
+      review: newReview,
+      averageRating: roundedAvg,
+      reviewCount: count,
+    };
+  }
+
   logAWSEvent(log: AWSEventLog): AWSEventLog {
     this.eventLogs.unshift(log);
     if (this.eventLogs.length > 50) {
@@ -797,11 +1191,68 @@ class AncWaveStore {
     return [...this.eventLogs];
   }
 
+  registerUser(userData: {
+    email: string;
+    name: string;
+    passwordHash: string;
+    role?: "owner" | "admin" | "user" | "customer";
+  }): InStoreUser {
+    const emailKey = userData.email.toLowerCase().trim();
+    const newUser: InStoreUser = {
+      id: `usr-${Date.now().toString(36)}`,
+      email: emailKey,
+      name: userData.name.trim(),
+      passwordHash: userData.passwordHash,
+      role: userData.role || "user",
+      createdAt: new Date().toISOString(),
+    };
+    this.users.set(emailKey, newUser);
+    return newUser;
+  }
+
+  findUserByEmail(email: string): InStoreUser | undefined {
+    return this.users.get(email.toLowerCase().trim());
+  }
+
+  findUserById(id: string): InStoreUser | undefined {
+    for (const u of this.users.values()) {
+      if (u.id === id) return u;
+    }
+    return undefined;
+  }
+
+  searchUsers(query = ""): InStoreUser[] {
+    const q = query.toLowerCase().trim();
+    const all = Array.from(this.users.values());
+    if (!q) return all;
+    return all.filter(
+      (u) => u.email.toLowerCase().includes(q) || u.name.toLowerCase().includes(q)
+    );
+  }
+
+  updateUserRole(
+    emailOrId: string,
+    newRole: "owner" | "admin" | "user" | "customer"
+  ): InStoreUser | undefined {
+    const lower = emailOrId.toLowerCase().trim();
+    let target = this.users.get(lower);
+    if (!target) {
+      target = this.findUserById(emailOrId);
+    }
+    if (target) {
+      target.role = newRole;
+      this.users.set(target.email.toLowerCase(), target);
+      return { ...target };
+    }
+    return undefined;
+  }
+
   resetStore(): void {
     this.products.clear();
     sampleCatalog.forEach((p) => {
       this.products.set(p.slug, { ...p });
     });
+    this.reviews = [...sampleReviews];
   }
 }
 
@@ -809,7 +1260,7 @@ class AncWaveStore {
 const globalStore = global as unknown as { __ancWaveStore?: AncWaveStore };
 if (
   !globalStore.__ancWaveStore ||
-  typeof globalStore.__ancWaveStore.getProductBySlug !== "function"
+  typeof (globalStore.__ancWaveStore as any)?.registerUser !== "function"
 ) {
   globalStore.__ancWaveStore = new AncWaveStore();
 }
@@ -825,3 +1276,8 @@ export function getProductBySlug(slug: string): ProductData | undefined {
 export function getAllProducts(): ProductData[] {
   return store.getAllProducts?.() || sampleCatalog;
 }
+
+export function getReviewsByProductId(productId: string): (Review & IReview)[] {
+  return store.getReviews(productId);
+}
+

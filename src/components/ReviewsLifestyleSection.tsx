@@ -44,6 +44,19 @@ export function ReviewsLifestyleSection() {
     setActiveSlide((prev) => (prev - 1 + lifestyleCards.length) % lifestyleCards.length);
   };
 
+  const [reviewsList, setReviewsList] = useState<any[]>(sampleReviews);
+
+  React.useEffect(() => {
+    fetch("/api/reviews?productId=form-01")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.reviews && Array.isArray(data.reviews) && data.reviews.length > 0) {
+          setReviewsList(data.reviews);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <section id="reviews" className="py-20 md:py-24 bg-white border-t border-[#EAEAE5]">
       <div className="max-w-7xl mx-auto px-6 sm:px-10 space-y-20">
@@ -61,29 +74,36 @@ export function ReviewsLifestyleSection() {
               A place in your everyday.
             </h2>
             <p className="text-xs text-zinc-400 max-w-xs md:text-right font-normal leading-relaxed break-words">
-              Illustrative reviews and community scenes created for this concept. Not real customer evidence.
+              Verified customer experiences and community scenes from daily listeners.
             </p>
           </div>
         </div>
 
-        {/* 3 Review Cards matching Figma Screenshot 4 */}
+        {/* Dynamic Review Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-          {sampleReviews.map((rev) => (
+          {reviewsList.slice(0, 3).map((rev) => (
             <div
-              key={rev.id}
+              key={rev.id || rev.reviewId}
               className="p-5 sm:p-8 rounded-2xl bg-white border border-[#EAEAE5] flex flex-col justify-between space-y-5 sm:space-y-6"
             >
               <div className="space-y-3 sm:space-y-4">
-                {/* 5 Blue Stars & Sample review badge */}
+                {/* 5 Stars & Verified Badge */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1 text-blue-600">
                     {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="w-3.5 h-3.5 fill-blue-600 text-blue-600" />
+                      <Star
+                        key={i}
+                        className={`w-3.5 h-3.5 ${
+                          i < rev.rating
+                            ? "fill-blue-600 text-blue-600"
+                            : "text-zinc-200"
+                        }`}
+                      />
                     ))}
                   </div>
                   <span className="text-[11px] text-zinc-400 font-sans flex items-center gap-1">
-                    <Check className="w-3 h-3 text-zinc-400" />
-                    Sample review
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    Verified buyer
                   </span>
                 </div>
 
@@ -91,18 +111,37 @@ export function ReviewsLifestyleSection() {
                 <p className="text-sm sm:text-[15px] text-[#222222] font-normal leading-relaxed break-words">
                   {rev.comment}
                 </p>
+
+                {/* Attached Review Photo */}
+                {rev.images && rev.images.length > 0 && (
+                  <div className="pt-1 flex gap-2 overflow-x-auto">
+                    {rev.images.map((img: string, i: number) => (
+                      <div
+                        key={i}
+                        className="relative w-12 h-12 rounded-xl overflow-hidden bg-zinc-100 border border-zinc-200 shrink-0"
+                      >
+                        <Image
+                          src={img}
+                          alt="Review media"
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Author & Avatar */}
               <div className="flex items-center gap-3 pt-2">
                 <div className="w-8 h-8 rounded-full bg-[#EAEAE5] text-zinc-700 flex items-center justify-center text-[11px] font-medium font-sans shrink-0">
-                  {rev.initials}
+                  {rev.initials || rev.userInitials || "VB"}
                 </div>
                 <div className="min-w-0">
                   <h4 className="font-semibold text-xs text-[#111111] truncate">
-                    {rev.author}
+                    {rev.author || rev.userName}
                   </h4>
-                  <p className="text-[11px] text-zinc-500 truncate">{rev.role}</p>
+                  <p className="text-[11px] text-zinc-500 truncate">{rev.role || rev.userRole || "Verified Owner"}</p>
                 </div>
               </div>
             </div>

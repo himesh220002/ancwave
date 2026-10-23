@@ -21,7 +21,7 @@
       "Action": [
         "events:PutEvents"
       ],
-      "Resource": "arn:aws:events:us-east-1:*:event-bus/ancwave-event-bus"
+      "Resource": "arn:aws:events:ap-south-1:*:event-bus/ancwave-event-bus"
     },
     {
       "Sid": "AllowCloudFrontCacheInvalidation",
@@ -30,7 +30,7 @@
         "cloudfront:CreateInvalidation",
         "cloudfront:GetInvalidation"
       ],
-      "Resource": "arn:aws:cloudfront::*:distribution/E3EXAMPLE9823CF"
+      "Resource": "arn:aws:cloudfront::*:distribution/E3HVB881LFOYR6"
     },
     {
       "Sid": "AllowLambdaInvocation",
@@ -38,7 +38,7 @@
       "Action": [
         "lambda:InvokeFunction"
       ],
-      "Resource": "arn:aws:lambda:us-east-1:*:function:ancwave-order-processor"
+      "Resource": "arn:aws:lambda:ap-south-1:*:function:ancwave-*"
     },
     {
       "Sid": "AllowCloudWatchLogs",

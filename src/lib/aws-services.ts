@@ -5,14 +5,18 @@ export interface AWSConfig {
   region: string;
   s3Bucket: string;
   cloudFrontDistributionId: string;
+  cloudFrontDomain: string;
   eventBusName: string;
   lambdaFunctionName: string;
 }
 
 export const AWS_DEFAULT_CONFIG: AWSConfig = {
-  region: process.env.AWS_REGION || "us-east-1",
+  region: process.env.AWS_REGION || "ap-south-1",
   s3Bucket: process.env.AWS_S3_BUCKET || "ancwave-media-storage-production",
   cloudFrontDistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID || "E3EXAMPLE9823CF",
+  cloudFrontDomain: (process.env.CLOUDFRONT_DOMAIN || process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN || "")
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, ""),
   eventBusName: process.env.EVENTBRIDGE_BUS_NAME || "ancwave-event-bus",
   lambdaFunctionName: process.env.LAMBDA_WORKER_NAME || "ancwave-order-processor",
 };
@@ -74,18 +78,56 @@ export async function dispatchOrderPlacedEvent(order: Order): Promise<AWSEventLo
 
 /**
  * Generates an S3 presigned URL for direct secure uploads
+ * If AWS credentials exist: uses real @aws-sdk/s3-request-presigner
+ * If envs are not yet filled in: provides local mock direct-upload endpoint that handles PUT seamlessly
  */
 export async function generateS3PresignedUrl(
   fileName: string,
   contentType: string
 ): Promise<{ uploadUrl: string; fileKey: string; publicUrl: string }> {
-  const fileKey = `uploads/${Date.now()}-${fileName.replace(/\s+/g, "-")}`;
+  const sanitizedName = fileName.replace(/[^a-zA-Z0-9.-]/g, "-").toLowerCase();
+  const fileKey = `reviews/${Date.now()}-${sanitizedName}`;
   const bucket = AWS_DEFAULT_CONFIG.s3Bucket;
   const region = AWS_DEFAULT_CONFIG.region;
 
-  // Realistic S3 Presigned URL format with AWS signature V4 query parameters
-  const uploadUrl = `https://${bucket}.s3.${region}.amazonaws.com/${fileKey}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20261020%2F${region}%2Fs3%2Faws4_request&X-Amz-Date=20261020T120000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=d2c8f8d9f10a8b9c...`;
-  const publicUrl = `https://cdn.ancwave.com/${fileKey}`;
+  const hasAwsCreds =
+    Boolean(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+
+  if (hasAwsCreds) {
+    try {
+      const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
+      const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+
+      const s3 = new S3Client({
+        region,
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        },
+      });
+
+      const command = new PutObjectCommand({
+        Bucket: bucket,
+        Key: fileKey,
+        ContentType: contentType,
+      });
+
+      const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 900 });
+      const publicUrl = AWS_DEFAULT_CONFIG.cloudFrontDomain
+        ? `https://${AWS_DEFAULT_CONFIG.cloudFrontDomain}/${fileKey}`
+        : `https://${bucket}.s3.${region}.amazonaws.com/${fileKey}`;
+
+      return { uploadUrl, fileKey, publicUrl };
+    } catch (err) {
+      console.warn("AWS S3 client init failed, falling back to local simulation:", err);
+    }
+  }
+
+  // Local out-of-the-box mode before AWS envs are filled in:
+  // Points to our mock direct-upload handler that responds to PUT identically to S3
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const uploadUrl = `${appUrl}/api/reviews/mock-upload?key=${encodeURIComponent(fileKey)}`;
+  const publicUrl = `${appUrl}/api/reviews/mock-upload?key=${encodeURIComponent(fileKey)}`;
 
   return { uploadUrl, fileKey, publicUrl };
 }

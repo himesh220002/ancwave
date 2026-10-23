@@ -4,13 +4,15 @@ import { connectDB } from "@/lib/db";
 import { ProductModel } from "@/lib/models";
 import { revalidatePath } from "next/cache";
 import { dispatchEventBridgeEvent } from "@/lib/aws-services";
+import { IVariant } from "@/types";
 
 export async function GET(req: NextRequest) {
   try {
-    await connectDB();
     const { searchParams } = new URL(req.url);
     const slug = searchParams.get("slug");
     const all = searchParams.get("all");
+
+    await connectDB();
 
     if (all === "true") {
       const products = store.getAllProducts();
@@ -23,8 +25,7 @@ export async function GET(req: NextRequest) {
 
     const product = store.getProduct(slug || "form-01");
 
-    // Cache-Control header simulating CloudFront edge cache behavior
-    const response = NextResponse.json(
+    return NextResponse.json(
       {
         success: true,
         product,
@@ -40,8 +41,6 @@ export async function GET(req: NextRequest) {
         },
       }
     );
-
-    return response;
   } catch (error) {
     console.error("Error in /api/product GET:", error);
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
@@ -51,12 +50,46 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { stock, activeDiscount, isFlashSale, slug } = body;
-    const targetSlug = slug || "form-01";
+    const {
+      stock,
+      activeDiscount,
+      isFlashSale,
+      slug,
+      productId,
+      variantSku,
+      variantStock,
+      childVariants,
+      name,
+      description,
+      type,
+      basePrice,
+      baseDiscount,
+      globalSpecs,
+    } = body;
 
+    const targetSlug = slug || "form-01";
     let updatedProduct = store.getProduct(targetSlug);
 
-    if (typeof stock === "number") {
+    // 1. If updating a specific child variant's stock
+    if (variantSku && typeof variantStock === "number") {
+      updatedProduct = store.updateVariantStock(targetSlug, variantSku, variantStock);
+    }
+    // 2. If updating full child variants list or product metadata
+    else if (childVariants && Array.isArray(childVariants)) {
+      updatedProduct = store.updateProductWithVariants({
+        slug: targetSlug,
+        productId: productId || updatedProduct.productId || "ANC-FORM-01",
+        name: name || updatedProduct.name,
+        description: description || updatedProduct.description,
+        type: type || updatedProduct.type,
+        basePrice: typeof basePrice === "number" ? basePrice : updatedProduct.basePrice,
+        baseDiscount: typeof baseDiscount === "number" ? baseDiscount : updatedProduct.baseDiscount,
+        globalSpecs: globalSpecs || updatedProduct.globalSpecs,
+        childVariants: childVariants as IVariant[],
+      });
+    }
+    // 3. Simple master stock adjustment
+    else if (typeof stock === "number") {
       updatedProduct = store.updateStock(stock, activeDiscount, targetSlug);
     }
 
@@ -64,38 +97,49 @@ export async function PATCH(req: NextRequest) {
       updatedProduct.isFlashSale = isFlashSale;
     }
 
-    // Try updating MongoDB if connected
+    // Persist to MongoDB if connected
     const db = await connectDB();
     if (db) {
-      await ProductModel.findOneAndUpdate(
-        { slug: targetSlug },
-        { ...updatedProduct },
-        { upsert: true, new: true }
-      );
+      try {
+        await ProductModel.findOneAndUpdate(
+          { $or: [{ slug: targetSlug }, { productId: updatedProduct.productId }] },
+          {
+            $set: {
+              ...updatedProduct,
+              variants: updatedProduct.childVariants || [],
+            },
+          },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        console.warn("DB product sync notice:", err);
+      }
     }
 
-    // On-demand revalidation
+    // On-demand Next.js ISR revalidation
     try {
       revalidatePath("/");
       revalidatePath("/products");
       revalidatePath(`/products/${targetSlug}`);
       revalidatePath("/api/product");
     } catch {
-      // ignore outside request context
+      // ignore
     }
 
-    // Dispatch EventBridge event
+    // Dispatch AWS EventBridge Event: StockUpdated
     await dispatchEventBridgeEvent("StockUpdated", {
       slug: targetSlug,
+      productId: updatedProduct.productId,
       newStock: updatedProduct.stock,
       activeDiscount: updatedProduct.activeDiscount,
-      trigger: "AdminInventoryAdjustment",
+      variantUpdated: variantSku || "all",
+      trigger: "RealTimeInventoryAdjustment",
     });
 
     return NextResponse.json({
       success: true,
       product: updatedProduct,
-      message: "Inventory updated and edge cache revalidated.",
+      message: "Inventory updated instantaneously and edge cache purged.",
     });
   } catch (error) {
     console.error("Error in /api/product PATCH:", error);

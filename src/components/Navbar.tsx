@@ -1,9 +1,22 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { ShoppingBag, Menu, X, ArrowUpRight, Grid } from "lucide-react";
+import {
+  ShoppingBag,
+  Menu,
+  X,
+  ArrowUpRight,
+  Grid,
+  User,
+  Crown,
+  ShieldCheck,
+  LogOut,
+  ChevronDown,
+} from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
+import { toast } from "@/components/Toaster";
 
 interface NavbarProps {
   subtitle?: string;
@@ -15,7 +28,21 @@ interface NavbarProps {
 
 export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
   const { totalItemsCount, setIsCartOpen } = useCart();
+  const { user, isAdmin, isOwner, setIsAuthModalOpen, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close user dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Close mobile menu on ESC
   useEffect(() => {
@@ -76,7 +103,7 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
         </nav>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-2.5 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Desktop Lineup / Buy Button */}
           <Link
             href="/products"
@@ -84,6 +111,94 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
           >
             Explore Catalog
           </Link>
+
+          {/* User Account Button & Dropdown */}
+          {!user ? (
+            <button
+              onClick={() => setIsAuthModalOpen(true)}
+              className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-2 rounded-lg border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-100 text-zinc-700 hover:text-black transition-colors text-xs font-semibold"
+              aria-label="Sign In or Register"
+              title="Sign In / Register"
+            >
+              <User className="w-4 h-4 stroke-[2]" />
+              <span className="hidden lg:inline">Sign In</span>
+            </button>
+          ) : (
+            <div className="relative" ref={userMenuRef}>
+              <button
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1.5 rounded-xl border border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50 transition-all text-xs font-medium text-zinc-800 shadow-2xs"
+                aria-label="User Account Menu"
+              >
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] text-white ${
+                    isOwner ? "bg-amber-600" : isAdmin ? "bg-blue-600" : "bg-zinc-900"
+                  }`}
+                >
+                  {user.name.slice(0, 1).toUpperCase()}
+                </div>
+                <span className="hidden lg:inline max-w-[90px] truncate">
+                  {user.name.split(" ")[0]}
+                </span>
+                {isOwner ? (
+                  <Crown className="w-3.5 h-3.5 text-amber-600 hidden sm:inline" />
+                ) : isAdmin ? (
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600 hidden sm:inline" />
+                ) : null}
+                <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+              </button>
+
+              {/* Account Dropdown */}
+              {isUserMenuOpen && (
+                <div className="absolute right-0 mt-2 w-60 rounded-2xl bg-white border border-zinc-200 shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 space-y-1">
+                  <div className="px-3 py-2.5 border-b border-zinc-100">
+                    <p className="text-xs font-bold text-zinc-900 truncate">{user.name}</p>
+                    <p className="text-[11px] font-mono text-zinc-500 truncate">{user.email}</p>
+                    <div className="mt-1.5">
+                      <span
+                        className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                          isOwner
+                            ? "bg-amber-100 text-amber-900"
+                            : isAdmin
+                            ? "bg-blue-100 text-blue-900"
+                            : "bg-zinc-100 text-zinc-700"
+                        }`}
+                      >
+                        Role: {user.role}
+                      </span>
+                    </div>
+                  </div>
+
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition-colors"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-blue-600" />
+                      <span>Operations Console</span>
+                    </Link>
+                  )}
+
+                  <button
+                    onClick={async () => {
+                      setIsUserMenuOpen(false);
+                      await logout();
+                      toast({
+                        type: "info",
+                        title: "Signed Out",
+                        description: "You have been logged out.",
+                      });
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Bag Icon */}
           <button
@@ -119,6 +234,60 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
       {/* Mobile Navigation Dropdown Menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden border-t border-zinc-200 bg-white/98 backdrop-blur-lg px-6 py-6 space-y-5 animate-in slide-in-from-top-3 duration-200 shadow-xl">
+          {/* Mobile User Profile Header */}
+          {!user ? (
+            <button
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                setIsAuthModalOpen(true);
+              }}
+              className="w-full py-2.5 px-4 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-900 font-semibold text-xs flex items-center justify-center gap-2 transition-colors"
+            >
+              <User className="w-4 h-4" />
+              <span>Sign In / Register</span>
+            </button>
+          ) : (
+            <div className="p-3 bg-zinc-50 rounded-xl space-y-2 text-xs border border-zinc-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-zinc-900">{user.name}</p>
+                  <p className="text-[11px] text-zinc-500 font-mono">{user.email}</p>
+                </div>
+                <span
+                  className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
+                    isOwner
+                      ? "bg-amber-100 text-amber-900"
+                      : isAdmin
+                      ? "bg-blue-100 text-blue-900"
+                      : "bg-zinc-200 text-zinc-700"
+                  }`}
+                >
+                  {user.role}
+                </span>
+              </div>
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-1.5 text-blue-600 font-semibold pt-1"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Go to Admin Console</span>
+                </Link>
+              )}
+              <button
+                onClick={async () => {
+                  setIsMobileMenuOpen(false);
+                  await logout();
+                }}
+                className="text-red-600 font-medium text-xs flex items-center gap-1 pt-1"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          )}
+
           <nav className="flex flex-col space-y-4 text-base font-semibold text-zinc-800">
             <Link
               href="/products"
@@ -129,7 +298,9 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
                 <Grid className="w-4 h-4" />
                 <span>All Audio Products</span>
               </div>
-              <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-normal">3 Models</span>
+              <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-normal">
+                3 Models
+              </span>
             </Link>
             <a
               href="/#features"

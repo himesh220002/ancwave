@@ -47,57 +47,56 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  // Initialize with 1 item by default to match screenshot 6 ("Your bag (1)")!
-  const [items, setItems] = useState<CartItem[]>([
-    {
-      productId: "form-01",
-      name: "Form 01",
-      variant: "silver",
-      variantName: "Silver mist",
-      price: 349,
-      quantity: 1,
-      image: "/images/hero-silver.jpg",
-      fit: "Adjustable fit",
-    },
-  ]);
-
+  // Start empty so cart does not auto-populate on page refresh
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [recentAddedFlash, setRecentAddedFlash] = useState(true);
+  const [recentAddedFlash, setRecentAddedFlash] = useState(false);
   const [customerDetails, setCustomerDetails] = useState<CustomerCheckoutDetails>(initialCustomerDetails);
 
-  // Sync with local storage
+  // Sync with local storage on initial mount only
   useEffect(() => {
     try {
       const savedCart = localStorage.getItem("ancwave_cart");
       if (savedCart) {
-        setItems(JSON.parse(savedCart));
+        const parsed = JSON.parse(savedCart);
+        if (Array.isArray(parsed)) {
+          setItems(parsed);
+        }
       }
       const savedCustomer = localStorage.getItem("ancwave_customer");
       if (savedCustomer) {
-        setCustomerDetails(JSON.parse(savedCustomer));
+        const parsedCustomer = JSON.parse(savedCustomer);
+        if (parsedCustomer && typeof parsedCustomer === "object") {
+          setCustomerDetails(parsedCustomer);
+        }
       }
     } catch {
       // ignore
+    } finally {
+      setIsInitialized(true);
     }
   }, []);
 
-  // Save customer details whenever they change
+  // Save customer details whenever they change (only after initial load)
   useEffect(() => {
+    if (!isInitialized) return;
     try {
       localStorage.setItem("ancwave_customer", JSON.stringify(customerDetails));
     } catch {
       // ignore
     }
-  }, [customerDetails]);
+  }, [customerDetails, isInitialized]);
 
-  // Sync items to local storage whenever items change
+  // Sync items to local storage whenever items change (only after initial load)
   useEffect(() => {
+    if (!isInitialized) return;
     try {
       localStorage.setItem("ancwave_cart", JSON.stringify(items));
     } catch {
       // ignore
     }
-  }, [items]);
+  }, [items, isInitialized]);
 
   const addItem = (item: Omit<CartItem, "quantity">, quantity = 1) => {
     setItems((prev) => {
@@ -124,16 +123,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeItem = (productId: string, variant: ProductColor, component?: string) => {
-    setItems((prev) =>
-      prev.filter(
+    setItems((prev) => {
+      const updated = prev.filter(
         (i) =>
           !(
             i.productId === productId &&
             i.variant === variant &&
             (i.component || "") === (component || "")
           )
-      )
-    );
+      );
+      try {
+        localStorage.setItem("ancwave_cart", JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
   };
 
   const updateQuantity = (
@@ -161,6 +166,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = () => {
     setItems([]);
+    try {
+      localStorage.setItem("ancwave_cart", JSON.stringify([]));
+    } catch {
+      // ignore
+    }
   };
 
   const totalItemsCount = items.reduce((sum, item) => sum + item.quantity, 0);

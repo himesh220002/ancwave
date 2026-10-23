@@ -12,12 +12,14 @@
                                          │
                                          ▼ (HTTPS / TLS 1.3 via ACM)
                              [ AWS CloudFront Global Edge ]
-                                 (600+ Edge POPs, <15ms)
+                           (d3h0eouvv2gscn.cloudfront.net)
                                     │               │
-             (Static Images / Media)│               │(Dynamic App / API)
+             (Static Assets & Media)│               │(Dynamic App & API Routes)
+             (/_next/static/*, /img)│               │(/*)
                                     ▼               ▼
-                       [ Amazon S3 Media Bucket ]   [ AWS EC2 / ECS Next.js Cluster ]
-                       (Presigned Uploads)          (Next.js 16 App Router)
+                       [ Amazon S3 Media Bucket ]   [ AWS Lambda: ancwave-live-app ]
+                       (Presigned Direct Uploads)   (Next.js Standalone + AWS Web Adapter)
+                                                    (⚡ Scale-to-Zero: $0.00 Idle Cost!)
                                                             │
                                             ┌───────────────┴───────────────┐
                                             ▼                               ▼
@@ -27,7 +29,7 @@
                                                         ┌───────────────────┴───────────────────┐
                                                         ▼                                       ▼
                                               [ AWS Lambda Worker ]                  [ Next.js On-Demand ISR ]
-                                              (Stock Sync & Invoicing)               (/api/revalidate Hook)
+                                              (ancwave-order-processor)              (/api/revalidate Hook)
 ```
 
 ---
@@ -57,20 +59,29 @@
      - **Target 2**: Next.js On-Demand ISR revalidate endpoint (wipes stale cache).
      - **Target 3**: Amazon SNS / SES (sends email receipt).
 
-### 4. AWS Lambda (Serverless Compute)
-- **Role**: Lightweight, event-driven background functions running on ARM64 AWS Graviton architecture.
-- **Functions**:
-  - `ancwave-order-processor`: Executes upon EventBridge event, handles inventory ledger locking.
-  - `ancwave-receipt-pdf`: Generates PDF invoice asynchronously and stores it in S3.
+### 4. AWS Lambda (Serverless Compute & Scale-to-Zero)
+- **Role**: Provides on-demand serverless execution that scales to zero ($0.00/month idle cost) when no users are active, and wakes up dynamically upon traffic.
+- **Two Core Lambda Components**:
+  1. **`ancwave-live-app` (Web Runner)**:
+     - Runs the entire Next.js App Router standalone build packaged in Docker with the official **AWS Lambda Web Adapter**.
+     - Connected to a **Lambda Function URL** with response streaming enabled (`AWS_LWA_INVOKE_MODE=response_stream`).
+     - Scales to 0 instances when idle (zero cost!). Starts in ~800ms upon traffic, and remains warm with sub-25ms response times while users browse.
+  2. **`ancwave-order-processor` (EventBridge Background Worker)**:
+     - Asynchronously triggered by `ancwave-event-bus` on `OrderPlaced` and `StockUpdated`.
+     - Executes Next.js On-Demand ISR cache invalidation (`/api/revalidate`) and background ledger updates without slowing down customer checkout.
 
 ### 5. AWS Certificate Manager (ACM)
 - **Role**: Issues zero-cost wildcard SSL/TLS certificates (`*.ancwave.com`).
 - **Feature**: Managed automatic renewal with DNS validation via Route 53. Deployed directly to CloudFront for TLS 1.3 protocol negotiation and Perfect Forward Secrecy.
 
-### 6. Amazon EC2 (Elastic Compute Cloud) & Docker
-- **Role**: Hosts the Next.js App Router cluster on **AWS Graviton3 (`t4g.large`)** instances.
-- **Why Graviton3?**: Delivers 40% better price-performance compared to x86 instances for Node.js workloads.
-- **Containerization**: Packaged via multi-stage Alpine Dockerfile (`infrastructure/aws/Dockerfile`) producing a lightweight 120MB image.
+### 6. Compute Comparison: Serverless Lambda vs. Traditional EC2
+- **Option A (Recommended): AWS Lambda Serverless (Scale-to-Zero)**:
+  - **Idle Cost**: **$0.00** (Uses AWS Lambda Free Tier: 1M free requests/month).
+  - **Zero Maintenance**: No OS patching, no disk maintenance.
+  - **Deployment**: Automatic container push to Amazon ECR (`infrastructure/aws/deploy-lambda.sh`).
+- **Option B (Alternative): Traditional AWS EC2 (`t4g.large`)**:
+  - Always-on VM running Docker container (`infrastructure/aws/deploy-ec2.sh`).
+  - Fixed cost ~$20–$35/month billed 24/7. Zero cold start. Ideal for constant 24/7 high traffic.
 
 ### 7. AWS IAM (Identity & Access Management)
 - **Role**: Enforces the principle of **least privilege**.

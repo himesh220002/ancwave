@@ -76,10 +76,48 @@ export interface ProductQnA {
   date: string;
 }
 
+export interface IVariant {
+  sku: string;               // Unique stock keeping unit
+  color: string;             // Variant color
+  specOverride: string;      // Specific variance details (e.g., "Detachable Mic", "Attached Mic")
+  price: number;             // Override price if different from parent
+  discount: number;          // Specific variant discount percentage
+  stock: number;             // Real-time inventory count
+  images: string[];          // S3 URLs / CloudFront Paths specific to this variant
+}
+
+export interface IProduct {
+  productId: string;         // Root product code (e.g., "ANC-AIR-TWS")
+  name: string;
+  description: string;
+  globalSpecs: Record<string, string>; // Shared specifications across all variants
+  basePrice: number;
+  baseDiscount: number;
+  type: string;              // "TWS Earbuds", "Over-Ear Headphones", etc.
+  variants: IVariant[];      // Child array for flexible multi-variant configurations
+  averageRating: number;     // Combined dynamic rating average
+  reviewCount: number;
+}
+
+export interface IReview {
+  reviewId: string;
+  productId: string;
+  userId: string;
+  userName?: string;
+  userRole?: string;
+  userInitials?: string;
+  variantSku?: string;
+  rating: number;            // 1 to 5 stars
+  comment: string;
+  images: string[];          // Maximum 5 items. Holds S3/CloudFront reference paths
+  createdAt: string | Date;
+}
+
 export interface ProductData {
   _id?: string;
   id: string;
   slug: string;
+  productId?: string;
   categorySlug: "headphones" | "earbuds" | "earphones";
   name: string;
   model: string;
@@ -88,6 +126,9 @@ export interface ProductData {
   description: string;
   price: number;
   originalPrice: number;
+  basePrice?: number;
+  baseDiscount?: number;
+  type?: string;
   activeDiscount: number;
   stock: number;
   lowStockThreshold: number;
@@ -96,6 +137,7 @@ export interface ProductData {
   returnDays: number;
   deliveryEstimate: string;
   rating: number;
+  averageRating?: number;
   reviewCount: number;
   sku: string;
   isTws?: boolean;
@@ -104,9 +146,11 @@ export interface ProductData {
   primaryValueCallouts?: ValueCallout[];
   explodedView?: ExplodedViewData;
   tabbedSpecs?: TabbedSpecs;
+  globalSpecs?: Record<string, string>;
   hygienePolicy?: HygienePolicyData;
   qna?: ProductQnA[];
   variants: ColorVariant[];
+  childVariants?: IVariant[];
   specs: {
     dimensionsMetric: string;
     dimensionsImperial: string;
@@ -132,13 +176,18 @@ export interface ProductData {
 
 export interface Review {
   id: string;
+  reviewId?: string;
+  productId?: string;
+  userId?: string;
   author: string;
   role: string;
   initials: string;
   variant: string;
+  variantSku?: string;
   rating: number;
   comment: string;
   verified: boolean;
+  images?: string[];
   tags?: string[];
   createdAt?: string;
 }
@@ -159,6 +208,7 @@ export interface CartItem {
 export interface Order {
   id: string;
   orderNumber: string;
+  userId?: string;
   customer: {
     fullName: string;
     email: string;
@@ -187,7 +237,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "customer";
+  role: "owner" | "admin" | "user" | "customer";
 }
 
 export interface AWSEventLog {

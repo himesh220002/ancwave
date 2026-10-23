@@ -5,18 +5,14 @@
       "Name": "ancwave-order-placed-rule",
       "Description": "Triggers Lambda order processor and Next.js ISR on-demand revalidation when an order is completed",
       "EventPattern": {
-        "source": ["aws.eventbridge.ancwave"],
-        "detail-type": ["OrderPlaced"]
+        "source": ["aws.eventbridge.ancwave", "ancwave.store"],
+        "detail-type": ["OrderPlaced", "StockUpdated", "CachePurged"]
       },
       "State": "ENABLED",
       "Targets": [
         {
           "Id": "target-lambda-order-processor",
-          "Arn": "arn:aws:lambda:us-east-1:123456789012:function:ancwave-order-processor"
-        },
-        {
-          "Id": "target-api-revalidate-webhook",
-          "Arn": "arn:aws:events:us-east-1:123456789012:api-destination/ancwave-revalidate-webhook"
+          "Arn": "arn:aws:lambda:ap-south-1:823787500418:function:ancwave-order-processor"
         }
       ]
     },

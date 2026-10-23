@@ -19,9 +19,13 @@ import {
   Minus,
   Plus,
   X,
+  User as UserIcon,
+  LogOut,
+  ChevronDown,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useCart, CustomerCheckoutDetails } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { Order } from "@/types";
 import { toast } from "@/components/Toaster";
 
@@ -44,11 +48,17 @@ export default function CheckoutPage() {
     customerDetails,
     setCustomerDetails,
   } = useCart();
+  const { user, isOwner, isAdmin, setIsAuthModalOpen, logout } = useAuth();
 
   const [formData, setFormData] = useState<CustomerCheckoutDetails>(customerDetails);
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+
+  // User auth interception & checkout handshake
+  const [pendingPaymentAfterAuth, setPendingPaymentAfterAuth] = useState(false);
+  const [isCheckoutUserMenuOpen, setIsCheckoutUserMenuOpen] = useState(false);
+  const checkoutUserMenuRef = React.useRef<HTMLDivElement>(null);
 
   // In-app Razorpay modal for test environments without live key
   const [isRazorpayModalOpen, setIsRazorpayModalOpen] = useState(false);
@@ -58,6 +68,20 @@ export default function CheckoutPage() {
   const [createdOrderId, setCreatedOrderId] = useState<string>("order_demo");
 
   const isIndia = formData.country?.toLowerCase() === "india";
+
+  // Dismiss checkout user menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        checkoutUserMenuRef.current &&
+        !checkoutUserMenuRef.current.contains(e.target as Node)
+      ) {
+        setIsCheckoutUserMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Load Razorpay Checkout.js script
   useEffect(() => {
@@ -72,6 +96,30 @@ export default function CheckoutPage() {
       }
     };
   }, []);
+
+  // 4. The Safe Handshake: Sync user data & immediately resume payment once user logs in
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        fullName:
+          !prev.fullName || prev.fullName === "Alex Morgan" ? user.name : prev.fullName,
+        email:
+          !prev.email || prev.email === "alex@example.com" ? user.email : prev.email,
+      }));
+
+      if (pendingPaymentAfterAuth) {
+        setPendingPaymentAfterAuth(false);
+        toast({
+          type: "success",
+          title: `Welcome, ${user.name.split(" ")[0]}!`,
+          description: "Authenticated securely. Connecting directly to Razorpay...",
+        });
+        executePaymentPipeline(user.id);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, pendingPaymentAfterAuth]);
 
   const handleCountryChange = (country: string) => {
     const isNowIndia = country.toLowerCase() === "india";
@@ -97,8 +145,9 @@ export default function CheckoutPage() {
   const razorpayCurrency = isIndia ? "INR" : "USD";
   const razorpayAmount = isIndia ? inrTotal : finalTotal;
 
-  const handleInitiatePayment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // 1. The Click & 2. The Interception
+  const handleInitiatePayment = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
 
     if (!formData.fullName || !formData.email || !formData.address || !formData.city) {
       toast({
@@ -109,11 +158,29 @@ export default function CheckoutPage() {
       return;
     }
 
+    // 2. The Interception: Check auth state before hitting payment
+    if (!user) {
+      setPendingPaymentAfterAuth(true);
+      toast({
+        type: "info",
+        title: "Sign In Required for Checkout",
+        description: "Please sign in or create an account. Your typed delivery address is preserved.",
+      });
+      // 3. The Auth Modal: open modal directly on top of checkout page without page reload
+      setIsAuthModalOpen(true);
+      return; // Halt execution until logged in
+    }
+
+    await executePaymentPipeline(user.id);
+  };
+
+  // 4 & 5. The Backend Handshake & Dynamic Razorpay Pop-up on API Resolve (No Timer)
+  const executePaymentPipeline = async (activeUserId?: string) => {
     setCustomerDetails(formData);
     setIsSubmitting(true);
 
     try {
-      // 1. Create order on backend via Razorpay SDK
+      // 3. Talk to backend to save shipping details & generate Razorpay Order ID
       const res = await fetch("/api/razorpay/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,6 +188,8 @@ export default function CheckoutPage() {
           amount: razorpayAmount,
           currency: razorpayCurrency,
           receipt: "anc_" + Date.now(),
+          userId: activeUserId || user?.id,
+          customer: formData,
         }),
       });
 
@@ -131,7 +200,7 @@ export default function CheckoutPage() {
 
       setCreatedOrderId(orderData.orderId);
 
-      // 2. If live Razorpay key is present and script loaded, invoke official standard popup
+      // 5. The Razorpay Pop-up: Trigger dynamically as soon as API returns (No fragile setTimeout delay!)
       if (
         typeof window !== "undefined" &&
         window.Razorpay &&
@@ -153,7 +222,8 @@ export default function CheckoutPage() {
             await handlePaymentSuccess(
               response.razorpay_payment_id,
               response.razorpay_order_id,
-              response.razorpay_signature
+              response.razorpay_signature,
+              activeUserId || user?.id
             );
           },
           prefill: {
@@ -162,6 +232,7 @@ export default function CheckoutPage() {
             contact: formData.contact,
           },
           notes: {
+            userId: activeUserId || user?.id || "guest",
             address: formData.address,
             city: formData.city,
             state: formData.state,
@@ -191,7 +262,7 @@ export default function CheckoutPage() {
       toast({
         type: "error",
         title: "Checkout Error",
-        description: "Could not initialize Razorpay checkout",
+        description: err instanceof Error ? err.message : "Could not initialize Razorpay checkout",
       });
       setIsSubmitting(false);
     }
@@ -200,7 +271,8 @@ export default function CheckoutPage() {
   const handlePaymentSuccess = async (
     paymentId: string,
     orderId: string,
-    signature?: string
+    signature?: string,
+    userIdForOrder?: string
   ) => {
     try {
       const itemsToSubmit =
@@ -229,6 +301,7 @@ export default function CheckoutPage() {
           amount: finalTotal,
           customer: formData,
           items: itemsToSubmit,
+          userId: userIdForOrder || user?.id,
         }),
       });
 
@@ -291,9 +364,74 @@ export default function CheckoutPage() {
             </Link>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
-            <Lock className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Secure Checkout</span>
+          {/* Right Header: User Account Icon & Secure Badge */}
+          <div className="flex items-center gap-2.5 sm:gap-4">
+            {!user ? (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50 text-xs font-semibold text-zinc-700 hover:text-black transition-colors shadow-2xs"
+                title="Sign In or Register"
+                aria-label="Sign In or Register"
+              >
+                <UserIcon className="w-3.5 h-3.5 stroke-[2] text-zinc-600" />
+                <span className="hidden xs:inline">Sign In</span>
+              </button>
+            ) : (
+              <div className="relative" ref={checkoutUserMenuRef}>
+                <button
+                  onClick={() => setIsCheckoutUserMenuOpen(!isCheckoutUserMenuOpen)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50 transition-all text-xs font-medium text-zinc-800 shadow-2xs"
+                  aria-label="User Account Menu"
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[9px] text-white ${
+                      isOwner ? "bg-amber-600" : isAdmin ? "bg-blue-600" : "bg-zinc-900"
+                    }`}
+                  >
+                    {user.name.slice(0, 1).toUpperCase()}
+                  </div>
+                  <span className="hidden xs:inline max-w-[90px] truncate">{user.name.split(" ")[0]}</span>
+                  <ChevronDown className="w-3 h-3 text-zinc-400" />
+                </button>
+
+                {isCheckoutUserMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-zinc-200 shadow-xl p-2 z-50 animate-in fade-in zoom-in-95 space-y-1">
+                    <div className="px-3 py-2 border-b border-zinc-100">
+                      <p className="text-xs font-bold text-zinc-900 truncate">{user.name}</p>
+                      <p className="text-[11px] font-mono text-zinc-500 truncate">{user.email}</p>
+                      <span className="inline-block mt-1 text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-zinc-100 text-zinc-700">
+                        Role: {user.role}
+                      </span>
+                    </div>
+                    {(isOwner || isAdmin) && (
+                      <Link
+                        href="/admin"
+                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-800 hover:bg-zinc-100 transition-colors"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Admin Console</span>
+                      </Link>
+                    )}
+                    <button
+                      onClick={async () => {
+                        setIsCheckoutUserMenuOpen(false);
+                        await logout();
+                        toast({ type: "info", title: "Signed Out", description: "You have signed out." });
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors text-left"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
+              <Lock className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="hidden sm:inline">Secure Checkout</span>
+            </div>
           </div>
         </div>
       </header>
@@ -368,6 +506,51 @@ export default function CheckoutPage() {
                   Enter your delivery address to proceed with Razorpay checkout.
                 </p>
               </div>
+
+              {/* Authentication Status Banner */}
+              {!user ? (
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-blue-50/70 border border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-900">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <UserIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-zinc-900">Have an account or want to register?</p>
+                      <p className="text-[11px] text-zinc-600 mt-0.5">
+                        Signing in saves your order to your profile. Or click pay to sign in at checkout.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAuthModalOpen(true)}
+                    className="self-start sm:self-center px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors shrink-0 shadow-2xs"
+                  >
+                    Sign In / Register
+                  </button>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-100 flex items-center justify-between text-xs text-emerald-950">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+                      {user.name.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-zinc-900">{user.name}</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold uppercase">
+                          {user.role}
+                        </span>
+                      </div>
+                      <p className="text-[11px] font-mono text-zinc-600">{user.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-100/60 px-2.5 py-1 rounded-full">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Verified Buyer</span>
+                  </div>
+                </div>
+              )}
 
               {/* Form */}
               <form onSubmit={handleInitiatePayment} className="space-y-6">
@@ -1024,7 +1207,8 @@ export default function CheckoutPage() {
                   handlePaymentSuccess(
                     "pay_" + Math.random().toString(36).substring(2, 14),
                     createdOrderId,
-                    "sig_verified_hmac"
+                    "sig_verified_hmac",
+                    user?.id
                   )
                 }
                 className="w-full py-4 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-semibold text-sm transition-all shadow-md flex items-center justify-center gap-2"

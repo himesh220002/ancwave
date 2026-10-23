@@ -30,9 +30,22 @@ export default function ProductsCatalogPage() {
   const [sortOption, setSortOption] = useState<SortOption>("featured");
   const [justAddedSlug, setJustAddedSlug] = useState<string | null>(null);
 
+  const [catalogProducts, setCatalogProducts] = useState<ProductData[]>(sampleCatalog);
+
+  React.useEffect(() => {
+    fetch("/api/product?all=true")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.products && Array.isArray(data.products)) {
+          setCatalogProducts(data.products);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Filter & sort logic
   const filteredProducts = useMemo(() => {
-    let list = [...sampleCatalog];
+    let list = [...catalogProducts];
 
     if (selectedCategory !== "all") {
       list = list.filter((p) => p.categorySlug === selectedCategory);
@@ -43,11 +56,11 @@ export default function ProductsCatalogPage() {
     } else if (sortOption === "price-desc") {
       list.sort((a, b) => b.price - a.price);
     } else if (sortOption === "rating") {
-      list.sort((a, b) => b.rating - a.rating);
+      list.sort((a, b) => (b.averageRating || b.rating) - (a.averageRating || a.rating));
     }
 
     return list;
-  }, [selectedCategory, sortOption]);
+  }, [catalogProducts, selectedCategory, sortOption]);
 
   const handleQuickAdd = (product: ProductData) => {
     const defaultVariant = product.variants[0];
@@ -210,7 +223,7 @@ export default function ProductsCatalogPage() {
                 {/* Rating Badge */}
                 <div className="absolute bottom-4 right-4 flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md text-xs font-semibold text-zinc-900 border border-zinc-200 shadow-2xs">
                   <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                  <span>{product.rating}</span>
+                  <span>{product.averageRating || product.rating}</span>
                   <span className="text-[10px] text-zinc-400 font-normal">({product.reviewCount})</span>
                 </div>
               </div>

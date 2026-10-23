@@ -5,7 +5,13 @@ import { store } from "@/lib/store";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { amount = 361, currency = "USD", receipt = "rcpt_" + Date.now() } = body;
+    const {
+      amount = 361,
+      currency = "USD",
+      receipt = "rcpt_" + Date.now(),
+      userId,
+      customer,
+    } = body;
 
     const currentProduct = store.getProduct();
     if (currentProduct.stock <= 0) {
@@ -38,6 +44,8 @@ export async function POST(req: NextRequest) {
           notes: {
             product: "ancwave Form 01",
             revalidateTrigger: "true",
+            userId: userId || "guest",
+            customerEmail: customer?.email || "unspecified",
           },
         });
 

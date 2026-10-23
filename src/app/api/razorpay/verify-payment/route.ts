@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       customer,
       items,
       amount = 361,
+      userId,
     } = body;
 
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
     const order: Order = {
       id: "ord-" + Math.random().toString(36).substring(2, 9),
       orderNumber,
+      userId: userId || undefined,
       customer: customer || {
         fullName: "Alex Morgan",
         email: "alex@example.com",

@@ -9,8 +9,8 @@
     "Quantity": 2,
     "Items": [
       {
-        "Id": "ancwave-nextjs-ec2-origin",
-        "DomainName": "app.ancwave.com",
+        "Id": "ancwave-nextjs-lambda-origin",
+        "DomainName": "example-lambda-id.lambda-url.ap-south-1.on.aws",
         "CustomOriginConfig": {
           "HTTPPort": 80,
           "HTTPSPort": 443,
@@ -23,15 +23,16 @@
       },
       {
         "Id": "ancwave-s3-media-origin",
-        "DomainName": "ancwave-media-storage-production.s3.us-east-1.amazonaws.com",
+        "DomainName": "ancwave-media-storage-production.s3.ap-south-1.amazonaws.com",
+        "OriginAccessControlId": "E3HVB881LFOYR6",
         "S3OriginConfig": {
-          "OriginAccessIdentity": "origin-access-identity/cloudfront/E2EXAMPLEOAI"
+          "OriginAccessIdentity": ""
         }
       }
     ]
   },
   "DefaultCacheBehavior": {
-    "TargetOriginId": "ancwave-nextjs-ec2-origin",
+    "TargetOriginId": "ancwave-nextjs-lambda-origin",
     "ViewerProtocolPolicy": "redirect-to-https",
     "AllowedMethods": {
       "Quantity": 7,

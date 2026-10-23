@@ -27,13 +27,32 @@ import {
   CheckCircle2,
   Share2,
 } from "lucide-react";
-import { ProductData, ProductColor, TwsComponentType, Review } from "@/types";
+import {
+  ProductData,
+  ProductColor,
+  TwsComponentType,
+  Review,
+  IReview,
+  IVariant,
+} from "@/types";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
 import { toast } from "@/components/Toaster";
 import { sampleReviews } from "@/lib/store";
+import confetti from "canvas-confetti";
+import {
+  Camera,
+  X,
+  Lock,
+  UploadCloud,
+  Send,
+  Loader2,
+  CheckCircle,
+  Image as ImageIcon,
+} from "lucide-react";
 
 interface ProductDetailViewProps {
   product: ProductData;
@@ -50,6 +69,36 @@ export function ProductDetailView({
 }: ProductDetailViewProps) {
   const router = useRouter();
   const { addItem } = useCart();
+  const { user, setIsAuthModalOpen } = useAuth();
+
+  // Child Variant selection (e.g. Detachable Mic vs Built-in Mic)
+  const [selectedVariantSku, setSelectedVariantSku] = useState<string>(
+    product.childVariants?.[0]?.sku || ""
+  );
+
+  // Dynamic reviews & live rating state
+  const [reviewsList, setReviewsList] = useState<(Review & IReview)[]>(sampleReviews);
+  const [liveRating, setLiveRating] = useState<number>(product.averageRating || product.rating);
+  const [liveReviewCount, setLiveReviewCount] = useState<number>(product.reviewCount);
+  const [eligibility, setEligibility] = useState<{
+    eligible: boolean;
+    reason?: string;
+    message?: string;
+    hasReviewed?: boolean;
+  } | null>(null);
+  const [isLoadingEligibility, setIsLoadingEligibility] = useState<boolean>(false);
+
+  // Review Composer form state
+  const [formRating, setFormRating] = useState<number>(5);
+  const [formHoverRating, setFormHoverRating] = useState<number>(0);
+  const [formComment, setFormComment] = useState<string>("");
+  const [formVariantSku, setFormVariantSku] = useState<string>(
+    product.childVariants?.[0]?.sku || ""
+  );
+  const [formImages, setFormImages] = useState<string[]>([]);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
+  const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
 
   // Active color variant
   const [selectedColor, setSelectedColor] = useState<ProductColor>(
@@ -171,20 +220,225 @@ export function ProductDetailView({
     router.push("/checkout");
   };
 
+  // Fetch dynamic reviews and user purchase eligibility
+  const fetchReviewsAndEligibility = React.useCallback(async () => {
+    try {
+      const targetId = product.productId || product.slug;
+
+      // 1. Fetch live approved reviews and aggregate rating
+      const res = await fetch(`/api/reviews?productId=${targetId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reviews && data.reviews.length > 0) {
+          setReviewsList(data.reviews);
+          if (typeof data.averageRating === "number") setLiveRating(data.averageRating);
+          if (typeof data.reviewCount === "number") setLiveReviewCount(data.reviewCount);
+        }
+      }
+
+      // 2. Query conditional review validation (LoggedIn + Bought)
+      setIsLoadingEligibility(true);
+      const eligRes = await fetch(`/api/reviews/eligibility?productId=${targetId}`);
+      if (eligRes.ok) {
+        const eligData = await eligRes.json();
+        setEligibility(eligData);
+      }
+    } catch (err) {
+      console.warn("Reviews/eligibility fetch error:", err);
+    } finally {
+      setIsLoadingEligibility(false);
+    }
+  }, [product.productId, product.slug, user]);
+
+  useEffect(() => {
+    fetchReviewsAndEligibility();
+  }, [fetchReviewsAndEligibility]);
+
+  // Secure 5-Photo Media Pipeline: Direct Browser-to-S3 Presigned Upload
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (formImages.length + files.length > 5) {
+      toast({
+        type: "info",
+        title: "Photo Limit Exceeded",
+        description: `Reviews are limited to a maximum of 5 photos. You currently have ${formImages.length} attached.`,
+      });
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+
+    try {
+      const newUrls: string[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        // 1. Request AWS S3 Presigned URL from backend API route
+        const presignRes = await fetch("/api/reviews/presigned-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            contentType: file.type || "image/jpeg",
+          }),
+        });
+
+        const presignData = await presignRes.json();
+        if (!presignData.success || !presignData.uploadUrl) {
+          throw new Error(presignData.error || "Failed to generate secure S3 presigned URL");
+        }
+
+        // 2. Upload directly from the browser to the AWS S3 Bucket
+        const uploadRes = await fetch(presignData.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type || "image/jpeg" },
+          body: file,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error("Direct S3 upload failed");
+        }
+
+        // 3. Store clean S3/CloudFront URL
+        newUrls.push(presignData.publicUrl);
+      }
+
+      setFormImages((prev) => [...prev, ...newUrls].slice(0, 5));
+      toast({
+        type: "success",
+        title: "Photo Uploaded",
+        description: `Direct AWS S3 upload completed for ${newUrls.length} image(s).`,
+      });
+    } catch (err: any) {
+      console.error("Direct S3 photo upload failed:", err);
+      toast({
+        type: "error",
+        title: "Media Upload Failed",
+        description: err.message || "Failed to upload photo to S3 storage",
+      });
+    } finally {
+      setIsUploadingPhoto(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setFormImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Submit verified review
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formComment.trim()) {
+      toast({
+        type: "info",
+        title: "Review Comment Required",
+        description: "Please share a few words about your acoustic experience.",
+      });
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      const selectedVariantObj = product.childVariants?.find((v) => v.sku === formVariantSku);
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: product.productId || product.slug,
+          slug: product.slug,
+          rating: formRating,
+          comment: formComment.trim(),
+          variantSku: formVariantSku,
+          variantName: selectedVariantObj?.color || currentVariant.name,
+          images: formImages.slice(0, 5),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+        toast({
+          type: "success",
+          title: "Verified Review Published!",
+          description: "Your rating is reflected across product cards and pages. Edge ISR purged.",
+        });
+
+        if (data.review) {
+          setReviewsList((prev) => [data.review, ...prev]);
+        }
+        if (typeof data.averageRating === "number") setLiveRating(data.averageRating);
+        if (typeof data.reviewCount === "number") setLiveReviewCount(data.reviewCount);
+
+        setFormComment("");
+        setFormImages([]);
+        fetchReviewsAndEligibility();
+      } else {
+        toast({
+          type: "error",
+          title: "Submission Blocked",
+          description: data.error || "Conditional review criteria not met",
+        });
+      }
+    } catch {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: "Failed to submit review",
+      });
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  // Demo purchase helper for fast verification testing
+  const handleQuickDemoVerify = async () => {
+    try {
+      const res = await fetch("/api/reviews/eligibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: product.slug }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          type: "success",
+          title: "Demo Purchase Linked",
+          description: "Completed order registered! Review privileges are now unlocked.",
+        });
+        fetchReviewsAndEligibility();
+      } else {
+        toast({
+          type: "error",
+          title: "Sign In Required",
+          description: "Please sign in first to link a demo purchase.",
+        });
+        setIsAuthModalOpen(true);
+      }
+    } catch {
+      toast({ type: "error", title: "Error", description: "Failed to link demo order" });
+    }
+  };
+
   // Filtered reviews
-  const allReviews: Review[] = sampleReviews;
-  const filteredReviews = reviewFilterTag === "all"
-    ? allReviews
-    : allReviews.filter((r) => r.tags?.includes(reviewFilterTag));
+  const filteredReviews = reviewsList.filter((r) => {
+    if (reviewFilterTag === "all") return true;
+    if (reviewFilterTag === "photos") return r.images && r.images.length > 0;
+    return r.tags?.includes(reviewFilterTag);
+  });
 
   // Review tags list
   const availableTags = [
     { id: "all", label: "All Reviews" },
-    { id: "Fit during running", label: "Fit during running" },
-    { id: "Bass response", label: "Bass response" },
-    { id: "Call clarity", label: "Call clarity" },
+    { id: "photos", label: "📸 With Photos" },
     { id: "ANC performance", label: "ANC performance" },
     { id: "Clamping force & comfort", label: "Clamping force & comfort" },
+    { id: "Flight travel", label: "Flight travel" },
+    { id: "Bass response", label: "Bass response" },
+    { id: "Call clarity", label: "Call clarity" },
   ];
 
   return (
@@ -295,8 +549,8 @@ export function ProductDetailView({
                   </span>
                   <div className="flex items-center gap-1 text-xs font-semibold text-zinc-900">
                     <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    <span>{product.rating}</span>
-                    <span className="text-zinc-400 font-normal">({product.reviewCount} verified reviews)</span>
+                    <span>{liveRating}</span>
+                    <span className="text-zinc-400 font-normal">({liveReviewCount} verified reviews)</span>
                   </div>
                 </div>
 
@@ -382,6 +636,74 @@ export function ProductDetailView({
                           <div className="mt-1 flex items-center justify-between text-[9px] font-mono text-zinc-400">
                             <span>SKU: {comp.sku}</span>
                             <span className="text-emerald-600">Stock: {comp.stock}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic Child Variants: Hardware Feature Variance */}
+              {product.childVariants && product.childVariants.length > 0 && (
+                <div className="space-y-2.5 pt-3 border-t border-zinc-100">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-zinc-900 flex items-center gap-1.5 font-mono uppercase tracking-wider">
+                      <Layers className="w-3.5 h-3.5 text-blue-600" />
+                      Hardware Variant Architecture
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {product.childVariants.length} configurations
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-500">
+                    Engineered feature sets and microphone acoustic options:
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    {product.childVariants.map((v) => {
+                      const isSelected = selectedVariantSku === v.sku;
+                      return (
+                        <button
+                          key={v.sku}
+                          type="button"
+                          onClick={() => {
+                            setSelectedVariantSku(v.sku);
+                            const matchingColor = product.variants.find(
+                              (cv) => cv.name.toLowerCase() === v.color.toLowerCase()
+                            );
+                            if (matchingColor) setSelectedColor(matchingColor.id);
+                          }}
+                          className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between gap-3 ${
+                            isSelected
+                              ? "bg-white border-blue-600 shadow-xs ring-1.5 ring-blue-600/30"
+                              : "bg-white/80 border-zinc-200 hover:border-zinc-300"
+                          }`}
+                        >
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-zinc-900">{v.color}</span>
+                              <span className="text-[10px] font-mono bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-600">
+                                {v.sku}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-500 truncate">
+                              {v.specOverride || "Integrated Acoustic Spec"}
+                            </p>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <div className="text-xs font-mono font-bold text-zinc-900">
+                              ${v.price}
+                            </div>
+                            <span
+                              className={`text-[9px] font-mono font-semibold ${
+                                v.stock <= 5 ? "text-amber-600" : "text-emerald-600"
+                              }`}
+                            >
+                              {v.stock === 0 ? "Sold out" : `${v.stock} units left`}
+                            </span>
                           </div>
                         </button>
                       );
@@ -715,26 +1037,26 @@ export function ProductDetailView({
           )}
 
           {/* User Reviews Header & Filterable Tags */}
-          <div className="space-y-6">
+          <div className="space-y-8">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
               <div>
                 <span className="text-[11px] font-mono tracking-widest text-zinc-400 uppercase font-semibold">
                   VERIFIED COMMUNITY ACOUSTICS
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
-                  Customer Experiences & Acoustic Pain Points
+                  Customer Experiences & Acoustic Reviews
                 </h2>
               </div>
               <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
                 <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                <span className="font-bold text-zinc-900">{product.rating} / 5.0</span>
-                <span>(Based on {product.reviewCount} customer reviews)</span>
+                <span className="font-bold text-zinc-900">{liveRating} / 5.0</span>
+                <span>(Based on {liveReviewCount} customer reviews)</span>
               </div>
             </div>
 
             {/* Pain Point Filter Pills */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-              <span className="text-xs text-zinc-400 font-medium shrink-0">Filter by focus:</span>
+              <span className="text-xs text-zinc-400 font-medium shrink-0">Filter:</span>
               {availableTags.map((tag) => (
                 <button
                   key={tag.id}
@@ -753,41 +1075,329 @@ export function ProductDetailView({
 
             {/* Reviews Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {filteredReviews.slice(0, 3).map((review) => (
+              {filteredReviews.map((review) => (
                 <div
-                  key={review.id}
+                  key={review.id || review.reviewId}
                   className="rounded-3xl bg-white border border-[#EAEAE5] p-6 space-y-4 flex flex-col justify-between shadow-2xs"
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1">
-                        {[...Array(review.rating)].map((_, i) => (
-                          <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3.5 h-3.5 ${
+                              i < review.rating
+                                ? "fill-amber-400 text-amber-400"
+                                : "text-zinc-200"
+                            }`}
+                          />
                         ))}
                       </div>
-                      <span className="text-[10px] font-mono text-zinc-400">
-                        {review.createdAt || "Verified buyer"}
+                      <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold">
+                        <Check className="w-3 h-3" />
+                        Verified Buyer
                       </span>
                     </div>
 
-                    <p className="text-xs text-zinc-600 leading-relaxed italic">
+                    <p className="text-xs text-zinc-700 leading-relaxed font-sans">
                       {review.comment}
                     </p>
+
+                    {/* Photo Gallery (Up to 5 Photos) */}
+                    {review.images && review.images.length > 0 && (
+                      <div className="pt-2">
+                        <div className="flex gap-2 overflow-x-auto py-1">
+                          {review.images.map((imgUrl, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setActiveLightboxImage(imgUrl)}
+                              className="relative w-14 h-14 rounded-xl overflow-hidden bg-zinc-100 border border-zinc-200 shrink-0 hover:opacity-90 hover:scale-105 transition-all cursor-pointer group"
+                            >
+                              <Image
+                                src={imgUrl}
+                                alt={`Customer photo ${idx + 1}`}
+                                fill
+                                className="object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-colors">
+                                <Maximize2 className="w-3.5 h-3.5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-3 border-t border-zinc-100 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold text-zinc-900">{review.author}</h4>
-                      <p className="text-[11px] text-zinc-400">{review.role}</p>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-zinc-100 text-zinc-700 font-bold text-[10px] flex items-center justify-center">
+                        {review.initials || "VB"}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-zinc-900">{review.author || review.userName}</h4>
+                        <p className="text-[10px] text-zinc-400">{review.role || review.variant || "Form 01"}</p>
+                      </div>
                     </div>
-                    {review.tags && review.tags[0] && (
-                      <span className="px-2 py-0.5 rounded text-[9px] font-mono bg-zinc-100 text-zinc-600">
-                        {review.tags[0]}
-                      </span>
-                    )}
+                    <span className="text-[10px] font-mono text-zinc-400">
+                      {review.createdAt || "Verified buyer"}
+                    </span>
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* CONDITIONAL REVIEW COMPOSER (LoggedIn + Bought) */}
+            <div className="pt-6">
+              {/* Case 1: User is Not Logged In */}
+              {!user && (
+                <div className="rounded-3xl bg-white border border-[#EAEAE5] p-8 text-center space-y-4 shadow-2xs">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base sm:text-lg font-bold text-zinc-900">
+                      Share Your Acoustic Experience
+                    </h3>
+                    <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                      Only verified owners of ancwave hardware can submit reviews. Sign in to your account to share your feedback.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsAuthModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-black text-white font-semibold text-xs shadow-xs transition-colors"
+                  >
+                    <span>Sign In to Review</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Case 2: User is Logged In, but has NO purchase */}
+              {user && eligibility && !eligibility.eligible && (
+                <div className="rounded-3xl bg-amber-50/60 border border-amber-200/80 p-8 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base sm:text-lg font-bold text-amber-950">
+                      Verified Owner Check: No Purchase Found
+                    </h3>
+                    <p className="text-xs text-amber-800/80 max-w-lg mx-auto">
+                      {eligibility.message ||
+                        "Our system cross-references active customer orders before publishing reviews to ensure authentic acoustic insights."}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                    <Link
+                      href="/checkout"
+                      className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-black text-white font-semibold text-xs shadow-xs transition-colors"
+                    >
+                      Purchase {product.name}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleQuickDemoVerify}
+                      className="px-4 py-2 rounded-xl bg-amber-200/70 hover:bg-amber-200 text-amber-900 font-semibold text-xs border border-amber-300 transition-colors"
+                    >
+                      ⚡ Demo Testing: Quick-Verify Purchase
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Case 3: User is Logged In AND Has Purchased -> Full Review Composer */}
+              {user && eligibility?.eligible && (
+                <div className="rounded-3xl bg-white border border-[#EAEAE5] p-6 sm:p-8 space-y-6 shadow-2xs">
+                  <div className="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <h3 className="text-lg font-bold text-zinc-900">
+                          Submit Your Verified Acoustic Review
+                        </h3>
+                      </div>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Authenticated as <span className="font-semibold text-zinc-800">{user.name}</span> ({user.email}) · Verified Buyer
+                      </p>
+                    </div>
+
+                    <span className="text-[11px] font-mono bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-semibold self-start sm:self-auto">
+                      ✓ Purchase Confirmed
+                    </span>
+                  </div>
+
+                  <form onSubmit={handleSubmitReview} className="space-y-5">
+                    {/* Interactive 5-Star Selector */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700 block">
+                        Acoustic Quality Rating
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          {[1, 2, 3, 4, 5].map((star) => {
+                            const isFilled = (formHoverRating || formRating) >= star;
+                            return (
+                              <button
+                                key={star}
+                                type="button"
+                                onMouseEnter={() => setFormHoverRating(star)}
+                                onMouseLeave={() => setFormHoverRating(0)}
+                                onClick={() => setFormRating(star)}
+                                className="p-1 text-amber-400 hover:scale-115 transition-transform"
+                                aria-label={`${star} Stars`}
+                              >
+                                <Star
+                                  className={`w-6 h-6 ${
+                                    isFilled ? "fill-amber-400 text-amber-400" : "text-zinc-200"
+                                  }`}
+                                />
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <span className="text-xs font-mono font-medium text-zinc-500 ml-2">
+                          {formRating === 5
+                            ? "5.0 - Acoustic Masterpiece"
+                            : formRating === 4
+                            ? "4.0 - Exceptional Performance"
+                            : formRating === 3
+                            ? "3.0 - Good Performance"
+                            : formRating === 2
+                            ? "2.0 - Fair"
+                            : "1.0 - Needs Improvement"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Hardware Variant Selection */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700">
+                        Tested Hardware Variant
+                      </label>
+                      <select
+                        value={formVariantSku}
+                        onChange={(e) => setFormVariantSku(e.target.value)}
+                        className="w-full sm:w-80 px-3.5 py-2 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-800 bg-zinc-50 focus:outline-none"
+                      >
+                        {product.childVariants && product.childVariants.length > 0 ? (
+                          product.childVariants.map((v) => (
+                            <option key={v.sku} value={v.sku}>
+                              {v.color} ({v.specOverride || "Standard"})
+                            </option>
+                          ))
+                        ) : (
+                          product.variants.map((v) => (
+                            <option key={v.id} value={v.name}>
+                              {v.name} Finish
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+
+                    {/* Review Comment Input */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700">
+                        Detailed Listening Impressions
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={formComment}
+                        onChange={(e) => setFormComment(e.target.value)}
+                        placeholder="Detail the spatial soundstage, low-frequency clarity, clamping comfort during extended sessions, or microphone noise rejection..."
+                        className="w-full px-4 py-3 rounded-2xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-sans leading-relaxed"
+                      />
+                    </div>
+
+                    {/* SECURE 5-PHOTO MEDIA PIPELINE (DIRECT S3 PRESIGNED URL UPLOAD) */}
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <label className="font-semibold text-zinc-700 flex items-center gap-1.5">
+                          <Camera className="w-4 h-4 text-zinc-500" />
+                          <span>Attach Setup Photos</span>
+                        </label>
+                        <span className="text-[11px] font-mono text-zinc-400">
+                          Photos ({formImages.length}/5) · Direct S3 Presigned Upload
+                        </span>
+                      </div>
+
+                      {/* Photo preview slots */}
+                      <div className="flex flex-wrap items-center gap-3">
+                        {formImages.map((imgUrl, i) => (
+                          <div
+                            key={i}
+                            className="relative w-18 h-18 rounded-2xl overflow-hidden bg-zinc-100 border border-zinc-300 group shadow-xs shrink-0"
+                          >
+                            <Image
+                              src={imgUrl}
+                              alt={`Upload preview ${i + 1}`}
+                              fill
+                              className="object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePhoto(i)}
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-red-600 transition-colors"
+                              title="Remove photo"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+
+                        {/* Upload Trigger (Max 5 items) */}
+                        {formImages.length < 5 && (
+                          <label className="w-18 h-18 rounded-2xl border-2 border-dashed border-zinc-300 hover:border-blue-600 hover:bg-blue-50/40 text-zinc-400 hover:text-blue-600 flex flex-col items-center justify-center cursor-pointer transition-all shrink-0">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              disabled={isUploadingPhoto}
+                              onChange={handlePhotoSelect}
+                              className="hidden"
+                            />
+                            {isUploadingPhoto ? (
+                              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                            ) : (
+                              <>
+                                <UploadCloud className="w-5 h-5" />
+                                <span className="text-[9px] font-mono mt-1 font-bold">ADD</span>
+                              </>
+                            )}
+                          </label>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-zinc-400">
+                        Upload up to 5 photos directly to secure AWS S3 storage. Supported formats: JPEG, PNG, WebP.
+                      </p>
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={isSubmittingReview || isUploadingPhoto}
+                        className="flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs shadow-md transition-all disabled:opacity-50"
+                      >
+                        {isSubmittingReview ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Posting Review & Purging Cache...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Post Verified Review</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
             </div>
           </div>
 
@@ -926,6 +1536,43 @@ export function ProductDetailView({
       {/* Cart Drawer & Minimalist Global Footer */}
       <CartDrawer />
       <Footer />
+
+      {/* Review Photo High-Resolution Lightbox Modal */}
+      {activeLightboxImage && (
+        <div
+          onClick={() => setActiveLightboxImage(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-3xl w-full bg-zinc-950 rounded-3xl overflow-hidden border border-zinc-800 p-4 space-y-3"
+          >
+            <div className="flex items-center justify-between text-xs text-zinc-400 px-2">
+              <span className="font-mono flex items-center gap-1.5 text-zinc-300">
+                <Camera className="w-3.5 h-3.5" />
+                Verified Buyer Hardware Media
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveLightboxImage(null)}
+                className="w-7 h-7 rounded-full bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="relative aspect-4/3 rounded-2xl overflow-hidden bg-black flex items-center justify-center">
+              <Image
+                src={activeLightboxImage}
+                alt="High-resolution verified buyer hardware photo"
+                fill
+                className="object-contain"
+                sizes="(max-width: 1024px) 100vw, 800px"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
