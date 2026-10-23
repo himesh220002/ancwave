@@ -14,7 +14,8 @@ interface AuthContextType {
   signup: (
     email: string,
     password: string,
-    name: string
+    name: string,
+    adminPasscode?: string
   ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   verifyDayPasscode: (passcode: string) => Promise<{ success: boolean; error?: string }>;
@@ -103,13 +104,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signup = async (
     email: string,
     password: string,
-    name: string
+    name: string,
+    adminPasscode?: string
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name }),
+        body: JSON.stringify({ email, password, name, adminPasscode }),
       });
       const data = await res.json();
       if (data.success && data.user) {

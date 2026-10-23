@@ -58,6 +58,8 @@ export default function AdminPage() {
     setIsAuthModalOpen,
     logout,
     refreshUser,
+    login,
+    signup,
   } = useAuth();
   const [activeTab, setActiveTab] = useState<
     "inventory" | "variation-engine" | "reviews" | "team"
@@ -72,6 +74,14 @@ export default function AdminPage() {
   const [passcodeInput, setPasscodeInput] = useState<string>("ancwave-ops-secure-2026");
   const [showPasscode, setShowPasscode] = useState<boolean>(false);
   const [isVerifyingPasscode, setIsVerifyingPasscode] = useState<boolean>(false);
+
+  // Dedicated Admin Authentication Gateway State
+  const [adminAuthTab, setAdminAuthTab] = useState<"signin" | "signup">("signin");
+  const [adminEmail, setAdminEmail] = useState<string>("owner@ancwave.com");
+  const [adminPassword, setAdminPassword] = useState<string>("ownerpassword123");
+  const [adminName, setAdminName] = useState<string>("");
+  const [adminRegistrationPasscode, setAdminRegistrationPasscode] = useState<string>("ancwave-ops-secure-2026");
+  const [isAdminAuthLoading, setIsAdminAuthLoading] = useState<boolean>(false);
 
   // Team Management State (Owner Exclusive)
   const [teamUsers, setTeamUsers] = useState<
@@ -492,6 +502,51 @@ export default function AdminPage() {
     });
   };
 
+  // Handle Dedicated Admin Portal Login & Registration
+  const handleAdminAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsAdminAuthLoading(true);
+
+    if (adminAuthTab === "signup") {
+      if (!adminName.trim()) {
+        toast({ type: "error", title: "Name Required", description: "Please enter your full name." });
+        setIsAdminAuthLoading(false);
+        return;
+      }
+      const res = await signup(adminEmail, adminPassword, adminName, adminRegistrationPasscode);
+      setIsAdminAuthLoading(false);
+      if (res.success) {
+        toast({
+          type: "success",
+          title: "Admin Account Created",
+          description: `Welcome, ${adminName}! Your staff account is authorized. Enter today's passcode to unlock.`,
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Registration Failed",
+          description: res.error || "Please verify your passcode and credentials.",
+        });
+      }
+    } else {
+      const res = await login(adminEmail, adminPassword);
+      setIsAdminAuthLoading(false);
+      if (res.success) {
+        toast({
+          type: "success",
+          title: "Admin Authenticated",
+          description: `Welcome back! Please enter today's 24-hour passcode to proceed.`,
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Authentication Failed",
+          description: res.error || "Invalid administrator credentials.",
+        });
+      }
+    }
+  };
+
   // 1. Loading State
   if (isLoading) {
     return (
@@ -508,30 +563,177 @@ export default function AdminPage() {
     );
   }
 
-  // 2. Not Logged In Screen
+  // 2. Not Logged In Screen - Dedicated Admin Operations Gateway
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0E0E10] text-white flex items-center justify-center p-4 font-sans">
-        <div className="max-w-md w-full bg-[#18181B] border border-zinc-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl relative overflow-hidden">
-          <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 mx-auto flex items-center justify-center">
-            <Lock className="w-8 h-8" />
+        <div className="max-w-md w-full bg-[#18181B] border border-zinc-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+          {/* Subtle Ambient Top Glow */}
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Terminal Header */}
+          <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
+                  <span>Operations Console</span>
+                  <span className="text-[10px] font-mono bg-blue-500/20 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded-full uppercase font-bold">
+                    Admin
+                  </span>
+                </h2>
+                <p className="text-[11px] text-zinc-400">Restricted Staff & Owner Terminal</p>
+              </div>
+            </div>
           </div>
-          <div className="space-y-2">
-            <h2 className="text-xl font-bold tracking-tight text-white">
-              Operations Console Locked
-            </h2>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              This terminal provides live stock orchestration, pricing variation adjustments, and edge cache purges. Sign in with an authorized Owner or Admin account to continue.
-            </p>
-          </div>
-          <div className="pt-2 flex flex-col gap-3">
+
+          {/* Admin Mode Switcher: Sign In vs Register Admin */}
+          <div className="grid grid-cols-2 p-1 bg-zinc-900 rounded-xl text-xs font-semibold border border-zinc-800">
             <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-all shadow-lg flex items-center justify-center gap-2"
+              type="button"
+              onClick={() => setAdminAuthTab("signin")}
+              className={`py-2 rounded-lg transition-all ${
+                adminAuthTab === "signin"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
             >
-              <UserIcon className="w-4 h-4" />
-              <span>Sign In / Register</span>
+              Admin Sign In
             </button>
+            <button
+              type="button"
+              onClick={() => setAdminAuthTab("signup")}
+              className={`py-2 rounded-lg transition-all ${
+                adminAuthTab === "signup"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Register Admin
+            </button>
+          </div>
+
+          {/* Quick 1-Click Presets for Administrator Access */}
+          {adminAuthTab === "signin" && (
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-mono font-medium text-zinc-500 uppercase tracking-wider">
+                Authorized Presets:
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminEmail("owner@ancwave.com");
+                    setAdminPassword("ownerpassword123");
+                  }}
+                  className="flex items-center justify-center gap-1.5 p-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[11px] font-semibold hover:bg-amber-500/20 transition-colors"
+                >
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Owner Account</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminEmail("admin@ancwave.com");
+                    setAdminPassword("adminpassword123");
+                  }}
+                  className="flex items-center justify-center gap-1.5 p-2 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-300 text-[11px] font-semibold hover:bg-blue-500/20 transition-colors"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Admin Account</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Dedicated Admin Form */}
+          <form onSubmit={handleAdminAuthSubmit} className="space-y-3.5">
+            {adminAuthTab === "signup" && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-zinc-300">Staff Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  placeholder="e.g. Himesh Patel"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                />
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-300">Staff Email Address</label>
+              <input
+                type="email"
+                required
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                placeholder="staff@ancwave.com"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-300">Staff Password</label>
+              <input
+                type="password"
+                required
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all font-mono"
+              />
+            </div>
+
+            {adminAuthTab === "signup" && (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-amber-300 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5" />
+                    <span>Master Operations Passcode</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAdminRegistrationPasscode("ancwave-ops-secure-2026")}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 font-mono underline"
+                  >
+                    Paste Default
+                  </button>
+                </div>
+                <input
+                  type="password"
+                  required
+                  value={adminRegistrationPasscode}
+                  onChange={(e) => setAdminRegistrationPasscode(e.target.value)}
+                  placeholder="Enter DAILY_ADMIN_PASSCODE..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-amber-500/40 text-sm text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all font-mono"
+                />
+                <p className="text-[10px] text-zinc-400">
+                  Required to register authorized admin accounts on the live server.
+                </p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isAdminAuthLoading}
+              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+            >
+              <Lock className="w-4 h-4" />
+              <span>
+                {isAdminAuthLoading
+                  ? "Verifying Credentials..."
+                  : adminAuthTab === "signup"
+                  ? "Register Admin & Authorize"
+                  : "Sign In to Terminal"}
+              </span>
+            </button>
+          </form>
+
+          <div className="text-center pt-2 border-t border-zinc-800">
             <Link
               href="/"
               className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -565,14 +767,14 @@ export default function AdminPage() {
           <div className="p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 space-y-3 text-xs text-zinc-300">
             <div className="font-semibold text-zinc-200 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>How to gain access:</span>
+              <span>Staff Authorization Required:</span>
             </div>
             <div className="space-y-2.5 text-[11px] leading-relaxed text-zinc-400">
               <p>
-                👑 <strong className="text-zinc-200">Owner Setup:</strong> If this is your platform and you just signed up, open your MongoDB Atlas collection <code className="text-emerald-400 font-mono">users</code>, locate the document for <code className="text-emerald-400 font-mono">{user.email}</code>, and change <code className="text-amber-400 font-mono">role: &quot;user&quot;</code> to <code className="text-amber-400 font-mono">&quot;owner&quot;</code>. Then click &quot;Refresh Role&quot; below.
+                This terminal is reserved for Owners and Administrators. Customer accounts cannot access live stock adjustments, pricing variation engines, or edge invalidation controls.
               </p>
               <p>
-                🛡️ <strong className="text-zinc-200">Teammate Access:</strong> If you are an employee, contact your workspace Owner. Once they search your email in their Team Access dashboard and click &quot;Grant Admin Access&quot;, your account will immediately gain permission.
+                To access this console, log out and sign in with your staff account or register as an admin using your master operations passcode.
               </p>
             </div>
           </div>
@@ -588,11 +790,10 @@ export default function AdminPage() {
             <button
               onClick={async () => {
                 await logout();
-                setIsAuthModalOpen(true);
               }}
               className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs transition-all text-center"
             >
-              Switch Account
+              Log Out & Sign In as Admin
             </button>
           </div>
 

@@ -6,7 +6,7 @@ import { store } from "@/lib/store";
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, name } = await req.json();
+    const { email, password, name, adminPasscode } = await req.json();
 
     if (!email || !password || !name) {
       return NextResponse.json(
@@ -25,6 +25,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Determine target role: Admin passcode validation or standard User
+    const correctAdminPass = process.env.DAILY_ADMIN_PASSCODE || "ancwave-ops-secure-2026";
+    let targetRole: "user" | "admin" = "user";
+
+    if (adminPasscode) {
+      if (adminPasscode.trim() !== correctAdminPass.trim()) {
+        return NextResponse.json(
+          { success: false, error: "Invalid Admin Passcode. Cannot register admin account." },
+          { status: 403 }
+        );
+      }
+      targetRole = "admin";
+    }
+
     const hashedPassword = await hashPassword(password);
 
     // 1. Try MongoDB Atlas if connected
@@ -38,19 +52,18 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Default role is strictly 'user' as requested
       const newUserDoc = await UserModel.create({
         email: cleanEmail,
         passwordHash: hashedPassword,
         name: cleanName,
-        role: "user",
+        role: targetRole,
       });
 
       const userObj = {
         id: newUserDoc._id.toString(),
         email: newUserDoc.email,
         name: newUserDoc.name,
-        role: newUserDoc.role as "user",
+        role: newUserDoc.role as "user" | "admin",
       };
 
       const token = signJWT({
@@ -91,14 +104,14 @@ export async function POST(req: NextRequest) {
       email: cleanEmail,
       name: cleanName,
       passwordHash: hashedPassword,
-      role: "user",
+      role: targetRole,
     });
 
     const userObj = {
       id: storeUser.id,
       email: storeUser.email,
       name: storeUser.name,
-      role: storeUser.role as "user",
+      role: storeUser.role as "user" | "admin",
     };
 
     const token = signJWT({
