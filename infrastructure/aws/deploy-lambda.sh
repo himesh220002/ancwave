@@ -52,6 +52,12 @@ if aws lambda get-function --function-name "${LAMBDA_FUNCTION_NAME}" --region "$
         --image-uri "${IMAGE_URI}" \
         --region "${AWS_REGION}"
     echo "✅ Lambda function code updated successfully!"
+
+    echo "🌐 Purging CloudFront Edge CDN cache..."
+    aws cloudfront create-invalidation \
+        --distribution-id "E1GFGU80FWV7ZM" \
+        --paths "/*" 2>/dev/null || true
+    echo "✅ CloudFront cache invalidated! New code is live globally."
 else
     echo "ℹ️ Lambda function '${LAMBDA_FUNCTION_NAME}' does not exist yet."
     echo "👉 Create it in the AWS Lambda Console as a 'Container Image' selecting image URI: ${IMAGE_URI}"

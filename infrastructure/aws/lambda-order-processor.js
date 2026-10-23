@@ -44,7 +44,7 @@ exports.handler = async (event) => {
 function triggerISRRevalidation() {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify({ path: "/", tag: "product-details" });
-    const appHost = process.env.APP_HOST || "ancwave.com";
+    const appHost = process.env.APP_HOST || "ancwave.cyphertech.online";
 
     const options = {
       hostname: appHost,
@@ -54,7 +54,7 @@ function triggerISRRevalidation() {
       headers: {
         "Content-Type": "application/json",
         "Content-Length": data.length,
-        "x-revalidate-secret": process.env.REVALIDATE_SECRET || "default_secret",
+        "x-revalidate-secret": process.env.REVALIDATE_SECRET || "ancwave_revalidation_secret_token_2026",
       },
       timeout: 5000,
     };
