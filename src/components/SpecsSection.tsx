@@ -99,8 +99,8 @@ export function SpecsSection({ product }: SpecsSectionProps) {
             {/* <div className="relative rounded-2xl bg-[#F0EFEA] p-6 sm:p-8 border border-[#EAEAE5]"> */}
 
 
-            <div className="relative w-full aspect-4/3 rounded-2xl overflow-hidden p-6 sm:p-8">
-              <div className="absolute top-6 left-6 text-[10px] font-mono tracking-[0.18em] text-zinc-400 uppercase mb-4 z-20">
+            <div className="relative w-full aspect-4/3 rounded-3xl overflow-hidden border border-[#E8E7E2] bg-[#ECECE7] shadow-xs">
+              <div className="absolute top-4 left-4 sm:top-5 sm:left-6 text-[10px] font-mono tracking-[0.18em] text-zinc-700 uppercase z-20 bg-white/85 backdrop-blur-md px-2.5 py-1 rounded-md shadow-2xs">
                 FORM 01 / ACOUSTIC ASSEMBLY
               </div>
               <Image
@@ -110,12 +110,6 @@ export function SpecsSection({ product }: SpecsSectionProps) {
                 className="object-cover z-10"
                 sizes="(max-width: 1024px) 100vw, 50vw"
               />
-              {/* <div className="absolute left-6 bottom-6 mt-4 pt-2 text-[10px] font-mono text-blue-600 tracking-wider z-20">
-                — EXPLODED VIEW · NOT TO SCALE
-              </div> */}
-              {/* </div> */}
-
-
             </div>
 
             {/* Labels below */}

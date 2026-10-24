@@ -80,18 +80,18 @@ export function CheckoutSection({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Left Column: Suspended Floating Headphone Render */}
           <div className="lg:col-span-6 space-y-4 sm:space-y-6">
-            <div className="relative aspect-4/3 rounded-2xl bg-[#F0EFEA] p-4 sm:p-6 overflow-hidden flex items-center justify-center border border-[#EAEAE5]">
+            <div className="relative aspect-4/3 rounded-3xl bg-[#F0EFEA] overflow-hidden border border-[#E8E7E2] shadow-xs">
+              <div className="absolute top-4 left-4 sm:top-5 sm:left-6 text-[10px] font-mono tracking-[0.18em] text-zinc-700 uppercase z-10 bg-white/85 backdrop-blur-md px-2.5 py-1 rounded-md shadow-2xs">
+                FORM 01 / {currentVariant.name.toUpperCase()}
+              </div>
               <Image
                 src={variantCoverImage}
                 alt={`${product.name} in ${currentVariant.name}`}
                 fill
-                className="object-contain p-2 sm:p-4 transition-all duration-300"
+                className="object-cover transition-all duration-300"
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 priority
               />
-              <div className="absolute top-4 left-4 sm:top-5 sm:left-6 text-[10px] font-mono tracking-[0.18em] text-zinc-400 uppercase">
-                FORM 01 / {currentVariant.name.toUpperCase()}
-              </div>
             </div>
 
             <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2 text-xs text-zinc-500 px-1">

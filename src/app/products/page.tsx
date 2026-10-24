@@ -23,6 +23,7 @@ import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
 import { sampleCatalog } from "@/lib/store";
 import { useCart } from "@/context/CartContext";
+import { toast } from "@/components/Toaster";
 import { ProductData } from "@/types";
 
 type CategoryFilter = string;
@@ -111,10 +112,35 @@ export default function ProductsCatalogPage() {
     return list;
   }, [catalogProducts, selectedCategory, sortOption]);
 
+  const activeComparedProducts = useMemo(() => {
+    if (comparedSlugs.length > 0) {
+      return catalogProducts.filter((p) => comparedSlugs.includes(p.slug));
+    }
+    return catalogProducts.slice(0, 3);
+  }, [catalogProducts, comparedSlugs]);
+
   const toggleCompare = (slug: string) => {
-    setComparedSlugs((prev) =>
-      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]
-    );
+    const targetProduct = catalogProducts.find((p) => p.slug === slug);
+    const prodName = targetProduct?.name || slug;
+
+    setComparedSlugs((prev) => {
+      const isAlready = prev.includes(slug);
+      if (isAlready) {
+        toast({
+          type: "info",
+          title: "Removed from Comparison",
+          description: `${prodName} removed from comparison matrix.`,
+        });
+        return prev.filter((s) => s !== slug);
+      } else {
+        toast({
+          type: "success",
+          title: "Added to Comparison",
+          description: `${prodName} added. Scroll down to view the matrix.`,
+        });
+        return [...prev, slug];
+      }
+    });
   };
 
   const handleQuickAdd = (product: ProductData, variant?: any, childVariant?: any) => {
@@ -272,79 +298,240 @@ export default function ProductsCatalogPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div className="space-y-1.5">
-              <span className="text-[11px] font-mono tracking-[0.18em] text-blue-600 uppercase font-semibold">
-                FIND YOUR FREQUENCY
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                <span className="text-[11px] font-mono tracking-[0.18em] text-blue-600 uppercase font-semibold">
+                  {comparedSlugs.length > 0 ? "CUSTOM COMPARISON ACTIVE" : "FIND YOUR FREQUENCY"}
+                </span>
+              </div>
               <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
-                Three ways to make it your own.
+                {comparedSlugs.length > 0
+                  ? `Comparing ${comparedSlugs.length} selected model${comparedSlugs.length > 1 ? "s" : ""}`
+                  : "Compare the lineup, side by side"}
               </h2>
             </div>
-            <p className="text-xs text-zinc-500 max-w-md">
-              At your desk, on your commute, or in your stride. Find the form that fits your day.
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <p className="text-xs text-zinc-500 max-w-sm">
+                {comparedSlugs.length > 0
+                  ? "Side-by-side technical specifications, driver architectures, and battery endurance."
+                  : "Check 'Add to compare' on any product cards above to customize this matrix dynamically."}
+              </p>
+              {comparedSlugs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setComparedSlugs([]);
+                    toast({
+                      type: "info",
+                      title: "Comparison Reset",
+                      description: "Reset to default flagship lineup comparison.",
+                    });
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-100 text-xs text-zinc-600 font-medium transition-colors cursor-pointer shrink-0"
+                >
+                  Reset to default
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Detailed Matrix Table */}
+          {/* Dynamic Comparison Matrix Table */}
           <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-2xs overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[640px]">
+            <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
-                <tr className="border-b border-zinc-200 bg-zinc-50/70">
-                  <th className="p-5 text-[11px] font-mono uppercase tracking-wider text-blue-600 font-bold w-1/4">
-                    THE LINEUP, AT A GLANCE
+                <tr className="border-b border-zinc-200 bg-zinc-50/80">
+                  <th className="p-5 text-[11px] font-mono uppercase tracking-wider text-blue-600 font-bold w-52 shrink-0 align-bottom">
+                    SPECIFICATIONS & ARCHITECTURE
                   </th>
-                  {catalogProducts.slice(0, 3).map((p) => (
-                    <th key={p.id} className="p-5 w-1/4">
-                      <div className="font-bold text-sm text-zinc-900">{p.name}</div>
-                      <div className="text-xs font-mono font-semibold text-blue-600 mt-0.5">
-                        ${p.price}
-                      </div>
-                    </th>
-                  ))}
+                  {activeComparedProducts.map((p) => {
+                    const mainImg =
+                      p.variants?.[0]?.images?.[0] ||
+                      p.variants?.[0]?.image ||
+                      p.childVariants?.[0]?.images?.[0] ||
+                      "/images/hero-silver.jpg";
+                    const isSelected = comparedSlugs.includes(p.slug);
+                    const configureHref = `/products/${p.slug}`;
+
+                    return (
+                      <th key={p.id} className="p-5 min-w-[220px] align-top relative border-l border-zinc-100">
+                        {isSelected && (
+                          <button
+                            type="button"
+                            onClick={() => toggleCompare(p.slug)}
+                            title="Remove from comparison"
+                            className="absolute top-3 right-3 w-6 h-6 rounded-full bg-zinc-200/70 hover:bg-red-100 hover:text-red-600 text-zinc-500 flex items-center justify-center transition-colors cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <div className="relative w-20 h-20 rounded-xl bg-[#F0EFEA] border border-zinc-200 overflow-hidden mx-auto mb-3">
+                          <Image
+                            src={mainImg}
+                            alt={p.name}
+                            fill
+                            className="object-contain p-1"
+                          />
+                        </div>
+
+                        <div className="text-center space-y-1">
+                          <Link
+                            href={configureHref}
+                            className="font-bold text-sm text-zinc-900 hover:text-blue-600 transition-colors line-clamp-1"
+                          >
+                            {p.name}
+                          </Link>
+                          <div className="text-sm font-mono font-bold text-blue-600">
+                            ${p.price}
+                          </div>
+                          <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-500">
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                            <span>{p.averageRating || p.rating || 4.9}</span>
+                            <span className="text-zinc-400 font-mono">({p.reviewCount || 128})</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAdd(p)}
+                            className="mt-2.5 w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <span>Add to bag +</span>
+                          </button>
+                        </div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 text-xs text-zinc-600">
                 <tr>
-                  <td className="p-5 font-medium text-zinc-500 bg-zinc-50/40">Best for</td>
-                  <td className="p-5 text-zinc-900">Immersive everyday listening</td>
-                  <td className="p-5 text-zinc-900">Lightweight, on-the-go listening</td>
-                  <td className="p-5 text-zinc-900">Training and outdoor movement</td>
+                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Category & Form</td>
+                  {activeComparedProducts.map((p) => (
+                    <td key={p.id} className="p-4 sm:p-5 font-medium text-zinc-900 border-l border-zinc-100">
+                      {p.category || (p.categorySlug === "headphones" ? "Wireless Over-Ear" : p.categorySlug === "earbuds" ? "True Wireless Earbuds" : "Smart Instrument")}
+                    </td>
+                  ))}
                 </tr>
                 <tr>
-                  <td className="p-5 font-medium text-zinc-500 bg-zinc-50/40">Design</td>
-                  <td className="p-5">Wireless over-ear</td>
-                  <td className="p-5">True wireless earbuds</td>
-                  <td className="p-5">Sports in-ear with earhooks</td>
+                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Core Philosophy</td>
+                  {activeComparedProducts.map((p) => (
+                    <td key={p.id} className="p-4 sm:p-5 text-zinc-700 border-l border-zinc-100">
+                      {p.tagline || (p.description ? p.description.slice(0, 80) + "..." : "Precision engineered")}
+                    </td>
+                  ))}
                 </tr>
                 <tr>
-                  <td className="p-5 font-medium text-zinc-500 bg-zinc-50/40">Battery · per charge</td>
-                  <td className="p-5">Up to 40 h · 38 h with ANC</td>
-                  <td className="p-5">Up to 8.5 h</td>
-                  <td className="p-5">Up to 18 h</td>
+                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Driver & Hardware</td>
+                  {activeComparedProducts.map((p) => {
+                    const spec =
+                      p.specs?.driver ||
+                      p.globalSpecs?.["Display Size"] ||
+                      p.globalSpecs?.["Acoustic Driver"] ||
+                      p.globalSpecs?.["Processor"] ||
+                      "40 mm custom biocellulose driver";
+                    return (
+                      <td key={p.id} className="p-4 sm:p-5 font-medium text-zinc-900 border-l border-zinc-100">
+                        {spec}
+                      </td>
+                    );
+                  })}
                 </tr>
                 <tr>
-                  <td className="p-5 font-medium text-zinc-500 bg-zinc-50/40">Battery · with case</td>
-                  <td className="p-5 text-zinc-400">Not applicable</td>
-                  <td className="p-5">Up to 34 h total</td>
-                  <td className="p-5 text-zinc-400">Not applicable</td>
+                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Battery & Playtime</td>
+                  {activeComparedProducts.map((p) => {
+                    const batt =
+                      p.specs?.batteryLife ||
+                      p.globalSpecs?.["Battery Capacity"] ||
+                      p.globalSpecs?.["Battery"] ||
+                      (p.isTws ? "Up to 8.5 h (34 h with case)" : "Up to 40 h · 38 h with ANC");
+                    return (
+                      <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                        {batt}
+                      </td>
+                    );
+                  })}
                 </tr>
                 <tr>
-                  <td className="p-5 font-medium text-zinc-500 bg-zinc-50/40">Standout feature</td>
-                  <td className="p-5 font-medium text-zinc-900">Detachable boom microphone</td>
-                  <td className="p-5 font-medium text-zinc-900">11 mm graphene drivers</td>
-                  <td className="p-5 font-medium text-zinc-900">ErgoLock titanium earhooks</td>
+                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Noise Control / Processor</td>
+                  {activeComparedProducts.map((p) => {
+                    const noise =
+                      p.specs?.noiseControl ||
+                      p.globalSpecs?.["Chipset / Processor"] ||
+                      "Adaptive Hybrid ANC with Transparency";
+                    return (
+                      <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                        {noise}
+                      </td>
+                    );
+                  })}
                 </tr>
                 <tr>
-                  <td className="p-5 font-medium text-zinc-500 bg-zinc-50/40">Charging / protection</td>
-                  <td className="p-5">USB-C fast charging</td>
-                  <td className="p-5">Qi wireless fast-charging case</td>
-                  <td className="p-5">IPX7 waterproofing</td>
+                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Charging & Durability</td>
+                  {activeComparedProducts.map((p) => {
+                    const charge =
+                      p.specs?.charging ||
+                      p.globalSpecs?.["Water Resistance"] ||
+                      "USB-C Rapid Charge";
+                    return (
+                      <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                        {charge}
+                      </td>
+                    );
+                  })}
+                </tr>
+                <tr>
+                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Connectivity</td>
+                  {activeComparedProducts.map((p) => {
+                    const conn =
+                      p.specs?.connectivity ||
+                      p.globalSpecs?.["Connectivity"] ||
+                      "Bluetooth 5.3 · Multi-device Multipoint";
+                    return (
+                      <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                        {conn}
+                      </td>
+                    );
+                  })}
+                </tr>
+                <tr>
+                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Materials & Weight</td>
+                  {activeComparedProducts.map((p) => {
+                    const mat =
+                      p.specs?.materials ||
+                      p.globalSpecs?.["Build Material"] ||
+                      "Anodized Aluminum · Slow-Recovery Foam";
+                    const wt = p.specs?.weightMetric || "256 g";
+                    return (
+                      <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                        {mat} ({wt})
+                      </td>
+                    );
+                  })}
+                </tr>
+                <tr>
+                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Warranty & Trial</td>
+                  {activeComparedProducts.map((p) => (
+                    <td key={p.id} className="p-4 sm:p-5 text-emerald-700 font-medium border-l border-zinc-100">
+                      {p.warrantyYears || 2}-Year Warranty · {p.returnDays || 30}-Day Returns
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Stock Availability</td>
+                  {activeComparedProducts.map((p) => (
+                    <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        {p.stock > 0 ? `${p.stock} units available` : "Pre-order"}
+                      </span>
+                    </td>
+                  ))}
                 </tr>
               </tbody>
             </table>
           </div>
 
           <p className="text-[11px] text-zinc-400 font-mono">
-            ⓘ Battery life varies with volume, settings, and use. Form Air TWS total playtime includes recharging with the case.
+            ⓘ Real-time technical comparison. Select any products from the catalog above to view instant hardware differences.
           </p>
         </div>
       </section>
@@ -427,28 +614,62 @@ export default function ProductsCatalogPage() {
       {comparedSlugs.length > 0 && (
         <aside
           aria-label="Product comparison dock"
-          className="fixed bottom-6 inset-x-0 z-40 max-w-lg mx-auto px-4 animate-in slide-in-from-bottom duration-300"
+          className="fixed bottom-6 inset-x-0 z-40 max-w-xl mx-auto px-4 animate-in slide-in-from-bottom duration-300"
         >
-          <div className="bg-zinc-900 text-white rounded-2xl shadow-2xl p-4 flex items-center justify-between gap-4 border border-zinc-700">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="font-semibold">{comparedSlugs.length} models</span>
-              <span className="text-zinc-400">selected for comparison</span>
+          <div className="bg-zinc-900/95 backdrop-blur-md text-white rounded-2xl shadow-2xl p-3 sm:p-3.5 flex items-center justify-between gap-3 border border-zinc-700">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center -space-x-2 shrink-0">
+                {activeComparedProducts.map((p) => {
+                  const img =
+                    p.variants?.[0]?.images?.[0] ||
+                    p.variants?.[0]?.image ||
+                    p.childVariants?.[0]?.images?.[0] ||
+                    "/images/hero-silver.jpg";
+                  return (
+                    <div
+                      key={p.id}
+                      className="w-8 h-8 rounded-full border-2 border-zinc-900 bg-[#F0EFEA] overflow-hidden relative shrink-0 shadow-xs"
+                      title={p.name}
+                    >
+                      <Image src={img} alt={p.name} fill className="object-contain p-0.5" />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-xs truncate">
+                <span className="font-semibold text-white">{comparedSlugs.length} model{comparedSlugs.length > 1 ? "s" : ""}</span>{" "}
+                <span className="text-zinc-400 hidden xs:inline">in comparison</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={() => setComparedSlugs([])}
+                onClick={() => {
+                  setComparedSlugs([]);
+                  toast({
+                    type: "info",
+                    title: "Comparison Cleared",
+                    description: "Removed all models from comparison.",
+                  });
+                }}
                 className="text-xs text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
               >
                 Clear
               </button>
-              <a
-                href="#compare-matrix"
-                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-semibold text-white transition-colors cursor-pointer"
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById("compare-matrix");
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth" });
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-xs font-semibold text-white transition-all cursor-pointer flex items-center gap-1 shadow-sm"
               >
-                View matrix →
-              </a>
+                <span>View matrix</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </aside>
@@ -813,16 +1034,27 @@ function ProductCatalogCard({
             </Link>
           </div>
 
-          {/* Add to compare checkbox */}
-          <label className="flex items-center justify-center gap-1.5 pt-1 text-[11px] text-zinc-400 hover:text-zinc-600 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={isCompared}
-              onChange={onToggleCompare}
-              className="rounded border-zinc-300 text-blue-600 focus:ring-0 cursor-pointer"
-            />
-            <span>Add to compare</span>
-          </label>
+          {/* Add to compare button */}
+          <button
+            type="button"
+            onClick={onToggleCompare}
+            className={`w-full py-2 px-3 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+              isCompared
+                ? "bg-blue-50 border-blue-400 text-blue-700 font-semibold shadow-2xs"
+                : "bg-white border-zinc-200 text-zinc-600 hover:text-blue-600 hover:border-blue-300 hover:bg-zinc-50"
+            }`}
+          >
+            <span
+              className={`w-4 h-4 rounded flex items-center justify-center border text-[11px] font-bold transition-colors ${
+                isCompared
+                  ? "bg-blue-600 border-blue-600 text-white"
+                  : "border-zinc-300 bg-white text-zinc-400"
+              }`}
+            >
+              {isCompared ? "✓" : "+"}
+            </span>
+            <span>{isCompared ? "In comparison (Remove)" : "Add to compare"}</span>
+          </button>
         </div>
       </div>
     </div>

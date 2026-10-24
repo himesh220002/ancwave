@@ -117,28 +117,28 @@ export function HeroSection({
 
           {/* Right Column: Hero Card Container matching Figma */}
           <div className="lg:col-span-6">
-            <div className="relative rounded-3xl bg-[#F0EFEA] border border-[#E8E7E2] overflow-hidden">
-              {/* Card Label: DESIGNED TO DISAPPEAR. */}
-              <div className=" px-6 py-2 z-10">
-                <span className="text-[10px] font-mono tracking-[0.2em] text-zinc-400 uppercase">
-                  DESIGNED TO DISAPPEAR.
-                </span>
-              </div>
+            <div className="relative rounded-3xl bg-[#F0EFEA] border border-[#E8E7E2] overflow-hidden shadow-xs">
+              {/* Headphone Studio Photography: fills full width and height */}
+              <div className="relative w-full aspect-4/3 overflow-hidden">
+                {/* Card Label: DESIGNED TO DISAPPEAR. */}
+                <div className="absolute top-4 left-4 sm:top-5 sm:left-6 z-10">
+                  <span className="text-[10px] font-mono tracking-[0.2em] text-zinc-700 uppercase bg-white/85 backdrop-blur-md px-2.5 py-1 rounded-md shadow-2xs">
+                    DESIGNED TO DISAPPEAR.
+                  </span>
+                </div>
 
-              {/* Headphone Studio Photography matching Screenshot 1 */}
-              <div className="relative w-full aspect-4/3 flex items-center justify-center">
                 <Image
                   src={heroImage}
                   alt={`ancwave Form 01 in ${currentVariant.name}`}
                   fill
                   priority
-                  className="object-contain transition-opacity duration-300"
+                  className="object-cover transition-opacity duration-300"
                   sizes="(max-width: 768px) 100vw, 50vw"
                 />
               </div>
 
               {/* Bottom: Pill Switcher & Dash Indicators */}
-              <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 bg-white/90 backdrop-blur-xs border-t border-[#E8E7E2]">
                 {/* Variant Switcher Pill matching Figma: ⚪ Silver mist / 01 */}
                 <div className="flex items-center gap-2">
                   {product.variants.map((v) => (
