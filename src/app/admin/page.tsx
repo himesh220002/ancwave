@@ -46,7 +46,18 @@ import {
   ChevronRight,
   Grid,
 } from "lucide-react";
-import { ProductData, Order, IVariant, Review, IReview, ECOMMERCE_CATEGORIES } from "@/types";
+import {
+  ProductData,
+  Order,
+  IVariant,
+  IVariantGroup,
+  IVariantColor,
+  childVariantsToVariantGroups,
+  variantGroupsToChildVariants,
+  Review,
+  IReview,
+  ECOMMERCE_CATEGORIES,
+} from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/components/Toaster";
 
@@ -114,6 +125,7 @@ export default function AdminPage() {
   const [masterBaseDiscount, setMasterBaseDiscount] = useState<number>(0);
   const [globalSpecsList, setGlobalSpecsList] = useState<{ key: string; value: string }[]>([]);
   const [childVariants, setChildVariants] = useState<IVariant[]>([]);
+  const [variantGroups, setVariantGroups] = useState<IVariantGroup[]>([]);
   const [isSavingVariants, setIsSavingVariants] = useState<boolean>(false);
 
   // Dedicated Variant Restock Modal State
@@ -238,21 +250,39 @@ export default function AdminPage() {
           ]);
         }
 
-        if (p.childVariants && p.childVariants.length > 0) {
-          setChildVariants(p.childVariants);
-        } else {
-          // Initialize fallback variants from color variants
+        if (p.variantGroups && p.variantGroups.length > 0) {
+          setVariantGroups(p.variantGroups);
           setChildVariants(
-            (p.variants || []).map((v, i) => ({
-              sku: `${p.productId || "ANC"}-${v.name.toUpperCase().replace(/\s+/g, "")}-${i === 0 ? "BOOM" : "INT"}`,
-              color: v.name,
-              specOverride: i === 0 ? "Detachable Boom Mic" : "Integrated Beamforming Mic",
+            p.childVariants && p.childVariants.length > 0
+              ? p.childVariants
+              : variantGroupsToChildVariants(p.variantGroups, p.basePrice || p.price)
+          );
+        } else if (p.childVariants && p.childVariants.length > 0) {
+          setChildVariants(p.childVariants);
+          setVariantGroups(childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price));
+        } else {
+          // Initialize fallback variant groups from color variants
+          const fallbackGroups: IVariantGroup[] = [
+            {
+              id: "A1",
+              name: "A1 (Standard Cut)",
+              specOverride: "A1 (Standard Cut)",
               price: p.price,
               discount: 0,
-              stock: Math.max(1, Math.floor(p.stock / (p.variants.length || 1))),
-              images: [v.image],
-            }))
-          );
+              colors: (p.variants || []).map((v, i) => ({
+                id: `A1-VAR-${i + 1}`,
+                sku: `${p.productId || "ANC"}-A1-${v.name.toUpperCase().replace(/\s+/g, "")}`,
+                color: v.name,
+                hex: v.hex || "#22252A",
+                price: p.price,
+                discount: 0,
+                stock: Math.max(1, Math.floor(p.stock / Math.max(1, p.variants.length))),
+                images: [v.image],
+              })),
+            },
+          ];
+          setVariantGroups(fallbackGroups);
+          setChildVariants(variantGroupsToChildVariants(fallbackGroups, p.price));
         }
       }
 
@@ -357,22 +387,37 @@ export default function AdminPage() {
     }
   };
 
-  // Quick variant stock adjuster
+  // Quick variant stock adjuster (updates both variantGroups and childVariants)
   const handleQuickVariantStock = async (sku: string, newStock: number) => {
     try {
+      const val = Math.max(0, newStock);
+      // Optimistic local state update
+      setVariantGroups((prev) =>
+        prev.map((g) => ({
+          ...g,
+          colors: g.colors.map((c) => (c.sku === sku ? { ...c, stock: val } : c)),
+        }))
+      );
+      setChildVariants((prev) =>
+        prev.map((v) => (v.sku === sku ? { ...v, stock: val } : v))
+      );
+
       const res = await fetch("/api/product", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           slug: selectedSlug,
           variantSku: sku,
-          variantStock: Math.max(0, newStock),
+          variantStock: val,
         }),
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.product) {
         setProduct(data.product);
+        if (data.product.variantGroups) {
+          setVariantGroups(data.product.variantGroups);
+        }
         if (data.product.childVariants) {
           setChildVariants(data.product.childVariants);
         }
@@ -380,7 +425,7 @@ export default function AdminPage() {
         toast({
           type: "success",
           title: "Variant Stock Updated",
-          description: `SKU ${sku} set to ${newStock} units. Live stock: ${data.product.stock}`,
+          description: `SKU ${sku} set to ${val} units. Live product inventory: ${data.product.stock} units.`,
         });
       }
     } catch {
@@ -388,89 +433,217 @@ export default function AdminPage() {
     }
   };
 
-  // Add a new child variant dynamically
-  const handleAddChildVariant = () => {
-    const newSku = `${masterProductId}-VAR-${childVariants.length + 1}`;
-    setChildVariants([
-      ...childVariants,
-      {
-        sku: newSku,
-        color: "New Color",
-        specOverride: "Custom Variant Feature (e.g., Detachable Mic)",
-        price: masterBasePrice,
-        discount: 0,
-        stock: 5,
-        images: ["/images/hero-silver.jpg"],
-      },
-    ]);
-  };
+  // --- Hierarchical Variant Architecture & Colorway Studio Helpers ---
 
-  // Remove child variant
-  const handleRemoveChildVariant = (index: number) => {
-    if (childVariants.length <= 1) {
-      toast({ type: "info", title: "Minimum 1 Variant", description: "Products must have at least one child variant." });
-      return;
-    }
-    const updated = [...childVariants];
-    updated.splice(index, 1);
-    setChildVariants(updated);
-  };
+  // 1. Add a new Architecture Cut (e.g. A3)
+  const handleAddArchitectureGroup = () => {
+    const nextNum = variantGroups.length + 1;
+    const newArchId = `A${nextNum}`;
+    const newArchName = `A${nextNum} (${nextNum === 1 ? "Regular Fit" : nextNum === 2 ? "Oversized Fit" : "Performance Cut"})`;
+    const newSku = `${masterProductId}-${newArchId}-BLK`;
 
-  // Update variant field
-  const handleVariantChange = (index: number, field: keyof IVariant, value: any) => {
-    const updated = [...childVariants];
-    updated[index] = { ...updated[index], [field]: value };
-    setChildVariants(updated);
-  };
-
-  // Multi-Image Variant Asset Helpers
-  const [isVariantUploading, setIsVariantUploading] = useState<number | null>(null);
-
-  const handleVariantAddImage = (variantIdx: number, url = "") => {
-    const updated = [...childVariants];
-    const currentImages = updated[variantIdx].images || [];
-    updated[variantIdx] = {
-      ...updated[variantIdx],
-      images: [...currentImages, url || "/images/hero-silver.jpg"],
+    const newGroup: IVariantGroup = {
+      id: newArchId,
+      name: newArchName,
+      specOverride: newArchName,
+      price: masterBasePrice,
+      discount: masterBaseDiscount,
+      colors: [
+        {
+          id: `${newArchId}-C1`,
+          sku: newSku,
+          color: "Pitch Black",
+          hex: "#1A1A1A",
+          price: masterBasePrice,
+          discount: 0,
+          stock: 5,
+          images: ["/images/hero-graphite.jpg"],
+        },
+      ],
     };
-    setChildVariants(updated);
+
+    const updated = [...variantGroups, newGroup];
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+    toast({
+      type: "success",
+      title: "Architecture Created",
+      description: `Added "${newArchName}" with 1 initial colorway. Click "+ Add Color" to add more colors.`,
+    });
   };
 
-  const handleVariantUpdateImage = (variantIdx: number, imgIdx: number, newUrl: string) => {
-    const updated = [...childVariants];
-    const currentImages = [...(updated[variantIdx].images || [])];
-    currentImages[imgIdx] = newUrl;
-    updated[variantIdx] = {
-      ...updated[variantIdx],
-      images: currentImages,
-    };
-    setChildVariants(updated);
-  };
-
-  const handleVariantRemoveImage = (variantIdx: number, imgIdx: number) => {
-    const updated = [...childVariants];
-    const currentImages = [...(updated[variantIdx].images || [])];
-    if (currentImages.length <= 1) {
+  // 2. Remove an entire Architecture
+  const handleRemoveArchitectureGroup = (groupId: string) => {
+    if (variantGroups.length <= 1) {
       toast({
         type: "info",
-        title: "Minimum 1 Photo Required",
-        description: "Each variant requires at least one primary showcase image.",
+        title: "Minimum 1 Architecture Required",
+        description: "Products must have at least one variant architecture.",
       });
       return;
     }
-    currentImages.splice(imgIdx, 1);
-    updated[variantIdx] = {
-      ...updated[variantIdx],
-      images: currentImages,
-    };
-    setChildVariants(updated);
+    const updated = variantGroups.filter((g) => g.id !== groupId);
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
   };
 
-  const handleVariantDirectS3Upload = async (variantIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  // 3. Update Architecture Header
+  const handleUpdateArchitectureName = (groupId: string, newName: string) => {
+    const updated = variantGroups.map((g) =>
+      g.id === groupId ? { ...g, name: newName, specOverride: newName } : g
+    );
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+  };
+
+  const handleUpdateArchitecturePrice = (groupId: string, price: number) => {
+    const updated = variantGroups.map((g) =>
+      g.id === groupId ? { ...g, price: Math.max(0, price) } : g
+    );
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+  };
+
+  // 4. Add a Colorway to a specific Architecture
+  const handleAddColorToArchitecture = (groupId: string, initialColor = "New Color", initialStock = 5) => {
+    const updated = variantGroups.map((g) => {
+      if (g.id !== groupId) return g;
+      const cleanName = initialColor.trim() || `Color ${g.colors.length + 1}`;
+      const code = cleanName.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5) || `C${g.colors.length + 1}`;
+      const newSku = `${masterProductId}-${g.id.toUpperCase()}-${code}`;
+      const colorLower = cleanName.toLowerCase();
+      const hex = colorLower.includes("green") ? "#2E5339" :
+                  colorLower.includes("black") ? "#1A1A1A" :
+                  colorLower.includes("blue") ? "#3B6978" :
+                  colorLower.includes("white") ? "#ECECEC" :
+                  colorLower.includes("red") ? "#DC2626" :
+                  colorLower.includes("grey") || colorLower.includes("gray") ? "#6B7280" :
+                  colorLower.includes("sandstone") || colorLower.includes("beige") ? "#D4B996" :
+                  "#4F46E5";
+
+      const newColor: IVariantColor = {
+        id: `${g.id}-${newSku}`,
+        sku: newSku,
+        color: cleanName,
+        hex,
+        price: g.price || masterBasePrice,
+        discount: g.discount || 0,
+        stock: Math.max(0, initialStock),
+        images: ["/images/hero-silver.jpg"],
+      };
+
+      return {
+        ...g,
+        colors: [...g.colors, newColor],
+      };
+    });
+
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+    toast({
+      type: "success",
+      title: "Colorway Added",
+      description: `Added "${initialColor}" to ${groupId}.`,
+    });
+  };
+
+  // 5. Remove a Colorway from Architecture
+  const handleRemoveColorFromArchitecture = (groupId: string, colorIndex: number) => {
+    const targetGroup = variantGroups.find((g) => g.id === groupId);
+    if (targetGroup && targetGroup.colors.length <= 1) {
+      toast({
+        type: "info",
+        title: "Minimum 1 Colorway Required",
+        description: "Each architecture must maintain at least one colorway.",
+      });
+      return;
+    }
+    const updated = variantGroups.map((g) => {
+      if (g.id !== groupId) return g;
+      const newColors = [...g.colors];
+      newColors.splice(colorIndex, 1);
+      return { ...g, colors: newColors };
+    });
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+  };
+
+  // 6. Update Colorway details
+  const handleUpdateArchitectureColor = (
+    groupId: string,
+    colorIndex: number,
+    field: keyof IVariantColor,
+    val: any
+  ) => {
+    const updated = variantGroups.map((g) => {
+      if (g.id !== groupId) return g;
+      const newColors = [...g.colors];
+      newColors[colorIndex] = { ...newColors[colorIndex], [field]: val };
+      return { ...g, colors: newColors };
+    });
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+  };
+
+  // 7. Multi-Image Asset Management for Architecture Colors
+  const [uploadingColorKey, setUploadingColorKey] = useState<string | null>(null);
+
+  const handleAddImageToColor = (groupId: string, colorIndex: number, url = "/images/hero-silver.jpg") => {
+    const updated = variantGroups.map((g) => {
+      if (g.id !== groupId) return g;
+      const newColors = [...g.colors];
+      const curImages = newColors[colorIndex].images || [];
+      newColors[colorIndex] = { ...newColors[colorIndex], images: [...curImages, url] };
+      return { ...g, colors: newColors };
+    });
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+  };
+
+  const handleUpdateImageInColor = (groupId: string, colorIndex: number, imgIndex: number, newUrl: string) => {
+    const updated = variantGroups.map((g) => {
+      if (g.id !== groupId) return g;
+      const newColors = [...g.colors];
+      const curImages = [...(newColors[colorIndex].images || [])];
+      curImages[imgIndex] = newUrl;
+      newColors[colorIndex] = { ...newColors[colorIndex], images: curImages };
+      return { ...g, colors: newColors };
+    });
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+  };
+
+  const handleRemoveImageFromColor = (groupId: string, colorIndex: number, imgIndex: number) => {
+    const updated = variantGroups.map((g) => {
+      if (g.id !== groupId) return g;
+      const newColors = [...g.colors];
+      const curImages = [...(newColors[colorIndex].images || [])];
+      if (curImages.length <= 1) {
+        toast({
+          type: "info",
+          title: "Minimum 1 Photo Required",
+          description: "Each colorway requires at least one primary showcase image.",
+        });
+        return g;
+      }
+      curImages.splice(imgIndex, 1);
+      newColors[colorIndex] = { ...newColors[colorIndex], images: curImages };
+      return { ...g, colors: newColors };
+    });
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+  };
+
+  const handleColorDirectS3Upload = async (
+    groupId: string,
+    colorIndex: number,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    const uploadKey = `${groupId}-${colorIndex}`;
+    setUploadingColorKey(uploadKey);
 
-    setIsVariantUploading(variantIdx);
     try {
       const uploadedUrls: string[] = [];
       for (let i = 0; i < files.length; i++) {
@@ -479,11 +652,10 @@ export default function AdminPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            fileName: `variant-${variantIdx}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`,
+            fileName: `variant-${groupId}-${colorIndex}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`,
             contentType: file.type || "image/jpeg",
           }),
         });
-
         const presignData = await presignRes.json();
         if (!presignData.success || !presignData.uploadUrl) {
           throw new Error(presignData.error || "Failed to generate S3 upload signature");
@@ -495,35 +667,34 @@ export default function AdminPage() {
           body: file,
         });
 
-        if (!uploadRes.ok) {
-          throw new Error("Direct S3 upload failed");
-        }
-
+        if (!uploadRes.ok) throw new Error("Direct S3 upload failed");
         uploadedUrls.push(presignData.publicUrl);
       }
 
-      const updated = [...childVariants];
-      const existing = updated[variantIdx].images || [];
-      updated[variantIdx] = {
-        ...updated[variantIdx],
-        images: [...existing, ...uploadedUrls],
-      };
-      setChildVariants(updated);
+      const updated = variantGroups.map((g) => {
+        if (g.id !== groupId) return g;
+        const newColors = [...g.colors];
+        const curImages = newColors[colorIndex].images || [];
+        newColors[colorIndex] = { ...newColors[colorIndex], images: [...curImages, ...uploadedUrls] };
+        return { ...g, colors: newColors };
+      });
+
+      setVariantGroups(updated);
+      setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
 
       toast({
         type: "success",
-        title: "S3 Image Pipeline Complete",
-        description: `Uploaded and attached ${uploadedUrls.length} image(s) to ${updated[variantIdx].color}.`,
+        title: "S3 Photos Uploaded",
+        description: `Attached ${uploadedUrls.length} image(s) to colorway.`,
       });
     } catch (err: any) {
-      console.error("Variant image upload error:", err);
       toast({
         type: "error",
-        title: "Image Upload Failed",
+        title: "Upload Failed",
         description: err.message || "Failed to upload image to S3 bucket.",
       });
     } finally {
-      setIsVariantUploading(null);
+      setUploadingColorKey(null);
       e.target.value = "";
     }
   };
@@ -545,7 +716,7 @@ export default function AdminPage() {
     setGlobalSpecsList(updated);
   };
 
-  // Save full master product & child variants
+  // Save full master product & hierarchical variant groups
   const handleSaveVariationEngine = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingVariants(true);
@@ -554,6 +725,8 @@ export default function AdminPage() {
         if (curr.key.trim()) acc[curr.key.trim()] = curr.value.trim();
         return acc;
       }, {} as Record<string, string>);
+
+      const syncedChildVariants = variantGroupsToChildVariants(variantGroups, Number(masterBasePrice));
 
       const res = await fetch("/api/product", {
         method: "PATCH",
@@ -567,19 +740,28 @@ export default function AdminPage() {
           basePrice: Number(masterBasePrice),
           baseDiscount: Number(masterBaseDiscount),
           globalSpecs: globalSpecsRecord,
-          childVariants,
+          variantGroups,
+          childVariants: syncedChildVariants,
         }),
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.product) {
         setProduct(data.product);
+        if (data.product.variantGroups) {
+          setVariantGroups(data.product.variantGroups);
+        }
+        if (data.product.childVariants) {
+          setChildVariants(data.product.childVariants);
+        }
         setStockInput(data.product.stock);
         toast({
           type: "success",
           title: "Variation Engine Synced",
-          description: `Saved ${childVariants.length} child variants. Master stock computed to ${data.product.stock} units. ISR purged.`,
+          description: `Saved ${variantGroups.length} architectures with ${data.product.childVariants?.length || 0} colors. Live stock: ${data.product.stock} units. ISR purged.`,
         });
+      } else {
+        toast({ type: "error", title: "Save Failed", description: data.error || "Could not save variation engine." });
       }
     } catch {
       toast({ type: "error", title: "Save Failed", description: "Failed to persist variation engine configuration" });
@@ -592,7 +774,13 @@ export default function AdminPage() {
   const openRestockModal = (target: ProductData) => {
     setRestockTargetProduct(target);
     const drafts: Record<string, number> = {};
-    if (target.childVariants && target.childVariants.length > 0) {
+    if (target.variantGroups && target.variantGroups.length > 0) {
+      target.variantGroups.forEach((g) => {
+        g.colors.forEach((c) => {
+          drafts[c.sku] = c.stock;
+        });
+      });
+    } else if (target.childVariants && target.childVariants.length > 0) {
       target.childVariants.forEach((v) => {
         drafts[v.sku] = v.stock;
       });
@@ -604,6 +792,90 @@ export default function AdminPage() {
     }
     setVariantStockDrafts(drafts);
     setIsRestockModalOpen(true);
+  };
+
+  // Add a Colorway directly from the Restock Modal with instant persistence
+  const handleModalAddColor = async (groupIdOrName: string, colorName: string, stock: number) => {
+    if (!restockTargetProduct) return;
+    try {
+      const res = await fetch("/api/product", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: restockTargetProduct.slug,
+          action: "addColor",
+          groupId: groupIdOrName,
+          color: {
+            color: colorName,
+            stock: Math.max(0, stock),
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.product) {
+        setRestockTargetProduct(data.product);
+        setProduct(data.product);
+        if (data.product.variantGroups) {
+          setVariantGroups(data.product.variantGroups);
+        }
+        if (data.product.childVariants) {
+          setChildVariants(data.product.childVariants);
+        }
+        const updatedDrafts = { ...variantStockDrafts };
+        data.product.childVariants?.forEach((v: IVariant) => {
+          if (updatedDrafts[v.sku] === undefined) {
+            updatedDrafts[v.sku] = v.stock;
+          }
+        });
+        setVariantStockDrafts(updatedDrafts);
+        setStockInput(data.product.stock);
+
+        toast({
+          type: "success",
+          title: "Color Added & Revalidated",
+          description: `Added "${colorName}" (${stock} units) to ${groupIdOrName}.`,
+        });
+      }
+    } catch {
+      toast({ type: "error", title: "Add Color Failed", description: "Could not add color to architecture." });
+    }
+  };
+
+  // Remove a Colorway directly from the Restock Modal
+  const handleModalRemoveColor = async (sku: string) => {
+    if (!restockTargetProduct) return;
+    try {
+      const res = await fetch("/api/product", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: restockTargetProduct.slug,
+          action: "removeColor",
+          variantSku: sku,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.product) {
+        setRestockTargetProduct(data.product);
+        setProduct(data.product);
+        if (data.product.variantGroups) setVariantGroups(data.product.variantGroups);
+        if (data.product.childVariants) setChildVariants(data.product.childVariants);
+        const updatedDrafts = { ...variantStockDrafts };
+        delete updatedDrafts[sku];
+        setVariantStockDrafts(updatedDrafts);
+        setStockInput(data.product.stock);
+
+        toast({
+          type: "success",
+          title: "Colorway Removed",
+          description: `Removed SKU ${sku}.`,
+        });
+      }
+    } catch {
+      toast({ type: "error", title: "Remove Failed", description: "Could not remove colorway." });
+    }
   };
 
   // Submit Batch Variant Restock to API
@@ -626,11 +898,11 @@ export default function AdminPage() {
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.product) {
         toast({
           type: "success",
           title: "Variants Restocked Successfully",
-          description: `Updated ${restockTargetProduct.name} across ${variantUpdates.length} variants. Live stock: ${data.product.stock} units.`,
+          description: `Updated ${restockTargetProduct.name} across ${variantUpdates.length} colors. Live stock: ${data.product.stock} units.`,
         });
         setIsRestockModalOpen(false);
         await fetchAdminData(restockTargetProduct.slug);
@@ -1435,7 +1707,7 @@ export default function AdminPage() {
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>The Variation Engine ({childVariants.length} Child Variants)</span>
+            <span>The Variation Engine ({variantGroups.length} Architectures · {childVariants.length} Colors)</span>
           </button>
 
           <button
@@ -1583,23 +1855,41 @@ export default function AdminPage() {
                   </button>
                 </div>
 
-                {/* Visual Variant Summary Chips */}
-                <div className="space-y-1.5">
+                {/* Visual Architecture & Colorway Summary */}
+                <div className="space-y-2">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold">
-                    Current Variant Allocation:
+                    Current Architecture & Color Allocations:
                   </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {childVariants.map((v) => (
-                      <span
-                        key={v.sku}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-100 border border-zinc-200 text-xs text-zinc-800 font-mono"
-                      >
-                        <span className="text-zinc-500 text-[10px]">{v.specOverride ? `${v.specOverride}:` : ""}</span>
-                        <strong>{v.color}</strong>
-                        <span className="bg-white px-1.5 py-0.2 rounded border border-zinc-200 font-bold text-blue-600">
-                          {v.stock}
-                        </span>
-                      </span>
+                  <div className="space-y-1.5">
+                    {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g) => (
+                      <div key={g.id} className="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-bold text-zinc-900 font-mono">
+                          <span className="flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">{g.id}</span>
+                            <span>{g.name}</span>
+                          </span>
+                          <span className="text-[10px] text-zinc-500 font-normal">
+                            {(g.colors || []).reduce((sum, c) => sum + (c.stock || 0), 0)} units total
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(g.colors || []).map((c) => (
+                            <span
+                              key={c.sku}
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white border border-zinc-200 text-[11px] text-zinc-800 font-mono"
+                            >
+                              <span
+                                className="w-2.5 h-2.5 rounded-full border border-black/10 shrink-0"
+                                style={{ backgroundColor: c.hex || "#333" }}
+                              />
+                              <span>{c.color}</span>
+                              <span className="bg-zinc-100 px-1.5 py-0.2 rounded font-bold text-blue-600">
+                                {c.stock}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1658,15 +1948,15 @@ export default function AdminPage() {
                 </form>
               </div>
 
-              {/* Right: Real-time Child Variant Stock Quick Toggles */}
+              {/* Right: Architecture & Colorway Real-Time Inventory Control */}
               <div className="lg:col-span-6 rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
                 <div className="border-b border-zinc-100 pb-4 flex items-center justify-between">
                   <div>
                     <h3 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans">
-                      Child Variant Real-Time Inventory
+                      Architecture & Colorway Inventory
                     </h3>
                     <p className="text-xs text-zinc-500 mt-1">
-                      Individual SKU counters mutate the master inventory count in real time.
+                      Independent colorway counters organized by architecture cut (A1, A2).
                     </p>
                   </div>
                   <button
@@ -1677,56 +1967,123 @@ export default function AdminPage() {
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {childVariants.map((v) => (
-                    <div
-                      key={v.sku}
-                      className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                    >
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-zinc-900">{v.color}</span>
-                          <span className="text-[10px] font-mono bg-zinc-200 px-1.5 py-0.5 rounded text-zinc-700">
-                            {v.sku}
+                <div className="space-y-4">
+                  {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g) => {
+                    const groupUnits = (g.colors || []).reduce((sum, c) => sum + (c.stock || 0), 0);
+                    return (
+                      <div
+                        key={g.id}
+                        className="rounded-2xl bg-zinc-50 border border-zinc-200 overflow-hidden shadow-2xs space-y-3 p-4 transition-all"
+                      >
+                        <div className="flex items-center justify-between border-b border-zinc-200/70 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold font-mono">
+                              {g.id}
+                            </span>
+                            <span className="text-xs font-bold text-zinc-900 font-sans">
+                              {g.name}
+                            </span>
+                            <span className="text-[10px] font-mono bg-zinc-200 px-1.5 py-0.5 rounded text-zinc-700">
+                              {(g.colors || []).length} {(g.colors || []).length === 1 ? "color" : "colors"}
+                            </span>
+                          </div>
+                          <span className="text-xs font-mono font-bold text-zinc-800">
+                            Total Units: <span className="text-blue-600 font-bold">{groupUnits}</span>
                           </span>
                         </div>
-                        <p className="text-[11px] text-zinc-500 truncate">
-                          {v.specOverride || "Standard spec"} · ${v.price}
-                        </p>
-                      </div>
 
-                      <div className="flex items-center gap-2 self-end sm:self-auto">
-                        <button
-                          type="button"
-                          onClick={() => handleQuickVariantStock(v.sku, Math.max(0, v.stock - 1))}
-                          className="w-8 h-8 rounded-lg bg-white border border-zinc-300 text-zinc-700 font-bold hover:bg-zinc-100 flex items-center justify-center text-sm shadow-xs"
-                        >
-                          -
-                        </button>
-                        <span className="w-12 text-center font-mono font-bold text-sm text-zinc-900">
-                          {v.stock}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleQuickVariantStock(v.sku, v.stock + 1)}
-                          className="w-8 h-8 rounded-lg bg-white border border-zinc-300 text-zinc-700 font-bold hover:bg-zinc-100 flex items-center justify-center text-sm shadow-xs"
-                        >
-                          +
-                        </button>
-                        <span
-                          className={`text-[10px] px-2 py-1 rounded-md font-semibold font-mono ${
-                            v.stock === 0
-                              ? "bg-red-100 text-red-700"
-                              : v.stock <= 5
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-emerald-100 text-emerald-800"
-                          }`}
-                        >
-                          {v.stock === 0 ? "SOLD OUT" : v.stock <= 5 ? "LOW STOCK" : "IN STOCK"}
-                        </span>
+                        {/* Colors in this Architecture */}
+                        <div className="space-y-2">
+                          {(g.colors || []).map((c) => (
+                            <div
+                              key={c.sku}
+                              className="p-3 rounded-xl bg-white border border-zinc-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs"
+                            >
+                              <div className="space-y-0.5 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="w-3.5 h-3.5 rounded-full border border-black/15 shrink-0 shadow-2xs"
+                                    style={{ backgroundColor: c.hex || "#333" }}
+                                  />
+                                  <span className="text-xs font-bold text-zinc-900">{c.color}</span>
+                                  <span className="text-[10px] font-mono bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-600">
+                                    {c.sku}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-400 font-mono">
+                                  ${c.price || g.price || product?.price} · {c.stock} units in stock
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2 self-end sm:self-auto">
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickVariantStock(c.sku, Math.max(0, c.stock - 1))}
+                                  className="w-7 h-7 rounded-lg bg-zinc-50 border border-zinc-300 text-zinc-700 font-bold hover:bg-zinc-100 flex items-center justify-center text-xs shadow-2xs cursor-pointer"
+                                >
+                                  -
+                                </button>
+                                <span className="w-10 text-center font-mono font-bold text-xs text-zinc-900">
+                                  {c.stock}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickVariantStock(c.sku, c.stock + 1)}
+                                  className="w-7 h-7 rounded-lg bg-zinc-50 border border-zinc-300 text-zinc-700 font-bold hover:bg-zinc-100 flex items-center justify-center text-xs shadow-2xs cursor-pointer"
+                                >
+                                  +
+                                </button>
+                                <span
+                                  className={`text-[10px] px-2 py-0.5 rounded-md font-semibold font-mono ${
+                                    c.stock === 0
+                                      ? "bg-red-100 text-red-700"
+                                      : c.stock <= 5
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-emerald-100 text-emerald-800"
+                                  }`}
+                                >
+                                  {c.stock === 0 ? "SOLD OUT" : c.stock <= 5 ? "LOW STOCK" : "IN STOCK"}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Inline Quick Add Color to this Architecture */}
+                        <div className="pt-2 border-t border-zinc-200/60 flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="Add Color (e.g. Heather Grey)"
+                            id={`quick-add-color-${g.id}`}
+                            className="flex-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-semibold text-zinc-800 focus:outline-none"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            defaultValue={5}
+                            id={`quick-add-stock-${g.id}`}
+                            className="w-14 px-2 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-mono font-bold text-center text-zinc-800 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nameInput = document.getElementById(`quick-add-color-${g.id}`) as HTMLInputElement;
+                              const stockInputEl = document.getElementById(`quick-add-stock-${g.id}`) as HTMLInputElement;
+                              const colorName = nameInput?.value?.trim();
+                              const initialStock = parseInt(stockInputEl?.value) || 5;
+                              if (!colorName) return;
+                              handleAddColorToArchitecture(g.id, colorName, initialStock);
+                              if (nameInput) nameInput.value = "";
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Color</span>
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* CloudFront / ISR Information */}
@@ -2117,253 +2474,296 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Child Variants List */}
+            {/* Hierarchical Variant Architecture & Colorway Studio */}
             <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
-              <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-zinc-950 font-sans">
-                    Child Variant Allocations ({childVariants.length} Active)
+                  <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-blue-600" />
+                    <span>Variant Architecture & Colorway Studio ({variantGroups.length} Architectures Active)</span>
                   </h3>
                   <p className="text-xs text-zinc-500 mt-1">
-                    E.g., Variant A with a detachable mic vs. Variant B with an integrated dual-beamforming mic.
+                    Model multiple variant architectures (e.g. A1 Regular Fit, A2 Streetwear Oversized Cut). Each architecture contains multiple colorways with their own stock counters, SKUs, and photography.
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  onClick={handleAddChildVariant}
-                  className="flex items-center gap-1.5 text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-semibold px-4 py-2 rounded-xl transition-colors shadow-xs"
+                  onClick={handleAddArchitectureGroup}
+                  className="flex items-center gap-1.5 text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-semibold px-4 py-2 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Child Variant</span>
+                  <span>+ Add Variant Architecture (A{variantGroups.length + 1})</span>
                 </button>
               </div>
 
-              <div className="space-y-4">
-                {childVariants.map((variant, idx) => (
-                  <div
-                    key={idx}
-                    className="p-5 rounded-2xl bg-zinc-50/70 border border-zinc-200 space-y-4 transition-all"
-                  >
-                    <div className="flex items-center justify-between pb-2 border-b border-zinc-200/60">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">
-                          {idx + 1}
-                        </span>
-                        <span className="text-xs font-bold text-zinc-900">
-                          {variant.color || "Untitled Variant"}
-                        </span>
-                        <span className="text-[10px] font-mono bg-zinc-200 px-2 py-0.5 rounded text-zinc-700">
-                          {variant.sku}
-                        </span>
-                      </div>
+              {/* Architectures Container */}
+              <div className="space-y-6">
+                {variantGroups.map((group, gIdx) => {
+                  const groupUnits = group.colors.reduce((sum, c) => sum + (c.stock || 0), 0);
 
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveChildVariant(idx)}
-                        className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 font-semibold"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-zinc-600">SKU (Stock Keeping Unit)</label>
-                        <input
-                          type="text"
-                          value={variant.sku}
-                          onChange={(e) => handleVariantChange(idx, "sku", e.target.value)}
-                          className="w-full px-3 py-2 text-xs font-mono font-bold bg-white border border-zinc-200 rounded-xl"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-zinc-600">Color Variant</label>
-                        <input
-                          type="text"
-                          value={variant.color}
-                          onChange={(e) => handleVariantChange(idx, "color", e.target.value)}
-                          className="w-full px-3 py-2 text-xs bg-white border border-zinc-200 rounded-xl"
-                        />
-                      </div>
-
-                      <div className="space-y-1 sm:col-span-2">
-                        <label className="text-[11px] font-semibold text-zinc-600">
-                          Feature Spec Override (e.g., Detachable Mic vs Built-in)
-                        </label>
-                        <input
-                          type="text"
-                          value={variant.specOverride}
-                          onChange={(e) => handleVariantChange(idx, "specOverride", e.target.value)}
-                          placeholder="e.g. Detachable Mic, Attached Mic"
-                          className="w-full px-3 py-2 text-xs bg-white border border-zinc-200 rounded-xl font-medium"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-zinc-600">Variant Price ($)</label>
-                        <input
-                          type="number"
-                          value={variant.price}
-                          onChange={(e) => handleVariantChange(idx, "price", Number(e.target.value))}
-                          className="w-full px-3 py-2 text-xs bg-white border border-zinc-200 rounded-xl"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-zinc-600">Discount (%)</label>
-                        <input
-                          type="number"
-                          value={variant.discount}
-                          onChange={(e) => handleVariantChange(idx, "discount", Number(e.target.value))}
-                          className="w-full px-3 py-2 text-xs bg-white border border-zinc-200 rounded-xl"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-zinc-600">Real-Time Inventory (Units)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={variant.stock}
-                          onChange={(e) => handleVariantChange(idx, "stock", Number(e.target.value))}
-                          className="w-full px-3 py-2 text-xs font-bold font-mono bg-white border border-zinc-200 rounded-xl text-blue-900"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Dedicated Multi-Image Asset Management */}
-                    <div className="pt-4 border-t border-zinc-200/60 space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Camera className="w-4 h-4 text-blue-600" />
-                            <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider">
-                              Variant Photography & Angle Assets ({(variant.images || []).length} Attached)
-                            </h4>
+                  return (
+                    <div
+                      key={group.id}
+                      className="p-5 sm:p-6 rounded-2xl bg-zinc-50/80 border border-zinc-200 space-y-5 transition-all shadow-2xs"
+                    >
+                      {/* Architecture Group Header Card */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200">
+                        <div className="flex items-center gap-3">
+                          <span className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xs font-bold font-mono shadow-2xs">
+                            {group.id}
+                          </span>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                                Architecture Cut #{gIdx + 1}
+                              </span>
+                              <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                                {group.colors.length} {group.colors.length === 1 ? "colorway" : "colorways"}
+                              </span>
+                              <span className="text-[10px] font-mono bg-zinc-200 text-zinc-800 px-2 py-0.5 rounded-full font-bold">
+                                {groupUnits} units total
+                              </span>
+                            </div>
+                            <input
+                              type="text"
+                              value={group.name}
+                              onChange={(e) => handleUpdateArchitectureName(group.id, e.target.value)}
+                              placeholder="e.g. A1 (Regular Fit) or A2 (Oversized Cut)"
+                              className="text-sm font-bold text-zinc-900 bg-white border border-zinc-200 px-3 py-1.5 rounded-lg mt-1 w-full sm:w-80 focus:outline-none"
+                            />
                           </div>
-                          <p className="text-[11px] text-zinc-500 mt-0.5">
-                            First photo acts as the primary storefront hero. Add multiple angles, macro details, and lifestyle shots.
-                          </p>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <label
-                            htmlFor={`file-variant-upload-${idx}`}
-                            className="cursor-pointer inline-flex items-center gap-1.5 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-3 py-1.5 rounded-lg border border-blue-200 transition-colors shadow-2xs"
-                          >
-                            <Upload className="w-3.5 h-3.5" />
-                            <span>{isVariantUploading === idx ? "Uploading to S3..." : "Direct S3 Upload"}</span>
-                          </label>
-                          <input
-                            id={`file-variant-upload-${idx}`}
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            disabled={isVariantUploading === idx}
-                            onChange={(e) => handleVariantDirectS3Upload(idx, e)}
-                            className="hidden"
-                          />
+                        <div className="flex items-center gap-3 self-end sm:self-auto">
+                          <div className="flex items-center gap-1.5">
+                            <label className="text-[11px] font-semibold text-zinc-500 font-mono">Base Price ($):</label>
+                            <input
+                              type="number"
+                              value={group.price ?? masterBasePrice}
+                              onChange={(e) => handleUpdateArchitecturePrice(group.id, Number(e.target.value))}
+                              className="w-20 px-2 py-1 text-xs font-mono font-bold bg-white border border-zinc-200 rounded-lg text-zinc-900 focus:outline-none"
+                            />
+                          </div>
 
                           <button
                             type="button"
-                            onClick={() => handleVariantAddImage(idx)}
-                            className="inline-flex items-center gap-1 text-xs bg-white hover:bg-zinc-100 text-zinc-800 font-semibold px-3 py-1.5 rounded-lg border border-zinc-200 transition-colors shadow-2xs"
+                            onClick={() => handleRemoveArchitectureGroup(group.id)}
+                            className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
                           >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add Angle</span>
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete Arch</span>
                           </button>
                         </div>
                       </div>
 
-                      {/* Attached Images Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                        {(variant.images && variant.images.length > 0 ? variant.images : ["/images/hero-silver.jpg"]).map(
-                          (imgUrl, imgIdx) => (
-                            <div
-                              key={imgIdx}
-                              className="p-3 rounded-xl bg-white border border-zinc-200 shadow-2xs space-y-2 relative group hover:border-zinc-300 transition-all"
-                            >
-                              <div className="flex items-center justify-between">
+                      {/* Colorways Nested in this Architecture */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-zinc-800 uppercase tracking-wider font-mono">
+                            Colorways & Stock for {group.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleAddColorToArchitecture(group.id, `Color ${group.colors.length + 1}`, 5)}
+                            className="inline-flex items-center gap-1.5 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-3 py-1.5 rounded-lg border border-blue-200 transition-colors shadow-2xs cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>+ Add Color to {group.id}</span>
+                          </button>
+                        </div>
+
+                        {group.colors.map((colorItem, cIdx) => (
+                          <div
+                            key={colorItem.sku || cIdx}
+                            className="p-4 rounded-xl bg-white border border-zinc-200 shadow-2xs space-y-4"
+                          >
+                            <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
+                              <div className="flex items-center gap-2">
                                 <span
-                                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
-                                    imgIdx === 0
-                                      ? "bg-blue-100 text-blue-800 border border-blue-200"
-                                      : "bg-zinc-100 text-zinc-700"
-                                  }`}
-                                >
-                                  {imgIdx === 0 ? "★ Primary Cover" : `Angle 0${imgIdx + 1}`}
+                                  className="w-4 h-4 rounded-full border border-black/20 shrink-0 shadow-2xs"
+                                  style={{ backgroundColor: colorItem.hex || "#333" }}
+                                />
+                                <span className="text-xs font-bold text-zinc-900">
+                                  {colorItem.color || "Untitled Color"}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleVariantRemoveImage(idx, imgIdx)}
-                                  className="text-zinc-400 hover:text-red-600 transition-colors p-1"
-                                  title="Remove angle"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <span className="text-[10px] font-mono bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-700">
+                                  {colorItem.sku}
+                                </span>
                               </div>
 
-                              <div className="relative aspect-16/10 rounded-lg bg-zinc-50 border border-zinc-100 overflow-hidden flex items-center justify-center">
-                                <img
-                                  src={imgUrl}
-                                  alt={`Variant ${variant.color} angle ${imgIdx + 1}`}
-                                  className="w-full h-full object-contain p-1"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.opacity = "0.3";
-                                  }}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveColorFromArchitecture(group.id, cIdx)}
+                                className="text-xs text-zinc-400 hover:text-red-600 flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Remove Color</span>
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                              {/* Color Name + Swatch Picker */}
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-600">Colorway Name</label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="color"
+                                    value={colorItem.hex || "#22252A"}
+                                    onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "hex", e.target.value)}
+                                    className="w-7 h-7 rounded border border-zinc-200 p-0 cursor-pointer shrink-0"
+                                    title="Choose color hex"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={colorItem.color}
+                                    onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "color", e.target.value)}
+                                    className="w-full px-2.5 py-1.5 text-xs bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-900 font-semibold focus:bg-white"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* SKU */}
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-600">SKU (Stock Keeping Unit)</label>
+                                <input
+                                  type="text"
+                                  value={colorItem.sku}
+                                  onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "sku", e.target.value)}
+                                  className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-900 focus:bg-white"
                                 />
                               </div>
 
+                              {/* Price Override */}
                               <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-600">Color Price ($)</label>
                                 <input
-                                  type="text"
-                                  value={imgUrl}
-                                  onChange={(e) => handleVariantUpdateImage(idx, imgIdx, e.target.value)}
-                                  placeholder="/images/... or https://..."
-                                  className="w-full px-2.5 py-1.5 text-[11px] font-mono bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:bg-white"
+                                  type="number"
+                                  value={colorItem.price ?? group.price ?? masterBasePrice}
+                                  onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "price", Number(e.target.value))}
+                                  className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-900 focus:bg-white"
+                                />
+                              </div>
+
+                              {/* Real-time Inventory */}
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-600">Real-Time Units (Stock)</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={colorItem.stock}
+                                  onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "stock", Number(e.target.value))}
+                                  className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-blue-50/50 border border-blue-200 rounded-lg text-blue-900 focus:bg-white"
                                 />
                               </div>
                             </div>
-                          )
-                        )}
-                      </div>
 
-                      {/* Quick Asset Presets Picker */}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <span className="text-[10px] font-mono text-zinc-400">Quick Presets:</span>
-                        {[
-                          { name: "Silver Studio", url: "/images/hero-silver.jpg" },
-                          { name: "Graphite Studio", url: "/images/hero-graphite.jpg" },
-                          { name: "Sandstone Studio", url: "/images/hero-sandstone.jpg" },
-                          { name: "Aluminum Gimbal", url: "/images/feature-aluminum.jpg" },
-                          { name: "Foam Cushion", url: "/images/feature-foam.jpg" },
-                          { name: "Rotary Dial", url: "/images/feature-dial.jpg" },
-                          { name: "Exploded X-Ray", url: "/images/exploded-assembly.jpg" },
-                          { name: "Workspace Scene", url: "/images/lifestyle-workspace.jpg" },
-                        ].map((preset) => (
-                          <button
-                            key={preset.name}
-                            type="button"
-                            onClick={() => handleVariantAddImage(idx, preset.url)}
-                            className="text-[10px] font-mono bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded transition-colors"
-                          >
-                            + {preset.name}
-                          </button>
+                            {/* Photography & Angles for this Color */}
+                            <div className="pt-3 border-t border-zinc-100 space-y-2.5">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <Camera className="w-3.5 h-3.5 text-blue-600" />
+                                  <span className="text-[11px] font-bold text-zinc-800">
+                                    Photography ({(colorItem.images || []).length} Attached)
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <label
+                                    htmlFor={`upload-color-${group.id}-${cIdx}`}
+                                    className="cursor-pointer inline-flex items-center gap-1 text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-2.5 py-1 rounded-md border border-blue-200 transition-colors cursor-pointer"
+                                  >
+                                    <Upload className="w-3 h-3" />
+                                    <span>{uploadingColorKey === `${group.id}-${cIdx}` ? "Uploading S3..." : "Direct S3 Upload"}</span>
+                                  </label>
+                                  <input
+                                    id={`upload-color-${group.id}-${cIdx}`}
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    disabled={uploadingColorKey === `${group.id}-${cIdx}`}
+                                    onChange={(e) => handleColorDirectS3Upload(group.id, cIdx, e)}
+                                    className="hidden"
+                                  />
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddImageToColor(group.id, cIdx)}
+                                    className="inline-flex items-center gap-1 text-[11px] bg-white hover:bg-zinc-100 text-zinc-700 font-semibold px-2.5 py-1 rounded-md border border-zinc-200 transition-colors cursor-pointer"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    <span>Add Angle</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Thumbnails */}
+                              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                                {(colorItem.images && colorItem.images.length > 0 ? colorItem.images : ["/images/hero-silver.jpg"]).map(
+                                  (imgUrl, imgIdx) => (
+                                    <div
+                                      key={imgIdx}
+                                      className="p-1.5 rounded-lg bg-zinc-50 border border-zinc-200 space-y-1 relative group"
+                                    >
+                                      <div className="relative aspect-square rounded bg-white overflow-hidden flex items-center justify-center">
+                                        <img
+                                          src={imgUrl}
+                                          alt={`${colorItem.color} angle ${imgIdx + 1}`}
+                                          className="w-full h-full object-contain p-0.5"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveImageFromColor(group.id, cIdx, imgIdx)}
+                                          className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white p-1 rounded transition-colors"
+                                          title="Remove photo"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                      <input
+                                        type="text"
+                                        value={imgUrl}
+                                        onChange={(e) => handleUpdateImageInColor(group.id, cIdx, imgIdx, e.target.value)}
+                                        className="w-full px-1.5 py-0.5 text-[9px] font-mono bg-white border border-zinc-200 rounded text-zinc-600 focus:outline-none"
+                                      />
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         ))}
                       </div>
+
+                      {/* Prominent Add Color to Architecture Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleAddColorToArchitecture(group.id, `Color ${group.colors.length + 1}`, 5)}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 text-blue-700 font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>+ Add More Colors to {group.name}</span>
+                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              <div className="pt-4 border-t border-zinc-100 flex justify-end">
+              {/* Bottom Actions */}
+              <div className="pt-4 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleAddArchitectureGroup}
+                  className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl border border-zinc-300 hover:border-zinc-400 bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-xs transition-colors shadow-2xs cursor-pointer"
+                >
+                  <Layers className="w-4 h-4 text-blue-600" />
+                  <span>+ Add New Variant Architecture (A{variantGroups.length + 1})</span>
+                </button>
+
                 <button
                   type="submit"
                   disabled={isSavingVariants}
-                  className="flex items-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs px-6 py-3 rounded-xl shadow-md transition-colors disabled:opacity-50"
+                  className="flex items-center justify-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs px-6 py-3 rounded-xl shadow-md transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>{isSavingVariants ? "Persisting Changes..." : "Save All & Revalidate Edge ISR"}</span>
@@ -2920,10 +3320,55 @@ export default function AdminPage() {
                                 >
                                   {currentDraftStock === 0 ? "SOLD OUT" : currentDraftStock <= 5 ? "LOW STOCK" : "IN STOCK"}
                                 </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleModalRemoveColor(v.sku)}
+                                  className="text-zinc-400 hover:text-red-600 transition-colors p-1"
+                                  title="Delete colorway"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </div>
                           );
                         })}
+                      </div>
+
+                      {/* Inline Add Colorway to Architecture within Restock Modal */}
+                      <div className="p-3 bg-blue-50/60 border-t border-blue-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder={`Add colorway to ${archName} (e.g., Heather Grey)`}
+                          id={`modal-color-name-${archName.replace(/[^a-zA-Z0-9]/g, "-")}`}
+                          className="flex-1 px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-xs font-semibold text-zinc-900 focus:outline-none"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          defaultValue={5}
+                          id={`modal-color-stock-${archName.replace(/[^a-zA-Z0-9]/g, "-")}`}
+                          placeholder="Qty"
+                          className="w-16 px-2 py-1.5 rounded-lg border border-blue-200 bg-white text-xs font-mono font-bold text-center text-zinc-900 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const nameId = `modal-color-name-${archName.replace(/[^a-zA-Z0-9]/g, "-")}`;
+                            const stockId = `modal-color-stock-${archName.replace(/[^a-zA-Z0-9]/g, "-")}`;
+                            const nameEl = document.getElementById(nameId) as HTMLInputElement;
+                            const stockEl = document.getElementById(stockId) as HTMLInputElement;
+                            const colorName = nameEl?.value?.trim();
+                            const initialQty = parseInt(stockEl?.value) || 5;
+                            if (!colorName) return;
+                            await handleModalAddColor(archName, colorName, initialQty);
+                            if (nameEl) nameEl.value = "";
+                          }}
+                          className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ Add Color</span>
+                        </button>
                       </div>
                     </div>
                   );
@@ -3239,28 +3684,54 @@ export default function AdminPage() {
                       Support multiple architectures (A1, A2) and individual color stocks
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextNum = newProdVariants.length + 1;
-                      setNewProdVariants([
-                        ...newProdVariants,
-                        {
-                          sku: `PROD-VAR-${nextNum}`,
-                          color: "New Color",
-                          hex: "#333333",
-                          specOverride: "A1 (Regular Fit)",
-                          price: newProdPrice,
-                          stock: 5,
-                          images: ["/images/hero-silver.jpg"],
-                        },
-                      ]);
-                    }}
-                    className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Variant</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const lastArch = newProdVariants[newProdVariants.length - 1]?.specOverride || "A1 (Regular Fit)";
+                        const nextNum = newProdVariants.length + 1;
+                        setNewProdVariants([
+                          ...newProdVariants,
+                          {
+                            sku: `PROD-VAR-${nextNum}`,
+                            color: "New Color",
+                            hex: "#333333",
+                            specOverride: lastArch,
+                            price: newProdPrice,
+                            stock: 5,
+                            images: ["/images/hero-silver.jpg"],
+                          },
+                        ]);
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Add Color to Arch</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const archIndex = new Set(newProdVariants.map((v) => v.specOverride)).size + 1;
+                        const archLetter = `A${archIndex}`;
+                        setNewProdVariants([
+                          ...newProdVariants,
+                          {
+                            sku: `PROD-${archLetter}-BLK`,
+                            color: "Pitch Black",
+                            hex: "#1A1A1A",
+                            specOverride: `${archLetter} (Edition ${archIndex})`,
+                            price: newProdPrice,
+                            stock: 5,
+                            images: ["/images/hero-graphite.jpg"],
+                          },
+                        ]);
+                      }}
+                      className="text-xs text-zinc-700 hover:text-zinc-900 font-semibold flex items-center gap-1 cursor-pointer bg-zinc-100 px-2.5 py-1 rounded-lg border border-zinc-200"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>+ New Arch Cut</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2.5">

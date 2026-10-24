@@ -77,6 +77,26 @@ export interface ProductQnA {
   date: string;
 }
 
+export interface IVariantColor {
+  id?: string;
+  sku: string;
+  color: string;
+  hex?: string;
+  price?: number;
+  discount?: number;
+  stock: number;
+  images: string[];
+}
+
+export interface IVariantGroup {
+  id: string; // e.g. "A1", "A2", "arch-1"
+  name: string; // e.g. "A1 (Regular Fit)"
+  specOverride?: string;
+  price?: number;
+  discount?: number;
+  colors: IVariantColor[];
+}
+
 export interface IVariant {
   sku: string;               // Unique stock keeping unit
   color: string;             // Variant color
@@ -85,6 +105,63 @@ export interface IVariant {
   discount: number;          // Specific variant discount percentage
   stock: number;             // Real-time inventory count
   images: string[];          // S3 URLs / CloudFront Paths specific to this variant
+}
+
+export function variantGroupsToChildVariants(groups: IVariantGroup[], defaultPrice = 99): IVariant[] {
+  const result: IVariant[] = [];
+  (groups || []).forEach((g) => {
+    (g.colors || []).forEach((c) => {
+      result.push({
+        sku: c.sku,
+        color: c.color,
+        specOverride: g.name || g.specOverride || "Standard Edition",
+        price: c.price ?? g.price ?? defaultPrice,
+        discount: c.discount ?? g.discount ?? 0,
+        stock: c.stock ?? 0,
+        images: c.images && c.images.length > 0 ? c.images : ["/images/hero-silver.jpg"],
+      });
+    });
+  });
+  return result;
+}
+
+export function childVariantsToVariantGroups(childVariants: IVariant[], basePrice = 99): IVariantGroup[] {
+  const map = new Map<string, IVariantGroup>();
+  (childVariants || []).forEach((cv, idx) => {
+    const groupName = cv.specOverride?.trim() || "Standard Architecture";
+    const groupId = groupName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || `group-${idx}`;
+    if (!map.has(groupId)) {
+      map.set(groupId, {
+        id: groupId,
+        name: groupName,
+        specOverride: groupName,
+        price: cv.price ?? basePrice,
+        discount: cv.discount ?? 0,
+        colors: [],
+      });
+    }
+    const group = map.get(groupId)!;
+    const colorLower = (cv.color || "").toLowerCase();
+    const hex = colorLower.includes("green") ? "#2E5339" :
+                colorLower.includes("black") ? "#1A1A1A" :
+                colorLower.includes("blue") ? "#3B6978" :
+                colorLower.includes("white") ? "#F5F5F5" :
+                colorLower.includes("silver") ? "#D1D5DB" :
+                colorLower.includes("sandstone") ? "#D4B996" :
+                "#4F46E5";
+
+    group.colors.push({
+      id: `${groupId}-${cv.sku}`,
+      sku: cv.sku,
+      color: cv.color,
+      hex,
+      price: cv.price ?? group.price ?? basePrice,
+      discount: cv.discount ?? 0,
+      stock: cv.stock ?? 0,
+      images: cv.images && cv.images.length > 0 ? cv.images : ["/images/hero-silver.jpg"],
+    });
+  });
+  return Array.from(map.values());
 }
 
 export interface IProduct {
@@ -305,6 +382,7 @@ export interface ProductData {
   qna?: ProductQnA[];
   variants: ColorVariant[];
   childVariants?: IVariant[];
+  variantGroups?: IVariantGroup[];
   specs?: {
     dimensionsMetric?: string;
     dimensionsImperial?: string;

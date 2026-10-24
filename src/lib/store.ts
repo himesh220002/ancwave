@@ -1,4 +1,16 @@
-import { ProductData, Order, AWSEventLog, Review, IVariant, IProduct, IReview } from "@/types";
+import {
+  ProductData,
+  Order,
+  AWSEventLog,
+  Review,
+  IVariant,
+  IProduct,
+  IReview,
+  IVariantGroup,
+  IVariantColor,
+  childVariantsToVariantGroups,
+  variantGroupsToChildVariants,
+} from "@/types";
 
 export const initialProductData: ProductData = {
   id: "form-01",
@@ -799,6 +811,64 @@ export const productAData: ProductData = {
     "Care Instructions": "Cold wash inside out, lay flat to dry",
     "Origin": "Ethically milled and tailored in Portugal",
   },
+  variantGroups: [
+    {
+      id: "A1",
+      name: "A1 (Regular Fit)",
+      specOverride: "A1 (Regular Fit)",
+      price: 120,
+      colors: [
+        {
+          sku: "PROD-A1-GREEN",
+          color: "Forest Green",
+          hex: "#2E5339",
+          price: 120,
+          stock: 5,
+          images: ["/images/lifestyle-workspace.jpg", "/images/feature-foam.jpg"],
+        },
+        {
+          sku: "PROD-A1-BLACK",
+          color: "Pitch Black",
+          hex: "#1A1A1A",
+          price: 120,
+          stock: 2,
+          images: ["/images/hero-graphite.jpg", "/images/feature-aluminum.jpg"],
+        },
+        {
+          sku: "PROD-A1-BLUE",
+          color: "Mineral Blue",
+          hex: "#3B6978",
+          price: 120,
+          stock: 4,
+          images: ["/images/hero-silver.jpg", "/images/checkout-floating.jpg"],
+        },
+      ],
+    },
+    {
+      id: "A2",
+      name: "A2 (Oversized Fit)",
+      specOverride: "A2 (Oversized Fit)",
+      price: 130,
+      colors: [
+        {
+          sku: "PROD-A2-WHITE",
+          color: "Arctic White",
+          hex: "#ECECEC",
+          price: 130,
+          stock: 8,
+          images: ["/images/hero-sandstone.jpg", "/images/feature-dial.jpg"],
+        },
+        {
+          sku: "PROD-A2-GREEN",
+          color: "Forest Green",
+          hex: "#2E5339",
+          price: 130,
+          stock: 7,
+          images: ["/images/lifestyle-cafe.jpg", "/images/lifestyle-city.jpg"],
+        },
+      ],
+    },
+  ],
   childVariants: [
     {
       sku: "PROD-A1-GREEN",
@@ -1121,22 +1191,49 @@ class AncWaveStore {
   }
 
   getProduct(slug = "form-01"): ProductData {
-    return this.products.get(slug) || { ...initialProductData };
+    let p = this.products.get(slug);
+    if (!p) p = { ...initialProductData };
+    if (!p.variantGroups || p.variantGroups.length === 0) {
+      if (p.childVariants && p.childVariants.length > 0) {
+        p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
+      }
+    }
+    return { ...p };
   }
 
   getProductById(id: string): ProductData | undefined {
     for (const p of this.products.values()) {
-      if (p.id === id || p.slug === id || p.productId === id) return { ...p };
+      if (p.id === id || p.slug === id || p.productId === id) {
+        if (!p.variantGroups || p.variantGroups.length === 0) {
+          if (p.childVariants && p.childVariants.length > 0) {
+            p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
+          }
+        }
+        return { ...p };
+      }
     }
     return undefined;
   }
 
   getProductBySlug(slug: string): ProductData | undefined {
-    return this.products.get(slug);
+    const p = this.products.get(slug);
+    if (p && (!p.variantGroups || p.variantGroups.length === 0)) {
+      if (p.childVariants && p.childVariants.length > 0) {
+        p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
+      }
+    }
+    return p ? { ...p } : undefined;
   }
 
   getAllProducts(): ProductData[] {
-    return Array.from(this.products.values());
+    return Array.from(this.products.values()).map((p) => {
+      if (!p.variantGroups || p.variantGroups.length === 0) {
+        if (p.childVariants && p.childVariants.length > 0) {
+          p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
+        }
+      }
+      return { ...p };
+    });
   }
 
   updateStock(newStock: number, activeDiscount?: number, slug = "form-01"): ProductData {
@@ -1152,12 +1249,18 @@ class AncWaveStore {
 
   updateVariantStock(productIdOrSlug: string, sku: string, newStock: number): ProductData {
     const p = this.products.get(productIdOrSlug) || this.getProductById(productIdOrSlug) || { ...initialProductData };
+    const stockVal = Math.max(0, newStock);
     if (p.childVariants) {
       p.childVariants = p.childVariants.map((v) =>
-        v.sku === sku ? { ...v, stock: Math.max(0, newStock) } : v
+        v.sku === sku ? { ...v, stock: stockVal } : v
       );
-      // Aggregate total master stock from variants if configured
       p.stock = p.childVariants.reduce((sum, v) => sum + v.stock, 0);
+    }
+    if (p.variantGroups && p.variantGroups.length > 0) {
+      p.variantGroups = p.variantGroups.map((g) => ({
+        ...g,
+        colors: g.colors.map((c) => (c.sku === sku ? { ...c, stock: stockVal } : c)),
+      }));
     }
     p.lastRevalidatedAt = new Date().toISOString();
     this.products.set(p.slug, p);
@@ -1174,13 +1277,19 @@ class AncWaveStore {
       lastRevalidatedAt: new Date().toISOString(),
     };
 
-    if (updated.childVariants && updated.childVariants.length > 0) {
+    if (updated.variantGroups && updated.variantGroups.length > 0) {
+      merged.variantGroups = updated.variantGroups;
+      merged.childVariants = variantGroupsToChildVariants(updated.variantGroups, merged.basePrice || merged.price);
+      merged.stock = merged.childVariants.reduce((sum, v) => sum + v.stock, 0);
+    } else if (updated.childVariants && updated.childVariants.length > 0) {
       merged.childVariants = updated.childVariants;
+      merged.variantGroups = childVariantsToVariantGroups(updated.childVariants, merged.basePrice || merged.price);
       merged.stock = updated.childVariants.reduce((sum, v) => sum + v.stock, 0);
+    }
 
-      // Synchronize color variants array with childVariants so storefront swatches and multi-image galleries update in lockstep
+    if (merged.childVariants && merged.childVariants.length > 0) {
       const existingVariants = existing.variants || [];
-      merged.variants = updated.childVariants.map((cv, idx) => {
+      merged.variants = merged.childVariants.map((cv, idx) => {
         const matchingExisting = existingVariants.find(
           (ev) => ev.name.toLowerCase() === cv.color.toLowerCase()
         );
@@ -1212,7 +1321,11 @@ class AncWaveStore {
       id: slug,
       lastRevalidatedAt: new Date().toISOString(),
     };
-    if (p.childVariants && p.childVariants.length > 0) {
+    if (p.variantGroups && p.variantGroups.length > 0) {
+      p.childVariants = variantGroupsToChildVariants(p.variantGroups, p.basePrice || p.price);
+      p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+    } else if (p.childVariants && p.childVariants.length > 0) {
+      p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
       p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
     }
     this.products.set(slug, p);
@@ -1237,11 +1350,127 @@ class AncWaveStore {
       });
       p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
     } else {
-      // Fallback if no child variants exist
       const totalStock = updates.reduce((sum, u) => sum + (Number(u.stock) || 0), 0);
       p.stock = totalStock;
     }
 
+    if (p.variantGroups && p.variantGroups.length > 0) {
+      p.variantGroups = p.variantGroups.map((g) => ({
+        ...g,
+        colors: g.colors.map((c) => {
+          if (updatesMap.has(c.sku)) {
+            return { ...c, stock: updatesMap.get(c.sku)! };
+          }
+          return c;
+        }),
+      }));
+    }
+
+    p.lastRevalidatedAt = new Date().toISOString();
+    this.products.set(p.slug, p);
+    return { ...p };
+  }
+
+  addColorToVariantGroup(
+    slug: string,
+    groupIdOrName: string,
+    colorData: {
+      sku?: string;
+      color: string;
+      hex?: string;
+      price?: number;
+      discount?: number;
+      stock: number;
+      images?: string[];
+    }
+  ): ProductData {
+    const p = this.products.get(slug) || this.getProductById(slug) || { ...initialProductData };
+    if (!p.variantGroups || p.variantGroups.length === 0) {
+      p.variantGroups = childVariantsToVariantGroups(p.childVariants || [], p.basePrice || p.price);
+    }
+
+    let group = p.variantGroups.find(
+      (g) => g.id.toLowerCase() === groupIdOrName.toLowerCase() || g.name.toLowerCase() === groupIdOrName.toLowerCase()
+    );
+
+    if (!group) {
+      group = {
+        id: groupIdOrName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || `arch-${Date.now().toString(36)}`,
+        name: groupIdOrName,
+        specOverride: groupIdOrName,
+        price: colorData.price ?? p.basePrice ?? p.price,
+        discount: colorData.discount ?? 0,
+        colors: [],
+      };
+      p.variantGroups.push(group);
+    }
+
+    const cleanColor = colorData.color.trim() || "New Color";
+    const generatedSku = colorData.sku?.trim() || `${p.productId || "PROD"}-${group.id.toUpperCase()}-${cleanColor.toUpperCase().replace(/[^A-Z0-9]/g, "")}`;
+    const hex = colorData.hex || (
+      cleanColor.toLowerCase().includes("green") ? "#2E5339" :
+      cleanColor.toLowerCase().includes("black") ? "#1A1A1A" :
+      cleanColor.toLowerCase().includes("blue") ? "#3B6978" :
+      cleanColor.toLowerCase().includes("white") ? "#ECECEC" :
+      cleanColor.toLowerCase().includes("red") ? "#DC2626" :
+      cleanColor.toLowerCase().includes("grey") || cleanColor.toLowerCase().includes("gray") ? "#6B7280" :
+      "#4F46E5"
+    );
+
+    const newColor: IVariantColor = {
+      id: `${group.id}-${generatedSku}`,
+      sku: generatedSku,
+      color: cleanColor,
+      hex,
+      price: colorData.price ?? group.price ?? p.basePrice ?? p.price,
+      discount: colorData.discount ?? group.discount ?? 0,
+      stock: Math.max(0, Number(colorData.stock) || 0),
+      images: Array.isArray(colorData.images) && colorData.images.length > 0 ? colorData.images : ["/images/hero-silver.jpg"],
+    };
+
+    const existingColorIdx = group.colors.findIndex((c) => c.sku.toLowerCase() === generatedSku.toLowerCase());
+    if (existingColorIdx >= 0) {
+      group.colors[existingColorIdx] = newColor;
+    } else {
+      group.colors.push(newColor);
+    }
+
+    // Re-derive childVariants & update total stock
+    p.childVariants = variantGroupsToChildVariants(p.variantGroups, p.basePrice || p.price);
+    p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+
+    // Sync storefront variants list
+    const existingVariants = p.variants || [];
+    p.variants = p.childVariants.map((cv, idx) => {
+      const match = existingVariants.find((ev) => ev.name.toLowerCase() === cv.color.toLowerCase());
+      return {
+        id: match?.id || cv.color.toLowerCase().replace(/[^a-z0-9]/g, "-") || `var-${idx}`,
+        name: cv.color,
+        hex: match?.hex || (cv as any).hex || "#22252A",
+        borderHex: match?.borderHex || "#111215",
+        image: cv.images?.[0] || match?.image || "/images/hero-silver.jpg",
+        images: cv.images && cv.images.length > 0 ? cv.images : [cv.images?.[0] || "/images/hero-silver.jpg"],
+        tag: String(idx + 1).padStart(2, "0"),
+      };
+    });
+
+    p.lastRevalidatedAt = new Date().toISOString();
+    this.products.set(p.slug, p);
+    return { ...p };
+  }
+
+  removeColorFromVariantGroup(slug: string, sku: string): ProductData {
+    const p = this.products.get(slug) || this.getProductById(slug) || { ...initialProductData };
+    if (!p.variantGroups || p.variantGroups.length === 0) {
+      p.variantGroups = childVariantsToVariantGroups(p.childVariants || [], p.basePrice || p.price);
+    }
+
+    p.variantGroups.forEach((g) => {
+      g.colors = g.colors.filter((c) => c.sku.toLowerCase() !== sku.toLowerCase());
+    });
+
+    p.childVariants = variantGroupsToChildVariants(p.variantGroups, p.basePrice || p.price);
+    p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
     p.lastRevalidatedAt = new Date().toISOString();
     this.products.set(p.slug, p);
     return { ...p };

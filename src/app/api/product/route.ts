@@ -4,7 +4,7 @@ import { connectDB } from "@/lib/db";
 import { ProductModel } from "@/lib/models";
 import { revalidatePath } from "next/cache";
 import { dispatchEventBridgeEvent } from "@/lib/aws-services";
-import { IVariant } from "@/types";
+import { IVariant, IVariantGroup, IVariantColor, variantGroupsToChildVariants } from "@/types";
 
 export async function GET(req: NextRequest) {
   try {
@@ -60,6 +60,10 @@ export async function PATCH(req: NextRequest) {
       variantStock,
       variantUpdates,
       childVariants,
+      variantGroups,
+      action,
+      groupId,
+      color,
       name,
       description,
       type,
@@ -71,15 +75,37 @@ export async function PATCH(req: NextRequest) {
     const targetSlug = slug || "form-01";
     let updatedProduct = store.getProduct(targetSlug);
 
-    // 1. Batch variant restock (from Restock Modal)
-    if (variantUpdates && Array.isArray(variantUpdates)) {
+    // 1. Direct Add Color to Variant Architecture
+    if (action === "addColor" && groupId && color) {
+      updatedProduct = store.addColorToVariantGroup(targetSlug, groupId, color);
+    }
+    // 2. Direct Remove Color from Architecture
+    else if (action === "removeColor" && variantSku) {
+      updatedProduct = store.removeColorFromVariantGroup(targetSlug, variantSku);
+    }
+    // 3. Batch variant restock (from Restock Modal)
+    else if (variantUpdates && Array.isArray(variantUpdates)) {
       updatedProduct = store.updateMultipleVariantStocks(targetSlug, variantUpdates);
     }
-    // 2. Single variant stock adjustment
+    // 4. Single variant stock adjustment
     else if (variantSku && typeof variantStock === "number") {
       updatedProduct = store.updateVariantStock(targetSlug, variantSku, variantStock);
     }
-    // 3. Full child variants list or metadata
+    // 5. Full hierarchical variantGroups list or metadata
+    else if (variantGroups && Array.isArray(variantGroups)) {
+      updatedProduct = store.updateProductWithVariants({
+        slug: targetSlug,
+        productId: productId || updatedProduct.productId || "ANC-FORM-01",
+        name: name || updatedProduct.name,
+        description: description || updatedProduct.description,
+        type: type || updatedProduct.type,
+        basePrice: typeof basePrice === "number" ? basePrice : updatedProduct.basePrice,
+        baseDiscount: typeof baseDiscount === "number" ? baseDiscount : updatedProduct.baseDiscount,
+        globalSpecs: globalSpecs || updatedProduct.globalSpecs,
+        variantGroups: variantGroups as IVariantGroup[],
+      });
+    }
+    // 6. Full child variants list or metadata
     else if (childVariants && Array.isArray(childVariants)) {
       updatedProduct = store.updateProductWithVariants({
         slug: targetSlug,
@@ -93,7 +119,7 @@ export async function PATCH(req: NextRequest) {
         childVariants: childVariants as IVariant[],
       });
     }
-    // 4. Simple master stock adjustment
+    // 7. Simple master stock adjustment
     else if (typeof stock === "number") {
       updatedProduct = store.updateStock(stock, activeDiscount, targetSlug);
     }
@@ -185,29 +211,36 @@ export async function POST(req: NextRequest) {
     const generatedSlug = (slug || productName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     const generatedProductId = productId || `PROD-${Date.now().toString(36).toUpperCase()}`;
 
-    // Accept childVariants or variants array with architecture/specOverride
-    const inputVariants = childVariants || variants;
-    const parsedVariants: IVariant[] = Array.isArray(inputVariants) && inputVariants.length > 0
-      ? inputVariants.map((v: any, i: number) => ({
-          sku: v.sku || `${generatedProductId}-VAR-${i + 1}`,
-          color: v.color || "Standard",
-          specOverride: v.specOverride || v.architecture || "Standard Fit / Cut",
-          price: Number(v.price) || Number(price) || 99,
-          discount: Number(v.discount) || 0,
-          stock: Number(v.stock) || 0,
-          images: Array.isArray(v.images) && v.images.length > 0 ? v.images : [v.image || "/images/hero-silver.jpg"],
-        }))
-      : [
-          {
-            sku: `${generatedProductId}-VAR-1`,
-            color: "Standard",
-            specOverride: "Default Edition",
-            price: Number(price) || 99,
-            discount: 0,
-            stock: 10,
-            images: ["/images/hero-silver.jpg"],
-          },
-        ];
+    // Accept variantGroups or childVariants or variants array with architecture/specOverride
+    const inputVariantGroups = body.variantGroups;
+    let parsedVariants: IVariant[] = [];
+
+    if (Array.isArray(inputVariantGroups) && inputVariantGroups.length > 0) {
+      parsedVariants = variantGroupsToChildVariants(inputVariantGroups, Number(price) || Number(basePrice) || 99);
+    } else {
+      const inputVariants = childVariants || variants;
+      parsedVariants = Array.isArray(inputVariants) && inputVariants.length > 0
+        ? inputVariants.map((v: any, i: number) => ({
+            sku: v.sku || `${generatedProductId}-VAR-${i + 1}`,
+            color: v.color || "Standard",
+            specOverride: v.specOverride || v.architecture || "Standard Fit / Cut",
+            price: Number(v.price) || Number(price) || 99,
+            discount: Number(v.discount) || 0,
+            stock: Number(v.stock) || 0,
+            images: Array.isArray(v.images) && v.images.length > 0 ? v.images : [v.image || "/images/hero-silver.jpg"],
+          }))
+        : [
+            {
+              sku: `${generatedProductId}-VAR-1`,
+              color: "Standard",
+              specOverride: "Default Edition",
+              price: Number(price) || 99,
+              discount: 0,
+              stock: 10,
+              images: ["/images/hero-silver.jpg"],
+            },
+          ];
+    }
 
     const initialTotalStock = parsedVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
 
@@ -238,6 +271,7 @@ export async function POST(req: NextRequest) {
       reviewCount: 0,
       sku: `${generatedProductId}-MASTER`,
       globalSpecs: globalSpecs || {},
+      variantGroups: Array.isArray(inputVariantGroups) && inputVariantGroups.length > 0 ? inputVariantGroups : undefined,
       childVariants: parsedVariants,
       variants: Array.isArray(variants) && variants.length > 0 ? variants : parsedVariants.map((cv, idx) => ({
         id: cv.color.toLowerCase().replace(/[^a-z0-9]/g, "-") || `var-${idx}`,
