@@ -1121,28 +1121,85 @@ export function ProductDetailView({
             </div>
           )}
 
-          {/* Dynamic Global Specs Table (Category-Agnostic: Apparel, Tech, Home, Beauty, Fitness, etc.) */}
-          {(!product.tabbedSpecs && product.globalSpecs) && (
-            <div className="rounded-2xl border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
-              {Object.entries(product.globalSpecs).map(([label, value], idx) => (
-                <div
-                  key={label}
-                  className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
-                    idx % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"
-                  }`}
-                >
-                  <span className="text-xs font-medium text-zinc-600 sm:w-1/3">
-                    {label}
-                  </span>
-                  <div className="sm:w-2/3 flex items-center justify-between gap-3">
-                    <span className="text-xs font-semibold text-zinc-900 font-mono">
-                      {value}
+          {/* Dynamic Global & Variant-Overridden Specifications (Category-Agnostic with Spec Diversion) */}
+          {(!product.tabbedSpecs && (product.globalSpecs || currentChildVariant?.variantSpecs)) && (() => {
+            const global = product.globalSpecs || {};
+            const overrides = currentChildVariant?.variantSpecs || {};
+            const allKeys = Array.from(new Set([...Object.keys(global), ...Object.keys(overrides)]));
+
+            return (
+              <div className="space-y-3">
+                {/* Active Architecture Differentiation Indicator */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold text-zinc-700 uppercase tracking-wider">
+                      Active Architecture:
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-xs font-semibold">
+                      {currentChildVariant?.specOverride || currentChildVariant?.color || "Standard Architecture"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[11px] font-mono">
+                    <span className="flex items-center gap-1.5 text-amber-800 font-medium bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/80">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      ⚡ Variant Override
+                    </span>
+                    <span className="flex items-center gap-1.5 text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-md border border-zinc-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                      🌐 Global Spec
                     </span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+
+                <div className="rounded-2xl border border-zinc-200 overflow-hidden divide-y divide-zinc-100 shadow-2xs">
+                  {allKeys.map((label, idx) => {
+                    const isOverridden = label in overrides;
+                    const displayValue = isOverridden ? overrides[label] : global[label];
+                    const globalDefault = global[label];
+
+                    return (
+                      <div
+                        key={label}
+                        className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors ${
+                          isOverridden
+                            ? "bg-amber-50/40 hover:bg-amber-50/70"
+                            : idx % 2 === 0
+                            ? "bg-white"
+                            : "bg-[#FAFAFA]"
+                        }`}
+                      >
+                        <div className="sm:w-1/3 flex items-center gap-2">
+                          <span className="text-xs font-medium text-zinc-700">
+                            {label}
+                          </span>
+                          {isOverridden && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300/80">
+                              OVERRIDE
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="sm:w-2/3 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4">
+                          <span className={`text-xs font-semibold font-mono ${
+                            isOverridden ? "text-amber-950 font-bold" : "text-zinc-900"
+                          }`}>
+                            {displayValue}
+                          </span>
+
+                          {isOverridden && globalDefault && (
+                            <span className="text-[10px] font-mono text-zinc-400">
+                              (Global base: {globalDefault})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </section>
 

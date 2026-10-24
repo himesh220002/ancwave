@@ -77,6 +77,7 @@ export interface INewProdArchitecture {
   id: string;
   name: string;
   price: number;
+  variantSpecs: Array<{ key: string; value: string }>;
   colors: INewProdColor[];
 }
 
@@ -174,6 +175,7 @@ export default function AdminPage() {
       id: "A1",
       name: "A1 (Regular Fit)",
       price: 120,
+      variantSpecs: [{ key: "Fit Cut", value: "Regular Tailored Cut" }],
       colors: [
         { id: "c1", color: "Forest Green", hex: "#2E5339", sku: "PROD-A1-GREEN", stock: 5, price: 120, images: ["/images/lifestyle-workspace.jpg"] },
         { id: "c2", color: "Pitch Black", hex: "#1A1A1A", sku: "PROD-A1-BLACK", stock: 2, price: 120, images: ["/images/hero-graphite.jpg"] },
@@ -184,6 +186,7 @@ export default function AdminPage() {
       id: "A2",
       name: "A2 (Oversized Fit)",
       price: 130,
+      variantSpecs: [{ key: "Fit Cut", value: "Streetwear Oversized Drop Shoulder" }],
       colors: [
         { id: "c4", color: "Arctic White", hex: "#ECECEC", sku: "PROD-A2-WHITE", stock: 8, price: 130, images: ["/images/hero-sandstone.jpg"] },
         { id: "c5", color: "Forest Green", hex: "#2E5339", sku: "PROD-A2-GREEN", stock: 7, price: 130, images: ["/images/lifestyle-cafe.jpg"] },
@@ -930,6 +933,7 @@ export default function AdminPage() {
         id: nextId,
         name: `${nextId} (Edition ${nextNum})`,
         price: newProdPrice || 120,
+        variantSpecs: [],
         colors: [
           {
             id: `color-${Date.now()}-1`,
@@ -1036,6 +1040,60 @@ export default function AdminPage() {
     });
   };
 
+  // Spec Divergence / Override Handlers for Architecture Cuts
+  const handleNewProdAddSpecOverride = (archIdx: number, specKey: string, defaultValue = "") => {
+    setNewProdArchitectures((prev) => {
+      const updated = [...prev];
+      const arch = { ...updated[archIdx] };
+      const currentSpecs = arch.variantSpecs || [];
+      if (currentSpecs.some((s) => s.key.toLowerCase() === specKey.toLowerCase())) {
+        toast({
+          type: "info",
+          title: "Already Diverged",
+          description: `"${specKey}" is already overridden in this architecture cut.`,
+        });
+        return prev;
+      }
+      const globalMatch = newProdSpecs.find((s) => s.key.toLowerCase() === specKey.toLowerCase());
+      arch.variantSpecs = [
+        ...currentSpecs,
+        {
+          key: specKey,
+          value: defaultValue || globalMatch?.value || "Divergent Specification Value",
+        },
+      ];
+      updated[archIdx] = arch;
+      return updated;
+    });
+  };
+
+  const handleNewProdRemoveSpecOverride = (archIdx: number, specIdx: number) => {
+    setNewProdArchitectures((prev) => {
+      const updated = [...prev];
+      const arch = { ...updated[archIdx] };
+      arch.variantSpecs = (arch.variantSpecs || []).filter((_, i) => i !== specIdx);
+      updated[archIdx] = arch;
+      return updated;
+    });
+  };
+
+  const handleNewProdUpdateSpecOverride = (
+    archIdx: number,
+    specIdx: number,
+    field: "key" | "value",
+    val: string
+  ) => {
+    setNewProdArchitectures((prev) => {
+      const updated = [...prev];
+      const arch = { ...updated[archIdx] };
+      const specs = [...(arch.variantSpecs || [])];
+      specs[specIdx] = { ...specs[specIdx], [field]: val };
+      arch.variantSpecs = specs;
+      updated[archIdx] = arch;
+      return updated;
+    });
+  };
+
   // Load Example Product A Variant Structure (A1 & A2)
   const handleLoadProductAExample = () => {
     setNewProdCategory("apparel-fashion");
@@ -1058,6 +1116,7 @@ export default function AdminPage() {
         id: "A1",
         name: "A1 (Regular Fit)",
         price: 120,
+        variantSpecs: [{ key: "Fit Cut", value: "Regular Tailored Cut" }],
         colors: [
           { id: "c-a1-1", sku: "PROD-A1-GREEN", color: "Forest Green", hex: "#2E5339", stock: 5, price: 120, images: ["/images/lifestyle-workspace.jpg"] },
           { id: "c-a1-2", sku: "PROD-A1-BLACK", color: "Pitch Black", hex: "#1A1A1A", stock: 2, price: 120, images: ["/images/hero-graphite.jpg"] },
@@ -1068,6 +1127,7 @@ export default function AdminPage() {
         id: "A2",
         name: "A2 (Oversized Fit)",
         price: 130,
+        variantSpecs: [{ key: "Fit Cut", value: "Streetwear Oversized Drop Shoulder" }],
         colors: [
           { id: "c-a2-1", sku: "PROD-A2-WHITE", color: "Arctic White", hex: "#ECECEC", stock: 8, price: 130, images: ["/images/hero-sandstone.jpg"] },
           { id: "c-a2-2", sku: "PROD-A2-GREEN", color: "Forest Green", hex: "#2E5339", stock: 7, price: 130, images: ["/images/lifestyle-cafe.jpg"] },
@@ -1078,6 +1138,70 @@ export default function AdminPage() {
       type: "info",
       title: "Product A Architecture Loaded",
       description: "A1 {Green: 5, Black: 2, Blue: 4} & A2 {White: 8, Green: 7} loaded.",
+    });
+  };
+
+  // Load Example Nova X1 Flagship Smartphone (Dual Architecture Spec Overrides)
+  const handleLoadNovaSmartphoneExample = () => {
+    setNewProdCategory("electronics-accessories");
+    setNewProdName("Nova X1 Flagship Smartphone");
+    setNewProdSlug("nova-x1-smartphone");
+    setNewProdModel("X1 SERIES FLAGSHIP 5G");
+    setNewProdTagline("Powerful smartphone built for all-day performance with dual display architectures.");
+    setNewProdDescription("Nova X1 delivers flagship-grade Snapdragon 8 performance with dual architectural formats: A1 Large Display Edition (6.0\", 5500mAh, Gorilla Glass Victus) and A2 Compact Edition (5.5\", 4700mAh, Dragon Shield Glass).");
+    setNewProdPrice(499);
+    setNewProdOriginalPrice(599);
+    setNewProdSpecs([
+      { key: "Brand", value: "Nova" },
+      { key: "Processor", value: "Snapdragon 8 Series" },
+      { key: "RAM", value: "8GB LPDDR5X" },
+      { key: "Storage", value: "128GB UFS 4.0" },
+      { key: "Rear Camera", value: "50MP Main + 12MP Ultra-Wide" },
+      { key: "Front Camera", value: "16MP HDR" },
+      { key: "OS", value: "Android 16" },
+      { key: "Fast Charging", value: "65W Wired Fast Charging" },
+      { key: "Network", value: "5G Dual SIM + Wi-Fi 7" },
+      { key: "Fingerprint", value: "Ultrasonic In-Display" },
+      { key: "Water Resistance", value: "IP68 Certified" },
+    ]);
+    setNewProdArchitectures([
+      {
+        id: "A1",
+        name: "Large Display Edition",
+        price: 499,
+        variantSpecs: [
+          { key: "Display Size", value: "6.0 inch LTPO AMOLED" },
+          { key: "Screen Protection", value: "Corning Gorilla Glass Victus" },
+          { key: "Battery Capacity", value: "5500mAh Dual-Cell" },
+          { key: "Weight", value: "210g" },
+        ],
+        colors: [
+          { id: "c-a1-blk", sku: "NVX1-A1-BLK", color: "Midnight Black", hex: "#101010", stock: 35, price: 499, images: ["/images/hero-graphite.jpg"] },
+          { id: "c-a1-blu", sku: "NVX1-A1-BLU", color: "Ocean Blue", hex: "#1565C0", stock: 22, price: 499, images: ["/images/hero-silver.jpg"] },
+          { id: "c-a1-slv", sku: "NVX1-A1-SLV", color: "Titanium Silver", hex: "#C0C0C0", stock: 18, price: 519, images: ["/images/lifestyle-workspace.jpg"] },
+        ],
+      },
+      {
+        id: "A2",
+        name: "Compact Edition",
+        price: 449,
+        variantSpecs: [
+          { key: "Display Size", value: "5.5 inch Compact AMOLED" },
+          { key: "Screen Protection", value: "Dragon Shield Glass" },
+          { key: "Battery Capacity", value: "4700mAh High-Density" },
+          { key: "Weight", value: "185g" },
+        ],
+        colors: [
+          { id: "c-a2-grn", sku: "NVX1-A2-GRN", color: "Forest Green", hex: "#2E7D32", stock: 30, price: 449, images: ["/images/lifestyle-cafe.jpg"] },
+          { id: "c-a2-wht", sku: "NVX1-A2-WHT", color: "Pearl White", hex: "#FAFAFA", stock: 16, price: 459, images: ["/images/hero-sandstone.jpg"] },
+          { id: "c-a2-red", sku: "NVX1-A2-RED", color: "Crimson Red", hex: "#B71C1C", stock: 11, price: 469, images: ["/images/lifestyle-urban.jpg"] },
+        ],
+      },
+    ]);
+    toast({
+      type: "info",
+      title: "Nova X1 Smartphone Architecture Loaded",
+      description: "A1 (6.0\" / 5500mAh Victus) & A2 (5.5\" / 4700mAh Dragon Shield) loaded with 132 units.",
     });
   };
 
@@ -1108,22 +1232,31 @@ export default function AdminPage() {
         return acc;
       }, {} as Record<string, string>);
 
-      // Map newProdArchitectures to IVariantGroup
-      const formattedVariantGroups: IVariantGroup[] = newProdArchitectures.map((arch) => ({
-        id: arch.id.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        name: arch.name.trim() || `${arch.id} Architecture`,
-        price: Number(arch.price) || Number(newProdPrice) || 99,
-        discount: 0,
-        colors: arch.colors.map((c) => ({
-          id: c.id,
-          sku: c.sku.trim() || `PROD-${arch.id.toUpperCase()}-${c.color.replace(/[^a-z0-9]+/gi, "").toUpperCase()}`,
-          color: c.color.trim() || "Standard",
-          hex: c.hex || "#333333",
-          stock: Number(c.stock) || 0,
-          price: Number(c.price) || Number(arch.price) || Number(newProdPrice) || 99,
-          images: c.images && c.images.length > 0 ? c.images : ["/images/hero-silver.jpg"],
-        })),
-      }));
+      // Map newProdArchitectures to IVariantGroup with variantSpecs
+      const formattedVariantGroups: IVariantGroup[] = newProdArchitectures.map((arch) => {
+        const variantSpecsRecord = (arch.variantSpecs || []).reduce((acc, curr) => {
+          if (curr.key.trim()) acc[curr.key.trim()] = curr.value.trim();
+          return acc;
+        }, {} as Record<string, string>);
+
+        return {
+          id: arch.id.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          name: arch.name.trim() || `${arch.id} Architecture`,
+          specOverride: arch.name.trim() || `${arch.id} Architecture`,
+          variantSpecs: Object.keys(variantSpecsRecord).length > 0 ? variantSpecsRecord : undefined,
+          price: Number(arch.price) || Number(newProdPrice) || 99,
+          discount: 0,
+          colors: arch.colors.map((c) => ({
+            id: c.id,
+            sku: c.sku.trim() || `PROD-${arch.id.toUpperCase()}-${c.color.replace(/[^a-z0-9]+/gi, "").toUpperCase()}`,
+            color: c.color.trim() || "Standard",
+            hex: c.hex || "#333333",
+            stock: Number(c.stock) || 0,
+            price: Number(c.price) || Number(arch.price) || Number(newProdPrice) || 99,
+            images: c.images && c.images.length > 0 ? c.images : ["/images/hero-silver.jpg"],
+          })),
+        };
+      });
 
       // Flatten to IVariant for childVariants
       const formattedChildVariants: IVariant[] = [];
@@ -1133,6 +1266,7 @@ export default function AdminPage() {
             sku: c.sku,
             color: c.color,
             specOverride: vg.name,
+            variantSpecs: vg.variantSpecs,
             price: c.price ?? vg.price ?? newProdPrice,
             discount: 0,
             stock: c.stock,
@@ -3683,18 +3817,27 @@ export default function AdminPage() {
 
               {/* Step 2: Core Details */}
               <div className="space-y-4 pt-4 border-t border-zinc-100">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <label className="text-xs font-bold text-zinc-900 uppercase font-mono tracking-wider">
                     2. Core Product Information
                   </label>
-                  <button
-                    type="button"
-                    onClick={handleLoadProductAExample}
-                    className="text-[11px] text-emerald-600 hover:text-emerald-700 font-semibold underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Load "Product A" Example (A1 & A2 Architecture)</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleLoadNovaSmartphoneExample}
+                      className="text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-300/80 hover:bg-emerald-100 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Load "Nova X1 Smartphone" Example (6.0" 5500mAh vs 5.5" 4700mAh)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLoadProductAExample}
+                      className="text-[11px] text-zinc-600 hover:text-zinc-900 font-medium underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Load "Product A" Example</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3935,6 +4078,146 @@ export default function AdminPage() {
                               </button>
                             )}
                           </div>
+                        </div>
+
+                        {/* Architecture Spec Overrides (Inheritance & Divergence Studio) */}
+                        <div
+                          className="p-3.5 rounded-xl bg-white border border-zinc-200/90 shadow-2xs space-y-3"
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const key = e.dataTransfer.getData("text/plain");
+                            if (key) {
+                              handleNewProdAddSpecOverride(archIdx, key);
+                            }
+                          }}
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                                <span className="text-xs font-bold text-zinc-900 font-mono uppercase tracking-wider">
+                                  Architecture Spec Overrides & Divergence
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80">
+                                  {(arch.variantSpecs || []).length} overridden
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-zinc-500 mt-0.5">
+                                Attributes that differ from Global Specs for this cut (e.g. Display Size, Battery, Protection Glass). Click or drag chips below to diverge.
+                              </p>
+                            </div>
+
+                            {/* Quick action: Add custom divergence */}
+                            <button
+                              type="button"
+                              onClick={() => handleNewProdAddSpecOverride(archIdx, "New Spec Attribute", "Custom Divergent Value")}
+                              className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer self-start sm:self-auto shrink-0"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>+ Custom Override</span>
+                            </button>
+                          </div>
+
+                          {/* Global Spec Chips (Click to diverge or Drag into Cut) */}
+                          {newProdSpecs.length > 0 && (
+                            <div className="space-y-1.5">
+                              <div className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+                                Click or drag global specs into {arch.id || `Arch ${archIdx + 1}`} to override:
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {newProdSpecs.map((gSpec, gsIdx) => {
+                                  const isAlreadyOverridden = (arch.variantSpecs || []).some(
+                                    (s) => s.key.toLowerCase() === gSpec.key.toLowerCase()
+                                  );
+
+                                  if (isAlreadyOverridden) {
+                                    return (
+                                      <span
+                                        key={gsIdx}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200/90 text-[11px] font-medium"
+                                        title={`Already overridden in ${arch.id || "this cut"}`}
+                                      >
+                                        <span className="text-[10px] font-mono font-bold text-amber-600">⚡</span>
+                                        <span className="font-semibold">{gSpec.key}</span>
+                                        <span className="text-[10px] text-amber-700 font-mono">(Diverged)</span>
+                                      </span>
+                                    );
+                                  }
+
+                                  return (
+                                    <button
+                                      key={gsIdx}
+                                      type="button"
+                                      draggable
+                                      onDragStart={(e) => e.dataTransfer.setData("text/plain", gSpec.key)}
+                                      onClick={() => handleNewProdAddSpecOverride(archIdx, gSpec.key, gSpec.value)}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-medium border border-zinc-200 transition-colors cursor-pointer group"
+                                      title="Click or drag to diverge this spec in this architecture cut"
+                                    >
+                                      <Plus className="w-3 h-3 text-zinc-400 group-hover:text-zinc-700" />
+                                      <span>{gSpec.key}</span>
+                                      <span className="text-[10px] text-zinc-400 font-mono">({gSpec.value})</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Active Overrides Rows */}
+                          {(arch.variantSpecs || []).length === 0 ? (
+                            <div className="p-2.5 rounded-lg bg-zinc-50 border border-dashed border-zinc-200 text-[11px] text-zinc-500 flex items-center justify-between">
+                              <span className="flex items-center gap-1.5">
+                                <span>🌐</span>
+                                <span>Inheriting 100% of Global Specs (Display, Battery, RAM, etc. inherit seamlessly from Master).</span>
+                              </span>
+                              <span className="text-[10px] font-mono text-zinc-400 hidden sm:inline">Click any chip above to diverge</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-2 pt-1 border-t border-zinc-100">
+                              <div className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                                <span>Active Overrides for {arch.id || `Cut ${archIdx + 1}`}:</span>
+                                <span className="text-[10px] font-mono text-amber-700 font-semibold">
+                                  {(arch.variantSpecs || []).length} Divergent {arch.variantSpecs?.length === 1 ? "Spec" : "Specs"}
+                                </span>
+                              </div>
+                              <div className="space-y-1.5">
+                                {(arch.variantSpecs || []).map((vSpec, vsIdx) => (
+                                  <div
+                                    key={vsIdx}
+                                    className="flex items-center gap-2 p-1.5 rounded-lg bg-amber-50/70 border border-amber-200/80"
+                                  >
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-mono text-[9px] font-bold shrink-0">
+                                      ⚡ OVERRIDE
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={vSpec.key}
+                                      onChange={(e) => handleNewProdUpdateSpecOverride(archIdx, vsIdx, "key", e.target.value)}
+                                      placeholder="Attribute Key"
+                                      className="w-1/3 px-2.5 py-1 rounded-md border border-amber-200/90 text-xs font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={vSpec.value}
+                                      onChange={(e) => handleNewProdUpdateSpecOverride(archIdx, vsIdx, "value", e.target.value)}
+                                      placeholder="Overridden Value (e.g. 6.0 inch LTPO AMOLED)"
+                                      className="flex-1 px-2.5 py-1 rounded-md border border-amber-200/90 text-xs font-mono font-medium text-amber-950 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleNewProdRemoveSpecOverride(archIdx, vsIdx)}
+                                      className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer shrink-0"
+                                      title="Revert back to Global Spec inheritance"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Colorways Table inside this Architecture Cut */}

@@ -1709,7 +1709,7 @@ class AncWaveStore {
 const globalStore = global as unknown as { __ancWaveStore?: AncWaveStore };
 if (
   !globalStore.__ancWaveStore ||
-  typeof (globalStore.__ancWaveStore as any)?.registerUser !== "function"
+  typeof (globalStore.__ancWaveStore as any)?.addProduct !== "function"
 ) {
   globalStore.__ancWaveStore = new AncWaveStore();
 }

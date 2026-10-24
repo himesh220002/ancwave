@@ -329,7 +329,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Error in /api/product POST:", error);
-    return NextResponse.json({ success: false, error: "Failed to create product" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Failed to create product" }, { status: 500 });
   }
 }
 

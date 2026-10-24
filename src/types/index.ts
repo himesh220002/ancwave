@@ -90,17 +90,19 @@ export interface IVariantColor {
 
 export interface IVariantGroup {
   id: string; // e.g. "A1", "A2", "arch-1"
-  name: string; // e.g. "A1 (Regular Fit)"
+  name: string; // e.g. "Large Display Edition"
   specOverride?: string;
+  variantSpecs?: Record<string, string>; // Variant-specific spec overrides e.g. { "Display Size": "6.0 inch", "Battery": "5500mAh" }
   price?: number;
   discount?: number;
   colors: IVariantColor[];
 }
 
 export interface IVariant {
-  sku: string;               // Unique stock keeping unit
+  sku: string;               // Unique stock keeping unit: e.g. NVX1-A1-BLK
   color: string;             // Variant color
-  specOverride: string;      // Specific variance details (e.g., "Detachable Mic", "Attached Mic")
+  specOverride: string;      // Specific variance details (e.g., "A1 (Large Display Edition)")
+  variantSpecs?: Record<string, string>; // Specific specs overrides for this variant
   price: number;             // Override price if different from parent
   discount: number;          // Specific variant discount percentage
   stock: number;             // Real-time inventory count
@@ -115,6 +117,7 @@ export function variantGroupsToChildVariants(groups: IVariantGroup[], defaultPri
         sku: c.sku,
         color: c.color,
         specOverride: g.name || g.specOverride || "Standard Edition",
+        variantSpecs: g.variantSpecs,
         price: c.price ?? g.price ?? defaultPrice,
         discount: c.discount ?? g.discount ?? 0,
         stock: c.stock ?? 0,
@@ -135,30 +138,32 @@ export function childVariantsToVariantGroups(childVariants: IVariant[], basePric
         id: groupId,
         name: groupName,
         specOverride: groupName,
+        variantSpecs: cv.variantSpecs,
         price: cv.price ?? basePrice,
         discount: cv.discount ?? 0,
         colors: [],
       });
     }
     const group = map.get(groupId)!;
-    const colorLower = (cv.color || "").toLowerCase();
-    const hex = colorLower.includes("green") ? "#2E5339" :
-                colorLower.includes("black") ? "#1A1A1A" :
-                colorLower.includes("blue") ? "#3B6978" :
-                colorLower.includes("white") ? "#F5F5F5" :
-                colorLower.includes("silver") ? "#D1D5DB" :
-                colorLower.includes("sandstone") ? "#D4B996" :
-                "#4F46E5";
-
+    if (!group.variantSpecs && cv.variantSpecs) {
+      group.variantSpecs = cv.variantSpecs;
+    }
+    const hex = cv.color.toLowerCase().includes("green") ? "#2E7D32" :
+      cv.color.toLowerCase().includes("black") ? "#101010" :
+      cv.color.toLowerCase().includes("blue") ? "#1565C0" :
+      cv.color.toLowerCase().includes("white") ? "#FAFAFA" :
+      cv.color.toLowerCase().includes("red") ? "#B71C1C" :
+      cv.color.toLowerCase().includes("silver") || cv.color.toLowerCase().includes("titanium") ? "#C0C0C0" :
+      cv.color.toLowerCase().includes("sandstone") ? "#D6C4A6" : "#333333";
     group.colors.push({
-      id: `${groupId}-${cv.sku}`,
+      id: `color-${group.colors.length + 1}`,
       sku: cv.sku,
       color: cv.color,
       hex,
-      price: cv.price ?? group.price ?? basePrice,
-      discount: cv.discount ?? 0,
-      stock: cv.stock ?? 0,
-      images: cv.images && cv.images.length > 0 ? cv.images : ["/images/hero-silver.jpg"],
+      price: cv.price,
+      discount: cv.discount,
+      stock: cv.stock,
+      images: cv.images,
     });
   });
   return Array.from(map.values());
