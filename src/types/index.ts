@@ -6,6 +6,7 @@ export interface ColorVariant {
   hex: string;
   borderHex: string;
   image: string;
+  images?: string[]; // Multiple high-res images for this variant
   tag: string;
 }
 

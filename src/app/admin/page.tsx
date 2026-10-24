@@ -39,6 +39,7 @@ import {
   UserCheck,
   UserX,
   User as UserIcon,
+  Upload,
 } from "lucide-react";
 import { ProductData, Order, IVariant, Review, IReview } from "@/types";
 import { useAuth } from "@/context/AuthContext";
@@ -334,6 +335,111 @@ export default function AdminPage() {
     const updated = [...childVariants];
     updated[index] = { ...updated[index], [field]: value };
     setChildVariants(updated);
+  };
+
+  // Multi-Image Variant Asset Helpers
+  const [isVariantUploading, setIsVariantUploading] = useState<number | null>(null);
+
+  const handleVariantAddImage = (variantIdx: number, url = "") => {
+    const updated = [...childVariants];
+    const currentImages = updated[variantIdx].images || [];
+    updated[variantIdx] = {
+      ...updated[variantIdx],
+      images: [...currentImages, url || "/images/hero-silver.jpg"],
+    };
+    setChildVariants(updated);
+  };
+
+  const handleVariantUpdateImage = (variantIdx: number, imgIdx: number, newUrl: string) => {
+    const updated = [...childVariants];
+    const currentImages = [...(updated[variantIdx].images || [])];
+    currentImages[imgIdx] = newUrl;
+    updated[variantIdx] = {
+      ...updated[variantIdx],
+      images: currentImages,
+    };
+    setChildVariants(updated);
+  };
+
+  const handleVariantRemoveImage = (variantIdx: number, imgIdx: number) => {
+    const updated = [...childVariants];
+    const currentImages = [...(updated[variantIdx].images || [])];
+    if (currentImages.length <= 1) {
+      toast({
+        type: "info",
+        title: "Minimum 1 Photo Required",
+        description: "Each variant requires at least one primary showcase image.",
+      });
+      return;
+    }
+    currentImages.splice(imgIdx, 1);
+    updated[variantIdx] = {
+      ...updated[variantIdx],
+      images: currentImages,
+    };
+    setChildVariants(updated);
+  };
+
+  const handleVariantDirectS3Upload = async (variantIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsVariantUploading(variantIdx);
+    try {
+      const uploadedUrls: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const presignRes = await fetch("/api/reviews/presigned-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: `variant-${variantIdx}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`,
+            contentType: file.type || "image/jpeg",
+          }),
+        });
+
+        const presignData = await presignRes.json();
+        if (!presignData.success || !presignData.uploadUrl) {
+          throw new Error(presignData.error || "Failed to generate S3 upload signature");
+        }
+
+        const uploadRes = await fetch(presignData.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type || "image/jpeg" },
+          body: file,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error("Direct S3 upload failed");
+        }
+
+        uploadedUrls.push(presignData.publicUrl);
+      }
+
+      const updated = [...childVariants];
+      const existing = updated[variantIdx].images || [];
+      updated[variantIdx] = {
+        ...updated[variantIdx],
+        images: [...existing, ...uploadedUrls],
+      };
+      setChildVariants(updated);
+
+      toast({
+        type: "success",
+        title: "S3 Image Pipeline Complete",
+        description: `Uploaded and attached ${uploadedUrls.length} image(s) to ${updated[variantIdx].color}.`,
+      });
+    } catch (err: any) {
+      console.error("Variant image upload error:", err);
+      toast({
+        type: "error",
+        title: "Image Upload Failed",
+        description: err.message || "Failed to upload image to S3 bucket.",
+      });
+    } finally {
+      setIsVariantUploading(null);
+      e.target.value = "";
+    }
   };
 
   // Global specs helper
@@ -1626,16 +1732,127 @@ export default function AdminPage() {
                           className="w-full px-3 py-2 text-xs font-bold font-mono bg-white border border-zinc-200 rounded-xl text-blue-900"
                         />
                       </div>
+                    </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-zinc-600">S3 / CloudFront Image URL</label>
-                        <input
-                          type="text"
-                          value={variant.images?.[0] || ""}
-                          onChange={(e) => handleVariantChange(idx, "images", [e.target.value])}
-                          placeholder="e.g. /images/hero-silver.jpg"
-                          className="w-full px-3 py-2 text-xs bg-white border border-zinc-200 rounded-xl font-mono text-[11px]"
-                        />
+                    {/* Dedicated Multi-Image Asset Management */}
+                    <div className="pt-4 border-t border-zinc-200/60 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Camera className="w-4 h-4 text-blue-600" />
+                            <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider">
+                              Variant Photography & Angle Assets ({(variant.images || []).length} Attached)
+                            </h4>
+                          </div>
+                          <p className="text-[11px] text-zinc-500 mt-0.5">
+                            First photo acts as the primary storefront hero. Add multiple angles, macro details, and lifestyle shots.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <label
+                            htmlFor={`file-variant-upload-${idx}`}
+                            className="cursor-pointer inline-flex items-center gap-1.5 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-3 py-1.5 rounded-lg border border-blue-200 transition-colors shadow-2xs"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>{isVariantUploading === idx ? "Uploading to S3..." : "Direct S3 Upload"}</span>
+                          </label>
+                          <input
+                            id={`file-variant-upload-${idx}`}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            disabled={isVariantUploading === idx}
+                            onChange={(e) => handleVariantDirectS3Upload(idx, e)}
+                            className="hidden"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => handleVariantAddImage(idx)}
+                            className="inline-flex items-center gap-1 text-xs bg-white hover:bg-zinc-100 text-zinc-800 font-semibold px-3 py-1.5 rounded-lg border border-zinc-200 transition-colors shadow-2xs"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Angle</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Attached Images Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {(variant.images && variant.images.length > 0 ? variant.images : ["/images/hero-silver.jpg"]).map(
+                          (imgUrl, imgIdx) => (
+                            <div
+                              key={imgIdx}
+                              className="p-3 rounded-xl bg-white border border-zinc-200 shadow-2xs space-y-2 relative group hover:border-zinc-300 transition-all"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span
+                                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                    imgIdx === 0
+                                      ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                      : "bg-zinc-100 text-zinc-700"
+                                  }`}
+                                >
+                                  {imgIdx === 0 ? "★ Primary Cover" : `Angle 0${imgIdx + 1}`}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleVariantRemoveImage(idx, imgIdx)}
+                                  className="text-zinc-400 hover:text-red-600 transition-colors p-1"
+                                  title="Remove angle"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="relative aspect-16/10 rounded-lg bg-zinc-50 border border-zinc-100 overflow-hidden flex items-center justify-center">
+                                <img
+                                  src={imgUrl}
+                                  alt={`Variant ${variant.color} angle ${imgIdx + 1}`}
+                                  className="w-full h-full object-contain p-1"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.opacity = "0.3";
+                                  }}
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <input
+                                  type="text"
+                                  value={imgUrl}
+                                  onChange={(e) => handleVariantUpdateImage(idx, imgIdx, e.target.value)}
+                                  placeholder="/images/... or https://..."
+                                  className="w-full px-2.5 py-1.5 text-[11px] font-mono bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:bg-white"
+                                />
+                              </div>
+                            </div>
+                          )
+                        )}
+                      </div>
+
+                      {/* Quick Asset Presets Picker */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[10px] font-mono text-zinc-400">Quick Presets:</span>
+                        {[
+                          { name: "Silver Studio", url: "/images/hero-silver.jpg" },
+                          { name: "Graphite Studio", url: "/images/hero-graphite.jpg" },
+                          { name: "Sandstone Studio", url: "/images/hero-sandstone.jpg" },
+                          { name: "Aluminum Gimbal", url: "/images/feature-aluminum.jpg" },
+                          { name: "Foam Cushion", url: "/images/feature-foam.jpg" },
+                          { name: "Rotary Dial", url: "/images/feature-dial.jpg" },
+                          { name: "Exploded X-Ray", url: "/images/exploded-assembly.jpg" },
+                          { name: "Workspace Scene", url: "/images/lifestyle-workspace.jpg" },
+                        ].map((preset) => (
+                          <button
+                            key={preset.name}
+                            type="button"
+                            onClick={() => handleVariantAddImage(idx, preset.url)}
+                            className="text-[10px] font-mono bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded transition-colors"
+                          >
+                            + {preset.name}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>

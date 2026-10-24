@@ -45,7 +45,12 @@ export const initialProductData: ProductData = {
       price: 349,
       discount: 0,
       stock: 4,
-      images: ["/images/hero-silver.jpg", "/images/feature-aluminum.jpg"],
+      images: [
+        "/images/hero-silver.jpg",
+        "/images/feature-aluminum.jpg",
+        "/images/feature-dial.jpg",
+        "/images/lifestyle-workspace.jpg",
+      ],
     },
     {
       sku: "ANC-FORM01-GRAPHITE-INT",
@@ -54,7 +59,12 @@ export const initialProductData: ProductData = {
       price: 349,
       discount: 0,
       stock: 6,
-      images: ["/images/hero-graphite.jpg", "/images/lifestyle-workspace.jpg"],
+      images: [
+        "/images/hero-graphite.jpg",
+        "/images/feature-foam.jpg",
+        "/images/lifestyle-city.jpg",
+        "/images/exploded-assembly.jpg",
+      ],
     },
     {
       sku: "ANC-FORM01-SANDSTONE-STUDIO",
@@ -63,7 +73,12 @@ export const initialProductData: ProductData = {
       price: 369,
       discount: 0,
       stock: 2,
-      images: ["/images/hero-sandstone.jpg", "/images/exploded-assembly.jpg"],
+      images: [
+        "/images/hero-sandstone.jpg",
+        "/images/checkout-floating.jpg",
+        "/images/lifestyle-cafe.jpg",
+        "/images/feature-dial.jpg",
+      ],
     },
   ],
   variants: [
@@ -73,6 +88,12 @@ export const initialProductData: ProductData = {
       hex: "#C4C8D0",
       borderHex: "#949DAA",
       image: "/images/hero-silver.jpg",
+      images: [
+        "/images/hero-silver.jpg",
+        "/images/feature-aluminum.jpg",
+        "/images/feature-dial.jpg",
+        "/images/lifestyle-workspace.jpg",
+      ],
       tag: "01",
     },
     {
@@ -81,6 +102,12 @@ export const initialProductData: ProductData = {
       hex: "#22252A",
       borderHex: "#111215",
       image: "/images/hero-graphite.jpg",
+      images: [
+        "/images/hero-graphite.jpg",
+        "/images/feature-foam.jpg",
+        "/images/lifestyle-city.jpg",
+        "/images/exploded-assembly.jpg",
+      ],
       tag: "02",
     },
     {
@@ -89,6 +116,12 @@ export const initialProductData: ProductData = {
       hex: "#D6C4A6",
       borderHex: "#B8A27E",
       image: "/images/hero-sandstone.jpg",
+      images: [
+        "/images/hero-sandstone.jpg",
+        "/images/checkout-floating.jpg",
+        "/images/lifestyle-cafe.jpg",
+        "/images/feature-dial.jpg",
+      ],
       tag: "03",
     },
   ],
@@ -1021,6 +1054,25 @@ class AncWaveStore {
     if (updated.childVariants && updated.childVariants.length > 0) {
       merged.childVariants = updated.childVariants;
       merged.stock = updated.childVariants.reduce((sum, v) => sum + v.stock, 0);
+
+      // Synchronize color variants array with childVariants so storefront swatches and multi-image galleries update in lockstep
+      const existingVariants = existing.variants || [];
+      merged.variants = updated.childVariants.map((cv, idx) => {
+        const matchingExisting = existingVariants.find(
+          (ev) => ev.name.toLowerCase() === cv.color.toLowerCase()
+        );
+        const colorId = matchingExisting?.id || cv.color.toLowerCase().replace(/[^a-z0-9]/g, "-") || `var-${idx}`;
+        const primaryImage = cv.images && cv.images.length > 0 ? cv.images[0] : (matchingExisting?.image || "/images/hero-silver.jpg");
+        return {
+          id: colorId,
+          name: cv.color,
+          hex: matchingExisting?.hex || (idx === 0 ? "#C4C8D0" : idx === 1 ? "#22252A" : idx === 2 ? "#D6C4A6" : "#4A5568"),
+          borderHex: matchingExisting?.borderHex || (idx === 0 ? "#949DAA" : idx === 1 ? "#111215" : idx === 2 ? "#B8A27E" : "#2D3748"),
+          image: primaryImage,
+          images: cv.images && cv.images.length > 0 ? cv.images : [primaryImage],
+          tag: String(idx + 1).padStart(2, "0"),
+        };
+      });
     }
 
     this.products.set(targetSlug, merged);

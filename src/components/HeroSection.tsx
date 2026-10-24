@@ -25,6 +25,7 @@ export function HeroSection({
   const activeColor = selectedColor || internalColor;
   const currentVariant =
     product.variants.find((v) => v.id === activeColor) || product.variants[0];
+  const heroImage = currentVariant.images?.[0] || currentVariant.image;
 
   const handleColorSwitch = (colorId: ProductColor) => {
     setInternalColor(colorId);
@@ -34,11 +35,11 @@ export function HeroSection({
   const handleAddToCart = () => {
     addItem({
       productId: product.id,
-      name: product.name,
+      name: `${product.name} - ${currentVariant.name}`,
       variant: currentVariant.id,
       variantName: currentVariant.name,
       price: product.price,
-      image: currentVariant.image,
+      image: heroImage,
       fit: "Adjustable fit",
     });
   };
@@ -127,7 +128,7 @@ export function HeroSection({
               {/* Headphone Studio Photography matching Screenshot 1 */}
               <div className="relative w-full aspect-4/3 flex items-center justify-center">
                 <Image
-                  src={currentVariant.image}
+                  src={heroImage}
                   alt={`ancwave Form 01 in ${currentVariant.name}`}
                   fill
                   priority

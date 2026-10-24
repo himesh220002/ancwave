@@ -22,6 +22,7 @@ import {
   HelpCircle,
   AlertTriangle,
   ChevronRight,
+  ChevronLeft,
   Maximize2,
   Volume2,
   CheckCircle2,
@@ -34,6 +35,7 @@ import {
   Review,
   IReview,
   IVariant,
+  MediaGalleryItem,
 } from "@/types";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -132,29 +134,81 @@ export function ProductDetailView({
   const currentVariant =
     product.variants.find((v) => v.id === selectedColor) || product.variants[0];
 
-  // Derived TWS component option (if product is TWS)
-  const currentTwsOption = product.isTws && product.twsComponents
-    ? product.twsComponents.find((c) => c.id === selectedTwsComponent) || product.twsComponents[0]
-    : null;
+  // Derived current child variant (hardware architecture / sku variance)
+  const currentChildVariant =
+    product.childVariants?.find((cv) => cv.sku === selectedVariantSku) ||
+    product.childVariants?.find(
+      (cv) => cv.color.toLowerCase() === currentVariant?.name.toLowerCase()
+    ) ||
+    product.childVariants?.[0];
 
-  // Active pricing based on component selection
-  const activePrice = currentTwsOption ? currentTwsOption.price : product.price;
+  // Derived TWS component option (if product is TWS)
+  const currentTwsOption =
+    product.isTws && product.twsComponents
+      ? product.twsComponents.find((c) => c.id === selectedTwsComponent) || product.twsComponents[0]
+      : null;
+
+  // Active pricing based on child variant / component selection
+  const activePrice = currentTwsOption
+    ? currentTwsOption.price
+    : (currentChildVariant?.price || product.price);
   const activeOriginalPrice = currentTwsOption
     ? currentTwsOption.originalPrice
     : product.originalPrice;
-  const activeSku = currentTwsOption ? currentTwsOption.sku : product.sku;
-  const activeStock = currentTwsOption ? currentTwsOption.stock : product.stock;
+  const activeSku = currentTwsOption
+    ? currentTwsOption.sku
+    : (currentChildVariant?.sku || product.sku);
+  const activeStock = currentTwsOption
+    ? currentTwsOption.stock
+    : (typeof currentChildVariant?.stock === "number" ? currentChildVariant.stock : product.stock);
 
-  // Media items list
-  const mediaGallery = product.mediaGallery || [
-    {
-      id: "default-hero",
-      url: currentVariant.image,
-      alt: product.name,
-      type: "hero" as const,
-      label: "Studio View",
-    },
-  ];
+  // Derived dynamic multiple images for the active variant
+  const variantImages: string[] = React.useMemo(() => {
+    if (currentChildVariant?.images && currentChildVariant.images.length > 0) {
+      return currentChildVariant.images;
+    }
+    if (currentVariant?.images && currentVariant.images.length > 0) {
+      return currentVariant.images;
+    }
+    if (currentVariant?.image) {
+      return [currentVariant.image];
+    }
+    return ["/images/hero-silver.jpg"];
+  }, [currentChildVariant, currentVariant]);
+
+  // Dynamic media gallery combining all variant-specific images + shared product architecture assets
+  const mediaGallery = React.useMemo(() => {
+    const angleLabels = [
+      "Studio Front View",
+      "Precision Macro Detail",
+      "Ergonomic Cushion Profile",
+      "Lifestyle In-Use",
+      "Rotary Dial Control",
+      "Acoustic Chamber",
+      "Architectural Angle",
+    ];
+
+    const items: MediaGalleryItem[] = variantImages.map((imgUrl, i) => ({
+      id: `var-img-${i}-${imgUrl.slice(-10)}`,
+      url: imgUrl,
+      alt: `${product.name} - ${currentChildVariant?.color || currentVariant?.name || "Variant"} - Angle ${i + 1}`,
+      type: i === 0 ? "hero" : i === 1 ? "macro" : "lifestyle",
+      label: angleLabels[i] || `Angle 0${i + 1}`,
+    }));
+
+    // If product has exploded view and it's not already in variant images, append it as technical view
+    if (product.explodedView?.image && !variantImages.includes(product.explodedView.image)) {
+      items.push({
+        id: "exploded-tech",
+        url: product.explodedView.image,
+        alt: `${product.name} Internal Acoustic Architecture`,
+        type: "360" as const,
+        label: "Internal Architecture",
+      });
+    }
+
+    return items;
+  }, [variantImages, product.name, currentChildVariant?.color, currentVariant?.name, product.explodedView?.image]);
 
   // Read initial query params from window.location on mount without blocking SSR
   useEffect(() => {
@@ -185,10 +239,18 @@ export function ProductDetailView({
     }
   }, [selectedColor, selectedTwsComponent, product.isTws]);
 
-  // When color changes, switch hero image to match color if applicable
+  // When color changes, switch hero image to match color and sync child variant
   const handleColorSelect = (colorId: ProductColor) => {
     setSelectedColor(colorId);
-    // Find variant image and set to hero
+    const selectedVariant = product.variants.find((v) => v.id === colorId);
+    if (selectedVariant && product.childVariants) {
+      const matchingChild = product.childVariants.find(
+        (cv) => cv.color.toLowerCase() === selectedVariant.name.toLowerCase()
+      );
+      if (matchingChild) {
+        setSelectedVariantSku(matchingChild.sku);
+      }
+    }
     setActiveMediaIndex(0);
   };
 
@@ -198,15 +260,17 @@ export function ProductDetailView({
       ? currentTwsOption.label
       : undefined;
 
+    const coverImage = variantImages[0] || currentVariant.image;
+
     addItem({
       productId: product.id,
-      name: product.name,
+      name: `${product.name} - ${currentChildVariant?.color || currentVariant.name}`,
       variant: currentVariant.id,
-      variantName: currentVariant.name,
+      variantName: `${currentVariant.name}${currentChildVariant?.specOverride ? ` (${currentChildVariant.specOverride})` : ""}`,
       component: componentLabel,
       componentSku: activeSku,
       price: activePrice,
-      image: currentVariant.image,
+      image: coverImage,
       fit: product.categorySlug === "headphones" ? "Adjustable fit" : "Universal ergonomic fit",
     });
 
@@ -479,13 +543,12 @@ export function ProductDetailView({
             {/* Left Column (7 cols): Split-Screen Media Gallery */}
             <div className="lg:col-span-7 space-y-4">
               {/* Main Showcase Viewport */}
-              <div className="relative aspect-4/3 sm:aspect-16/10 rounded-3xl bg-[#F0EFEA] p-6 sm:p-10 overflow-hidden flex items-center justify-center border border-[#EAEAE5] group">
+              <div
+                onClick={() => setActiveLightboxImage(mediaGallery[activeMediaIndex]?.url || currentVariant.image)}
+                className="relative aspect-4/3 sm:aspect-16/10 rounded-3xl bg-[#F0EFEA] p-6 sm:p-10 overflow-hidden flex items-center justify-center border border-[#EAEAE5] group cursor-zoom-in"
+              >
                 <Image
-                  src={
-                    activeMediaIndex === 0
-                      ? currentVariant.image
-                      : mediaGallery[activeMediaIndex]?.url || currentVariant.image
-                  }
+                  src={mediaGallery[activeMediaIndex]?.url || currentVariant.image}
                   alt={mediaGallery[activeMediaIndex]?.alt || product.name}
                   fill
                   priority
@@ -493,7 +556,7 @@ export function ProductDetailView({
                   sizes="(max-width: 1024px) 100vw, 60vw"
                 />
 
-                {/* Perspective Badge */}
+                {/* Perspective & Angle Badges */}
                 <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2">
                   <span className="px-3 py-1 rounded-full bg-white/90 backdrop-blur-md text-[10px] font-mono tracking-widest text-zinc-800 uppercase font-semibold border border-zinc-200 shadow-2xs">
                     {mediaGallery[activeMediaIndex]?.label || "STUDIO RENDER"}
@@ -506,32 +569,78 @@ export function ProductDetailView({
                   )}
                 </div>
 
+                {/* Top Right Counter & Zoom Button */}
+                <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md text-[10px] font-mono font-bold text-zinc-700 border border-zinc-200 shadow-2xs">
+                    {activeMediaIndex + 1} / {mediaGallery.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveLightboxImage(mediaGallery[activeMediaIndex]?.url || currentVariant.image);
+                    }}
+                    className="w-7 h-7 rounded-full bg-white/90 backdrop-blur-md border border-zinc-200 text-zinc-700 flex items-center justify-center hover:bg-white hover:scale-105 transition-all shadow-2xs"
+                    title="Inspect high resolution"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Cycle Arrows (Overlayed on Hover) */}
+                {mediaGallery.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMediaIndex((prev) => (prev - 1 + mediaGallery.length) % mediaGallery.length);
+                      }}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 backdrop-blur-md border border-zinc-200 text-zinc-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:scale-105 shadow-sm"
+                      aria-label="Previous angle"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMediaIndex((prev) => (prev + 1) % mediaGallery.length);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 backdrop-blur-md border border-zinc-200 text-zinc-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:scale-105 shadow-sm"
+                      aria-label="Next angle"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+
                 {/* Color Variant Pill Indicator */}
-                <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 text-[11px] font-mono text-zinc-500 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full border border-zinc-200">
-                  {currentVariant.name.toUpperCase()} · {product.model}
+                <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 text-[11px] font-mono text-zinc-600 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full border border-zinc-200">
+                  {(currentChildVariant?.color || currentVariant.name).toUpperCase()} · {currentChildVariant?.sku || product.model}
                 </div>
               </div>
 
-              {/* Thumbnails Navigation Row */}
-              <div className="grid grid-cols-4 gap-3 sm:gap-4">
+              {/* Multi-Angle Thumbnails Carousel */}
+              <div className="flex items-center gap-3 overflow-x-auto pb-2 pt-1 scrollbar-thin">
                 {mediaGallery.map((media, idx) => (
                   <button
-                    key={media.id}
+                    key={media.id || idx}
                     onClick={() => setActiveMediaIndex(idx)}
-                    className={`relative aspect-4/3 rounded-2xl bg-[#F0EFEA] p-2 overflow-hidden border transition-all text-left flex flex-col justify-end ${
+                    className={`relative shrink-0 w-24 sm:w-28 aspect-4/3 rounded-2xl bg-[#F0EFEA] p-1.5 overflow-hidden border transition-all text-left flex flex-col justify-end group/thumb ${
                       activeMediaIndex === idx
                         ? "border-blue-600 ring-2 ring-blue-600/20 shadow-xs"
-                        : "border-zinc-200/80 hover:border-zinc-400"
+                        : "border-zinc-200/80 hover:border-zinc-400 opacity-75 hover:opacity-100"
                     }`}
                   >
                     <Image
-                      src={idx === 0 ? currentVariant.image : media.url}
+                      src={media.url}
                       alt={media.alt}
                       fill
-                      className="object-contain p-1"
-                      sizes="150px"
+                      className="object-contain p-1 group-hover/thumb:scale-105 transition-transform"
+                      sizes="120px"
                     />
-                    <span className="relative z-10 text-[9px] font-mono text-zinc-800 bg-white/80 px-1.5 py-0.5 rounded truncate max-w-full">
+                    <span className="relative z-10 text-[9px] font-mono text-zinc-800 bg-white/90 px-1.5 py-0.5 rounded-md truncate max-w-full border border-zinc-200/50">
                       {media.label}
                     </span>
                   </button>
@@ -674,6 +783,7 @@ export function ProductDetailView({
                               (cv) => cv.name.toLowerCase() === v.color.toLowerCase()
                             );
                             if (matchingColor) setSelectedColor(matchingColor.id);
+                            setActiveMediaIndex(0);
                           }}
                           className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between gap-3 ${
                             isSelected

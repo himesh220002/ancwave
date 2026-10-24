@@ -37,15 +37,16 @@ export function CheckoutSection({
     product.variants.find((v) => v.id === selectedColor) || product.variants[0];
 
   const isLowStock = product.stock <= (product.lowStockThreshold || 10);
+  const variantCoverImage = currentVariant.images?.[0] || currentVariant.image || "/images/checkout-floating.jpg";
 
   const handleAddToCart = () => {
     addItem({
       productId: product.id,
-      name: product.name,
+      name: `${product.name} - ${currentVariant.name}`,
       variant: currentVariant.id,
       variantName: currentVariant.name,
       price: product.price,
-      image: currentVariant.image,
+      image: variantCoverImage,
       fit: "One size · adjustable",
     });
 
@@ -81,10 +82,10 @@ export function CheckoutSection({
           <div className="lg:col-span-6 space-y-4 sm:space-y-6">
             <div className="relative aspect-4/3 rounded-2xl bg-[#F0EFEA] p-4 sm:p-6 overflow-hidden flex items-center justify-center border border-[#EAEAE5]">
               <Image
-                src="/images/checkout-floating.jpg"
-                alt="Form 01 floating"
+                src={variantCoverImage}
+                alt={`${product.name} in ${currentVariant.name}`}
                 fill
-                className="object-contain p-2 sm:p-4"
+                className="object-contain p-2 sm:p-4 transition-all duration-300"
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 priority
               />
