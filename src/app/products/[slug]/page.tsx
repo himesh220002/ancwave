@@ -28,7 +28,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // Dynamic Metadata Formula per specification:
   // [Brand] [Model] [Category Type] - Features, Specs & Reviews | [Store Name]
   const title = `ancwave ${product.name} ${product.model} - Features, Specs & Reviews | ancwave`;
-  const description = `${product.tagline} Meet ${product.name} (${product.category}). Featuring ${product.specs.noiseControl}, ${product.specs.driver}, and ${product.specs.batteryLife}. Insured delivery with 30-day home trial.`;
+  const specHighlights = product.specs?.driver
+    ? `Featuring ${product.specs.noiseControl || "Adaptive Shield"}, ${product.specs.driver}, and ${product.specs.batteryLife || "Extended battery"}.`
+    : product.description;
+  const description = `${product.tagline} Meet ${product.name} (${product.category}). ${specHighlights} Insured delivery with 30-day home trial.`;
 
   return {
     title,

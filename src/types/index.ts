@@ -114,12 +114,165 @@ export interface IReview {
   createdAt: string | Date;
 }
 
+export interface ProductCategoryDefinition {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  topSellingItems: string;
+  growthDriver: string;
+  defaultSpecs: Array<{ key: string; value: string }>;
+}
+
+export const ECOMMERCE_CATEGORIES: ProductCategoryDefinition[] = [
+  {
+    id: "apparel-fashion",
+    name: "Apparel & Fashion",
+    slug: "apparel-fashion",
+    description: "Clothing, footwear, activewear, traditional wear",
+    topSellingItems: "Clothing, footwear, activewear, traditional wear",
+    growthDriver: "High repeat purchase rates and seasonal trends.",
+    defaultSpecs: [
+      { key: "Material / Fabric", value: "100% Organic Combed Cotton" },
+      { key: "Fit Type", value: "Tailored Relaxed Fit" },
+      { key: "Care Instructions", value: "Machine Wash Cold, Line Dry" },
+      { key: "Origin / Make", value: "Ethically Milled & Crafted" },
+    ],
+  },
+  {
+    id: "electronics-accessories",
+    name: "Electronics & Mobile Accessories",
+    slug: "electronics-accessories",
+    description: "Smartphones, chargers, earphones, power banks",
+    topSellingItems: "Smartphones, chargers, earphones, power banks",
+    growthDriver: "Constant tech upgrades and high consumer demand.",
+    defaultSpecs: [
+      { key: "Power Output / Charging", value: "65W GaN Fast Charging" },
+      { key: "Ports & Connectivity", value: "USB-C PD 3.0 & MagSafe Qi" },
+      { key: "Chassis Material", value: "CNC Anodized Aluminum" },
+      { key: "Compatibility", value: "Universal iOS, Android & Mac/PC" },
+    ],
+  },
+  {
+    id: "beauty-personal-care",
+    name: "Beauty & Personal Care",
+    slug: "beauty-personal-care",
+    description: "Skincare, cosmetics, haircare, daily hygiene",
+    topSellingItems: "Skincare, cosmetics, haircare, daily hygiene",
+    growthDriver: "Strong brand loyalty and consumable replenishment.",
+    defaultSpecs: [
+      { key: "Active Formulation", value: "Dermatologically Tested, Cruelty-Free" },
+      { key: "Net Volume / Weight", value: "100 ml / 3.4 fl oz" },
+      { key: "Skin Type", value: "All Skin Types & Sensitive Barrier" },
+      { key: "Shelf Life", value: "24 Months" },
+    ],
+  },
+  {
+    id: "home-kitchen",
+    name: "Home & Kitchen",
+    slug: "home-kitchen",
+    description: "Storage organizers, cookware, smart decor, bedding",
+    topSellingItems: "Storage organizers, cookware, smart decor, bedding",
+    growthDriver: "Remote work lifestyles and functional home utility.",
+    defaultSpecs: [
+      { key: "Dimensions", value: "38 cm x 25 cm x 12 cm" },
+      { key: "Core Material", value: "Solid Japanese Walnut & Powdered Steel" },
+      { key: "Assembly", value: "Zero Tools Required, Pre-assembled" },
+      { key: "Load Capacity", value: "Up to 30 kg" },
+    ],
+  },
+  {
+    id: "health-wellness",
+    name: "Health & Wellness",
+    slug: "health-wellness",
+    description: "Vitamins, supplements, protein powders, OTC items",
+    topSellingItems: "Vitamins, supplements, protein powders, OTC items",
+    growthDriver: "Rising health awareness and subscription orders.",
+    defaultSpecs: [
+      { key: "Purity & Testing", value: "GMP Certified, 3rd Party Tested" },
+      { key: "Servings", value: "30 Servings (1 Month Supply)" },
+      { key: "Dietary", value: "100% Vegan, Non-GMO, Gluten-Free" },
+      { key: "Recommended Use", value: "1 Scoop daily in water or shake" },
+    ],
+  },
+  {
+    id: "grocery-consumables",
+    name: "Grocery & Consumables",
+    slug: "grocery-consumables",
+    description: "Snacks, instant meal kits, beverages, staple foods",
+    topSellingItems: "Snacks, instant meal kits, beverages, staple foods",
+    growthDriver: "Hyper-local quick-commerce delivery networks.",
+    defaultSpecs: [
+      { key: "Ingredients", value: "Single-Origin Artisanal Roast" },
+      { key: "Net Weight", value: "500 grams (Whole Bean)" },
+      { key: "Flavor Notes", value: "Dark Chocolate, Honeycomb, Citrus" },
+      { key: "Storage Condition", value: "Airtight valve seal, Store dry" },
+    ],
+  },
+  {
+    id: "baby-kids",
+    name: "Baby & Kids Products",
+    slug: "baby-kids",
+    description: "Diapers, wet wipes, baby food, educational toys",
+    topSellingItems: "Diapers, wet wipes, baby food, educational toys",
+    growthDriver: "Non-negotiable daily household necessity.",
+    defaultSpecs: [
+      { key: "Safety Certification", value: "ASTM / EN71 Certified, BPA-Free" },
+      { key: "Age Grade", value: "0 to 36 Months" },
+      { key: "Material", value: "Hypoallergenic Food-Grade Silicone" },
+      { key: "Cleaning", value: "Sterilizer Safe & Dishwasher Safe" },
+    ],
+  },
+  {
+    id: "fitness-sports",
+    name: "Fitness & Sports Gear",
+    slug: "fitness-sports",
+    description: "Yoga mats, resistance bands, activewear, dumbbells",
+    topSellingItems: "Yoga mats, resistance bands, activewear, dumbbells",
+    growthDriver: "Growing focus on home workouts and preventative health.",
+    defaultSpecs: [
+      { key: "Grip Surface", value: "Laser-Textured Anti-Slip Surface" },
+      { key: "Resistance Range", value: "10 to 60 lbs Variable Tension" },
+      { key: "Core Material", value: "Eco-Friendly Natural Tree Rubber" },
+      { key: "Weight", value: "2.1 kg (Includes Carry Strap)" },
+    ],
+  },
+  {
+    id: "pet-care",
+    name: "Pet Care Supplies",
+    slug: "pet-care",
+    description: "Dog/cat food, pet grooming products, toys",
+    topSellingItems: "Dog/cat food, pet grooming products, toys",
+    growthDriver: "High recurring spend by dedicated pet parents.",
+    defaultSpecs: [
+      { key: "Breed Size", value: "All Breeds (Puppy to Senior)" },
+      { key: "Durability", value: "Tear-Proof Ballistic Nylon Weave" },
+      { key: "Safety", value: "100% Non-Toxic & Lead-Free" },
+      { key: "Washing", value: "Machine Washable Cover" },
+    ],
+  },
+  {
+    id: "fashion-jewellery",
+    name: "Fashion Jewellery",
+    slug: "fashion-jewellery",
+    description: "Imitation rings, earrings, trend necklaces, watches",
+    topSellingItems: "Imitation rings, earrings, trend necklaces, watches",
+    growthDriver: "Low manufacturing costs and high retail profit margins.",
+    defaultSpecs: [
+      { key: "Plating & Base", value: "18K Gold Triple PVD on 316L Steel" },
+      { key: "Water Resistance", value: "100% Waterproof, Sweatproof & Hypoallergenic" },
+      { key: "Chain Length", value: "45 cm + 5 cm Extender" },
+      { key: "Packaging", value: "Luxury Velvet Pouch & Certificate" },
+    ],
+  },
+];
+
 export interface ProductData {
   _id?: string;
   id: string;
   slug: string;
   productId?: string;
-  categorySlug: "headphones" | "earbuds" | "earphones";
+  categorySlug: string;
   name: string;
   model: string;
   category: string;
@@ -152,25 +305,27 @@ export interface ProductData {
   qna?: ProductQnA[];
   variants: ColorVariant[];
   childVariants?: IVariant[];
-  specs: {
-    dimensionsMetric: string;
-    dimensionsImperial: string;
-    weightMetric: string;
-    weightImperial: string;
-    batteryLife: string;
-    charging: string;
-    driver: string;
-    noiseControl: string;
-    connectivity: string;
-    codecs: string;
-    materials: string;
-    inTheBox: string;
+  specs?: {
+    dimensionsMetric?: string;
+    dimensionsImperial?: string;
+    weightMetric?: string;
+    weightImperial?: string;
+    batteryLife?: string;
+    charging?: string;
+    driver?: string;
+    noiseControl?: string;
+    connectivity?: string;
+    codecs?: string;
+    materials?: string;
+    inTheBox?: string;
+    [key: string]: string | undefined;
   };
-  metrics: {
-    playtime: string;
-    driverSize: string;
-    weight: string;
-    bluetooth: string;
+  metrics?: {
+    playtime?: string;
+    driverSize?: string;
+    weight?: string;
+    bluetooth?: string;
+    [key: string]: string | undefined;
   };
   lastRevalidatedAt: string;
 }

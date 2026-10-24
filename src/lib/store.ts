@@ -765,10 +765,133 @@ export const earphoneProductData: ProductData = {
   lastRevalidatedAt: "2026-10-20T12:00:00.000Z",
 };
 
+export const productAData: ProductData = {
+  id: "product-a",
+  slug: "product-a",
+  productId: "ANC-PROD-A",
+  categorySlug: "apparel-fashion",
+  name: "Product A - Studio Minimalist Hoodie",
+  model: "ORGANIC HEAVYWEIGHT 450 GSM",
+  category: "Apparel & Fashion",
+  tagline: "Ultra-dense combed cotton with tailored architectural cut.",
+  description:
+    "Crafted from 100% sustainable combed cotton. Designed with dual variant architectures: A1 (Regular Fit) and A2 (Oversized Streetwear Fit) across multiple muted colorways.",
+  price: 120,
+  basePrice: 120,
+  originalPrice: 145,
+  activeDiscount: 0,
+  baseDiscount: 0,
+  type: "Apparel & Fashion",
+  stock: 26, // A1: Green (5) + Black (2) + Blue (4) + A2: White (8) + Green (7) = 26 units
+  lowStockThreshold: 5,
+  isFlashSale: false,
+  warrantyYears: 1,
+  returnDays: 30,
+  deliveryEstimate: "Dispatches in 24 hours · Worldwide delivery in 3–5 business days",
+  rating: 4.95,
+  averageRating: 4.95,
+  reviewCount: 34,
+  sku: "PROD-A-MASTER",
+  globalSpecs: {
+    "Material / Fabric": "100% Organic Combed Ring-Spun Cotton",
+    "Fabric Density": "450 GSM Heavyweight French Terry",
+    "Fit Architecture": "A1 Regular Fit & A2 Streetwear Oversized Cut",
+    "Care Instructions": "Cold wash inside out, lay flat to dry",
+    "Origin": "Ethically milled and tailored in Portugal",
+  },
+  childVariants: [
+    {
+      sku: "PROD-A1-GREEN",
+      color: "Forest Green",
+      specOverride: "A1 (Regular Fit)",
+      price: 120,
+      discount: 0,
+      stock: 5,
+      images: ["/images/lifestyle-workspace.jpg", "/images/feature-foam.jpg"],
+    },
+    {
+      sku: "PROD-A1-BLACK",
+      color: "Pitch Black",
+      specOverride: "A1 (Regular Fit)",
+      price: 120,
+      discount: 0,
+      stock: 2,
+      images: ["/images/hero-graphite.jpg", "/images/feature-aluminum.jpg"],
+    },
+    {
+      sku: "PROD-A1-BLUE",
+      color: "Mineral Blue",
+      specOverride: "A1 (Regular Fit)",
+      price: 120,
+      discount: 0,
+      stock: 4,
+      images: ["/images/hero-silver.jpg", "/images/checkout-floating.jpg"],
+    },
+    {
+      sku: "PROD-A2-WHITE",
+      color: "Arctic White",
+      specOverride: "A2 (Oversized Fit)",
+      price: 130,
+      discount: 0,
+      stock: 8,
+      images: ["/images/hero-sandstone.jpg", "/images/feature-dial.jpg"],
+    },
+    {
+      sku: "PROD-A2-GREEN",
+      color: "Forest Green",
+      specOverride: "A2 (Oversized Fit)",
+      price: 130,
+      discount: 0,
+      stock: 7,
+      images: ["/images/lifestyle-cafe.jpg", "/images/lifestyle-city.jpg"],
+    },
+  ],
+  variants: [
+    {
+      id: "green",
+      name: "Forest Green",
+      hex: "#2E5339",
+      borderHex: "#1E3826",
+      image: "/images/lifestyle-workspace.jpg",
+      images: ["/images/lifestyle-workspace.jpg", "/images/feature-foam.jpg"],
+      tag: "01",
+    },
+    {
+      id: "black",
+      name: "Pitch Black",
+      hex: "#1A1A1A",
+      borderHex: "#0D0D0D",
+      image: "/images/hero-graphite.jpg",
+      images: ["/images/hero-graphite.jpg", "/images/feature-aluminum.jpg"],
+      tag: "02",
+    },
+    {
+      id: "blue",
+      name: "Mineral Blue",
+      hex: "#3E5365",
+      borderHex: "#293744",
+      image: "/images/hero-silver.jpg",
+      images: ["/images/hero-silver.jpg", "/images/checkout-floating.jpg"],
+      tag: "03",
+    },
+    {
+      id: "white",
+      name: "Arctic White",
+      hex: "#F5F5F0",
+      borderHex: "#D8D8D0",
+      image: "/images/hero-sandstone.jpg",
+      images: ["/images/hero-sandstone.jpg", "/images/feature-dial.jpg"],
+      tag: "04",
+    },
+  ],
+  lastRevalidatedAt: "2026-10-24T12:00:00.000Z",
+};
+
 export const sampleCatalog: ProductData[] = [
   initialProductData,
   earbudProductData,
   earphoneProductData,
+  productAData,
 ];
 
 export const sampleReviews: (Review & IReview)[] = [
@@ -1077,6 +1200,51 @@ class AncWaveStore {
 
     this.products.set(targetSlug, merged);
     return { ...merged };
+  }
+
+  addProduct(newProduct: ProductData): ProductData {
+    const slug = newProduct.slug || newProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const productId = newProduct.productId || `PROD-${Date.now().toString(36).toUpperCase()}`;
+    const p: ProductData = {
+      ...newProduct,
+      slug,
+      productId,
+      id: slug,
+      lastRevalidatedAt: new Date().toISOString(),
+    };
+    if (p.childVariants && p.childVariants.length > 0) {
+      p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+    }
+    this.products.set(slug, p);
+    return { ...p };
+  }
+
+  deleteProduct(slug: string): boolean {
+    return this.products.delete(slug);
+  }
+
+  updateMultipleVariantStocks(slug: string, updates: Array<{ sku: string; stock: number }>): ProductData {
+    const p = this.products.get(slug) || this.getProductById(slug) || { ...initialProductData };
+    const updatesMap = new Map<string, number>();
+    updates.forEach((u) => updatesMap.set(u.sku, Math.max(0, Number(u.stock) || 0)));
+
+    if (p.childVariants && p.childVariants.length > 0) {
+      p.childVariants = p.childVariants.map((v) => {
+        if (updatesMap.has(v.sku)) {
+          return { ...v, stock: updatesMap.get(v.sku)! };
+        }
+        return v;
+      });
+      p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+    } else {
+      // Fallback if no child variants exist
+      const totalStock = updates.reduce((sum, u) => sum + (Number(u.stock) || 0), 0);
+      p.stock = totalStock;
+    }
+
+    p.lastRevalidatedAt = new Date().toISOString();
+    this.products.set(p.slug, p);
+    return { ...p };
   }
 
   reduceStock(quantity: number, slug = "form-01"): { product: ProductData; previousStock: number } {

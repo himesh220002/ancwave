@@ -40,8 +40,13 @@ import {
   UserX,
   User as UserIcon,
   Upload,
+  PackagePlus,
+  FolderPlus,
+  X,
+  ChevronRight,
+  Grid,
 } from "lucide-react";
-import { ProductData, Order, IVariant, Review, IReview } from "@/types";
+import { ProductData, Order, IVariant, Review, IReview, ECOMMERCE_CATEGORIES } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/components/Toaster";
 
@@ -110,6 +115,87 @@ export default function AdminPage() {
   const [globalSpecsList, setGlobalSpecsList] = useState<{ key: string; value: string }[]>([]);
   const [childVariants, setChildVariants] = useState<IVariant[]>([]);
   const [isSavingVariants, setIsSavingVariants] = useState<boolean>(false);
+
+  // Dedicated Variant Restock Modal State
+  const [isRestockModalOpen, setIsRestockModalOpen] = useState<boolean>(false);
+  const [restockTargetProduct, setRestockTargetProduct] = useState<ProductData | null>(null);
+  const [variantStockDrafts, setVariantStockDrafts] = useState<Record<string, number>>({});
+  const [isSubmittingRestock, setIsSubmittingRestock] = useState<boolean>(false);
+
+  // Dynamic Product Creator Modal State (10 Top-Selling E-Commerce Categories)
+  const [isNewProductModalOpen, setIsNewProductModalOpen] = useState<boolean>(false);
+  const [newProdCategory, setNewProdCategory] = useState<string>("apparel-fashion");
+  const [newProdName, setNewProdName] = useState<string>("");
+  const [newProdSlug, setNewProdSlug] = useState<string>("");
+  const [newProdModel, setNewProdModel] = useState<string>("ORGANIC HEAVYWEIGHT 450 GSM");
+  const [newProdTagline, setNewProdTagline] = useState<string>("Ultra-dense combed cotton with tailored architectural cut.");
+  const [newProdDescription, setNewProdDescription] = useState<string>(
+    "Crafted from 100% sustainable combed cotton. Designed with dual variant architectures: A1 (Regular Fit) and A2 (Oversized Streetwear Fit)."
+  );
+  const [newProdPrice, setNewProdPrice] = useState<number>(120);
+  const [newProdOriginalPrice, setNewProdOriginalPrice] = useState<number>(145);
+  const [newProdSpecs, setNewProdSpecs] = useState<Array<{ key: string; value: string }>>([
+    { key: "Material / Fabric", value: "100% Organic Combed Ring-Spun Cotton" },
+    { key: "Fabric Density", value: "450 GSM Heavyweight French Terry" },
+    { key: "Fit Architecture", value: "A1 Regular Fit & A2 Streetwear Oversized Cut" },
+    { key: "Care Instructions", value: "Cold wash inside out, lay flat to dry" },
+  ]);
+  const [newProdVariants, setNewProdVariants] = useState<Array<{
+    sku: string;
+    color: string;
+    hex: string;
+    specOverride: string;
+    price: number;
+    stock: number;
+    images: string[];
+  }>>([
+    {
+      sku: "PROD-A1-GREEN",
+      color: "Forest Green",
+      hex: "#2E5339",
+      specOverride: "A1 (Regular Fit)",
+      price: 120,
+      stock: 5,
+      images: ["/images/lifestyle-workspace.jpg"],
+    },
+    {
+      sku: "PROD-A1-BLACK",
+      color: "Pitch Black",
+      hex: "#1A1A1A",
+      specOverride: "A1 (Regular Fit)",
+      price: 120,
+      stock: 2,
+      images: ["/images/hero-graphite.jpg"],
+    },
+    {
+      sku: "PROD-A1-BLUE",
+      color: "Mineral Blue",
+      hex: "#3B6978",
+      specOverride: "A1 (Regular Fit)",
+      price: 120,
+      stock: 4,
+      images: ["/images/hero-silver.jpg"],
+    },
+    {
+      sku: "PROD-A2-WHITE",
+      color: "Arctic White",
+      hex: "#ECECEC",
+      specOverride: "A2 (Oversized Fit)",
+      price: 130,
+      stock: 8,
+      images: ["/images/hero-sandstone.jpg"],
+    },
+    {
+      sku: "PROD-A2-GREEN",
+      color: "Forest Green",
+      hex: "#2E5339",
+      specOverride: "A2 (Oversized Fit)",
+      price: 130,
+      stock: 7,
+      images: ["/images/lifestyle-cafe.jpg"],
+    },
+  ]);
+  const [isCreatingProduct, setIsCreatingProduct] = useState<boolean>(false);
 
   const fetchAdminData = async (slugToFetch?: string) => {
     try {
@@ -499,6 +585,211 @@ export default function AdminPage() {
       toast({ type: "error", title: "Save Failed", description: "Failed to persist variation engine configuration" });
     } finally {
       setIsSavingVariants(false);
+    }
+  };
+
+  // Open Dedicated Variant Restock Modal
+  const openRestockModal = (target: ProductData) => {
+    setRestockTargetProduct(target);
+    const drafts: Record<string, number> = {};
+    if (target.childVariants && target.childVariants.length > 0) {
+      target.childVariants.forEach((v) => {
+        drafts[v.sku] = v.stock;
+      });
+    } else if (target.variants && target.variants.length > 0) {
+      target.variants.forEach((v, i) => {
+        const sku = `${target.productId || target.id.toUpperCase()}-VAR-${i + 1}`;
+        drafts[sku] = Math.max(1, Math.floor(target.stock / target.variants.length));
+      });
+    }
+    setVariantStockDrafts(drafts);
+    setIsRestockModalOpen(true);
+  };
+
+  // Submit Batch Variant Restock to API
+  const handleSaveBatchRestock = async () => {
+    if (!restockTargetProduct) return;
+    setIsSubmittingRestock(true);
+    try {
+      const variantUpdates = Object.entries(variantStockDrafts).map(([sku, stock]) => ({
+        sku,
+        stock: Math.max(0, Number(stock) || 0),
+      }));
+
+      const res = await fetch("/api/product", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: restockTargetProduct.slug,
+          variantUpdates,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          type: "success",
+          title: "Variants Restocked Successfully",
+          description: `Updated ${restockTargetProduct.name} across ${variantUpdates.length} variants. Live stock: ${data.product.stock} units.`,
+        });
+        setIsRestockModalOpen(false);
+        await fetchAdminData(restockTargetProduct.slug);
+      } else {
+        toast({
+          type: "error",
+          title: "Restock Failed",
+          description: data.error || "Could not update variant stock.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Restock Error",
+        description: err.message || "Failed to update variant stock.",
+      });
+    } finally {
+      setIsSubmittingRestock(false);
+    }
+  };
+
+  // Category Selector in Product Creator Modal
+  const handleCategorySelect = (catSlug: string) => {
+    setNewProdCategory(catSlug);
+    const cat = ECOMMERCE_CATEGORIES.find((c) => c.slug === catSlug);
+    if (cat) {
+      setNewProdSpecs([...cat.defaultSpecs]);
+      const firstItem = cat.topSellingItems.split(",")[0].trim();
+      setNewProdModel(firstItem.toUpperCase());
+      setNewProdTagline(`Premium ${cat.name} engineered for exceptional durability, comfort and style.`);
+      setNewProdDescription(`High-grade ${cat.name.toLowerCase()} manufactured with premium materials and rigorous quality testing.`);
+    }
+  };
+
+  // Load Example Product A Variant Structure (A1 & A2)
+  const handleLoadProductAExample = () => {
+    setNewProdCategory("apparel-fashion");
+    setNewProdName("Product A - Studio Minimalist Hoodie");
+    setNewProdSlug("product-a");
+    setNewProdModel("ORGANIC HEAVYWEIGHT 450 GSM");
+    setNewProdTagline("Ultra-dense combed cotton with tailored architectural cut.");
+    setNewProdDescription("Crafted from 100% sustainable combed cotton. Features dual architectural cuts: A1 (Regular Fit) and A2 (Oversized Streetwear Fit).");
+    setNewProdPrice(120);
+    setNewProdOriginalPrice(145);
+    setNewProdSpecs([
+      { key: "Material / Fabric", value: "100% Organic Combed Ring-Spun Cotton" },
+      { key: "Fabric Density", value: "450 GSM Heavyweight French Terry" },
+      { key: "Fit Architecture", value: "A1 Regular Fit & A2 Streetwear Oversized Cut" },
+      { key: "Care Instructions", value: "Cold wash inside out, lay flat to dry" },
+      { key: "Origin", value: "Ethically milled and tailored in Portugal" },
+    ]);
+    setNewProdVariants([
+      { sku: "PROD-A1-GREEN", color: "Forest Green", hex: "#2E5339", specOverride: "A1 (Regular Fit)", price: 120, stock: 5, images: ["/images/lifestyle-workspace.jpg"] },
+      { sku: "PROD-A1-BLACK", color: "Pitch Black", hex: "#1A1A1A", specOverride: "A1 (Regular Fit)", price: 120, stock: 2, images: ["/images/hero-graphite.jpg"] },
+      { sku: "PROD-A1-BLUE", color: "Mineral Blue", hex: "#3B6978", specOverride: "A1 (Regular Fit)", price: 120, stock: 4, images: ["/images/hero-silver.jpg"] },
+      { sku: "PROD-A2-WHITE", color: "Arctic White", hex: "#ECECEC", specOverride: "A2 (Oversized Fit)", price: 130, stock: 8, images: ["/images/hero-sandstone.jpg"] },
+      { sku: "PROD-A2-GREEN", color: "Forest Green", hex: "#2E5339", specOverride: "A2 (Oversized Fit)", price: 130, stock: 7, images: ["/images/lifestyle-cafe.jpg"] },
+    ]);
+    toast({
+      type: "info",
+      title: "Product A Architecture Loaded",
+      description: "A1 {Green: 5, Black: 2, Blue: 4} & A2 {White: 8, Green: 7} loaded.",
+    });
+  };
+
+  // Submit Dynamic New Product
+  const handleCreateNewProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProdName.trim()) {
+      toast({ type: "error", title: "Product Title Required", description: "Please enter product name." });
+      return;
+    }
+    if (newProdVariants.length === 0) {
+      toast({ type: "error", title: "Variant Required", description: "Product must have at least one variant." });
+      return;
+    }
+
+    setIsCreatingProduct(true);
+    try {
+      const selectedCategoryDef = ECOMMERCE_CATEGORIES.find((c) => c.slug === newProdCategory);
+      const generatedSlug = (newProdSlug || newProdName)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
+
+      const globalSpecsRecord = newProdSpecs.reduce((acc, curr) => {
+        if (curr.key.trim()) acc[curr.key.trim()] = curr.value.trim();
+        return acc;
+      }, {} as Record<string, string>);
+
+      const formattedChildVariants: IVariant[] = newProdVariants.map((v, i) => ({
+        sku: v.sku.trim() || `PROD-${Date.now().toString(36).toUpperCase()}-V${i + 1}`,
+        color: v.color.trim() || "Standard",
+        specOverride: v.specOverride.trim() || "Standard Fit / Architecture",
+        price: Number(v.price) || Number(newProdPrice) || 99,
+        discount: 0,
+        stock: Number(v.stock) || 0,
+        images: v.images && v.images.length > 0 ? v.images : ["/images/hero-silver.jpg"],
+      }));
+
+      const formattedColorVariants = newProdVariants.map((v, i) => ({
+        id: (v.color || `color-${i + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        name: v.color || "Standard",
+        hex: v.hex || "#333333",
+        borderHex: "#111111",
+        image: v.images?.[0] || "/images/hero-silver.jpg",
+        images: v.images && v.images.length > 0 ? v.images : ["/images/hero-silver.jpg"],
+        tag: `0${i + 1}`,
+      }));
+
+      const payload = {
+        name: newProdName.trim(),
+        slug: generatedSlug,
+        productId: `PROD-${generatedSlug.toUpperCase()}`,
+        category: selectedCategoryDef?.name || "General Goods",
+        categorySlug: newProdCategory,
+        model: newProdModel.trim() || selectedCategoryDef?.topSellingItems?.split(",")[0] || "PREMIUM QUALITY",
+        tagline: newProdTagline.trim() || "Engineered with precision and architectural beauty.",
+        description: newProdDescription.trim() || "Authentic high-grade product designed for exceptional daily utility.",
+        price: Number(newProdPrice) || 99,
+        basePrice: Number(newProdPrice) || 99,
+        originalPrice: Number(newProdOriginalPrice) || (Number(newProdPrice) || 99) * 1.25,
+        type: selectedCategoryDef?.name || "Standard Goods",
+        globalSpecs: globalSpecsRecord,
+        childVariants: formattedChildVariants,
+        variants: formattedColorVariants,
+      };
+
+      const res = await fetch("/api/product", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          type: "success",
+          title: "Product Created & Edge Synchronized!",
+          description: `${data.product.name} created with ${data.product.childVariants?.length || 0} variants (${data.product.stock} total units).`,
+        });
+        setIsNewProductModalOpen(false);
+        setSelectedSlug(data.product.slug);
+        await fetchAdminData(data.product.slug);
+      } else {
+        toast({
+          type: "error",
+          title: "Creation Failed",
+          description: data.error || "Unable to save new product.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Creation Error",
+        description: err.message || "Failed to create new product.",
+      });
+    } finally {
+      setIsCreatingProduct(false);
     }
   };
 
@@ -1067,15 +1358,36 @@ export default function AdminPage() {
               <span>24h Session Active</span>
             </span>
 
-            <select
-              value={selectedSlug}
-              onChange={(e) => setSelectedSlug(e.target.value)}
-              className="text-xs bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 rounded-xl px-2.5 sm:px-3 py-2 font-medium text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
-            >
-              <option value="form-01">Form 01 (Over-Ear)</option>
-              <option value="form-air-tws">Form Air TWS (Earbuds)</option>
-              <option value="form-pulse-iem">Form Pulse IEM (Sports)</option>
-            </select>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={selectedSlug}
+                onChange={(e) => {
+                  setSelectedSlug(e.target.value);
+                  fetchAdminData(e.target.value);
+                }}
+                className="text-xs bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 rounded-xl px-2.5 sm:px-3 py-2 font-medium text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-600/30 max-w-[210px] truncate"
+              >
+                {products.length === 0 ? (
+                  <option value="form-01">Form 01 (Over-Ear)</option>
+                ) : (
+                  products.map((p) => (
+                    <option key={p.slug} value={p.slug}>
+                      {p.name} ({p.category || p.categorySlug}) · {p.stock} units
+                    </option>
+                  ))
+                )}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => setIsNewProductModalOpen(true)}
+                className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl font-semibold shadow-xs transition-colors shrink-0"
+                title="Create New Dynamic Product across 10 Categories"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Add Product</span>
+              </button>
+            </div>
 
             <button
               onClick={handlePurgeAndRevalidate}
@@ -1227,63 +1539,102 @@ export default function AdminPage() {
         {activeTab === "inventory" && (
           <div className="space-y-8 animate-in fade-in duration-200">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Left Form: Real-time Stock Modifier */}
+              {/* Left Column: Variant-Aware Restock & Alert Center */}
               <div className="lg:col-span-6 rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
-                <div className="border-b border-zinc-100 pb-4">
-                  <h3 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans">
-                    Adjust Master Stock & Flash Alert Badge
-                  </h3>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Setting stock to 5 or lower triggers the animated “🔥 Few left!” badge instantaneously for edge visitors.
-                  </p>
+                <div className="border-b border-zinc-100 pb-4 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-mono uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                      {product?.category || "Apparel & Tech"}
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans mt-1">
+                      {product?.name || "Active Product"} Restock
+                    </h3>
+                    <p className="text-xs text-zinc-500">
+                      Total Inventory: <strong className="font-mono text-zinc-950 text-sm">{product?.stock || 0} units</strong> across {childVariants.length} variants
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-mono font-bold text-zinc-400">SKU:</span>
+                    <div className="text-xs font-mono font-bold text-zinc-800">{product?.productId || product?.sku}</div>
+                  </div>
                 </div>
 
-                <form onSubmit={handleUpdateInventory} className="space-y-5">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-700">
-                      Total Inventory Units ({product?.name})
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        max="500"
-                        value={stockInput}
-                        onChange={(e) => setStockInput(Number(e.target.value))}
-                        className="flex-1 min-w-[120px] px-4 py-2.5 rounded-xl border border-zinc-200 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-zinc-50 font-semibold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setStockInput(3)}
-                        className="px-3 py-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs font-semibold hover:bg-amber-100 transition-colors"
-                      >
-                        Quick Set: 3 (Few Left)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setStockInput(15)}
-                        className="px-3 py-2 bg-zinc-100 text-zinc-700 rounded-xl text-xs font-semibold hover:bg-zinc-200 transition-colors"
-                      >
-                        Quick Set: 15
-                      </button>
+                {/* Primary Restock Button that opens the Dedicated Variant Popup */}
+                <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <PackagePlus className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-bold text-blue-950">
+                        Multi-Variant Restock Studio
+                      </h4>
+                      <p className="text-[11px] text-blue-800/80 leading-relaxed mt-0.5">
+                        Restock individual architectures (A1, A2) and colorways without ambiguity. Never increment a blind master number.
+                      </p>
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-700">
-                      Active Instant Discount ($ Off MSRP)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="150"
-                      value={discountInput}
-                      onChange={(e) => setDiscountInput(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-zinc-50"
-                    />
+                  <button
+                    type="button"
+                    onClick={() => product && openRestockModal(product)}
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-sm"
+                  >
+                    <PackagePlus className="w-4 h-4" />
+                    <span>+ Restock Variants & Colors (Popup)</span>
+                  </button>
+                </div>
+
+                {/* Visual Variant Summary Chips */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold">
+                    Current Variant Allocation:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {childVariants.map((v) => (
+                      <span
+                        key={v.sku}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-100 border border-zinc-200 text-xs text-zinc-800 font-mono"
+                      >
+                        <span className="text-zinc-500 text-[10px]">{v.specOverride ? `${v.specOverride}:` : ""}</span>
+                        <strong>{v.color}</strong>
+                        <span className="bg-white px-1.5 py-0.2 rounded border border-zinc-200 font-bold text-blue-600">
+                          {v.stock}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Flash Sale, Discount & ISR Edge Settings */}
+                <form onSubmit={handleUpdateInventory} className="space-y-4 pt-3 border-t border-zinc-100">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-zinc-700">
+                        Instant Discount ($ Off)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="150"
+                        value={discountInput}
+                        onChange={(e) => setDiscountInput(Number(e.target.value))}
+                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50 font-semibold focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-zinc-700">
+                        REVALIDATE_SECRET
+                      </label>
+                      <input
+                        type="text"
+                        value={revalidateSecret}
+                        onChange={(e) => setRevalidateSecret(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono text-zinc-800 bg-zinc-50 focus:outline-none"
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-50 border border-zinc-200">
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200">
                     <input
                       type="checkbox"
                       id="flashSaleToggle"
@@ -1292,30 +1643,17 @@ export default function AdminPage() {
                       className="w-4 h-4 text-blue-600 rounded cursor-pointer"
                     />
                     <label htmlFor="flashSaleToggle" className="text-xs font-medium text-zinc-700 cursor-pointer">
-                      Enable "Few Left" Flash Alert Trigger when stock &le; 5 units
+                      Enable "🔥 Few Left" Flash Alert when stock &le; 5 units
                     </label>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-700 flex items-center justify-between">
-                      <span>REVALIDATE_SECRET Token</span>
-                      <span className="text-[10px] text-zinc-400 font-mono">Header: x-revalidate-secret</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={revalidateSecret}
-                      onChange={(e) => setRevalidateSecret(e.target.value)}
-                      className="w-full px-4 py-2 rounded-xl border border-zinc-200 text-xs font-mono text-zinc-800 bg-zinc-50 focus:outline-none"
-                    />
                   </div>
 
                   <button
                     type="submit"
                     disabled={isUpdating}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-sm transition-all shadow-md disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs transition-all shadow-xs disabled:opacity-50"
                   >
-                    <Save className="w-4 h-4" />
-                    <span>{isUpdating ? "Saving & Purging..." : "Save Stock & Purge Stale Cache"}</span>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isUpdating ? "Purging Edge Cache..." : "Save Discount & Edge Rules"}</span>
                   </button>
                 </form>
               </div>
@@ -1401,6 +1739,168 @@ export default function AdminPage() {
                     Every inventory mutation triggers an AWS EventBridge <code>StockUpdated</code> event and issues Next.js on-demand ISR revalidation via <code>revalidatePath</code>, ensuring subsequent visitors hit zero-latency CloudFront edge caches.
                   </p>
                 </div>
+              </div>
+            </div>
+
+            {/* Multi-Category Inventory & Product Catalog Hub */}
+            <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center">
+                    <Grid className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
+                      Multi-Category Inventory Hub ({products.length} Products)
+                    </h3>
+                    <p className="text-xs text-zinc-500">
+                      Manage stock allocations, architectures, and variants across 10 top-selling e-commerce categories
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsNewProductModalOpen(true)}
+                  className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-semibold shadow-xs transition-colors self-start sm:self-auto"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Add New Product</span>
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-100 text-zinc-400 font-mono">
+                      <th className="py-2.5 px-3 font-normal">PRODUCT & ROOT SKU</th>
+                      <th className="py-2.5 px-3 font-normal">CATEGORY</th>
+                      <th className="py-2.5 px-3 font-normal">RETAIL PRICE</th>
+                      <th className="py-2.5 px-3 font-normal">TOTAL STOCK</th>
+                      <th className="py-2.5 px-3 font-normal">VARIANTS & ARCHITECTURES</th>
+                      <th className="py-2.5 px-3 font-normal text-right">RESTOCK ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {products.map((p) => {
+                      const isSelected = p.slug === selectedSlug;
+                      const hasLowStock = p.stock <= (p.lowStockThreshold || 5);
+                      const isSoldOut = p.stock === 0;
+
+                      return (
+                        <tr
+                          key={p.slug}
+                          className={`hover:bg-zinc-50/80 transition-colors ${
+                            isSelected ? "bg-blue-50/30" : ""
+                          }`}
+                        >
+                          <td className="py-3 px-3">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-zinc-900">{p.name}</span>
+                                {isSelected && (
+                                  <span className="text-[9px] font-mono px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded font-bold">
+                                    ACTIVE
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] font-mono text-zinc-400">
+                                {p.productId || p.sku} · {p.model}
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-3">
+                            <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">
+                              {p.category || p.categorySlug}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-3 font-mono font-semibold text-zinc-900">
+                            ${p.price}
+                          </td>
+
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-1.5 font-mono">
+                              <span className="font-bold text-zinc-950">{p.stock} units</span>
+                              <span
+                                className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                                  isSoldOut
+                                    ? "bg-red-100 text-red-700"
+                                    : hasLowStock
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-emerald-100 text-emerald-800"
+                                }`}
+                              >
+                                {isSoldOut ? "SOLD OUT" : hasLowStock ? "LOW" : "HEALTHY"}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-3">
+                            <div className="flex flex-wrap gap-1 max-w-xs">
+                              {(p.childVariants && p.childVariants.length > 0) ? (
+                                p.childVariants.map((cv) => (
+                                  <span
+                                    key={cv.sku}
+                                    className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200 whitespace-nowrap"
+                                  >
+                                    {cv.specOverride ? `${cv.specOverride} ` : ""}{cv.color} ({cv.stock})
+                                  </span>
+                                ))
+                              ) : (
+                                (p.variants || []).map((v) => (
+                                  <span
+                                    key={v.id}
+                                    className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200 whitespace-nowrap"
+                                  >
+                                    {v.name}
+                                  </span>
+                                ))
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => openRestockModal(p)}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors shadow-2xs"
+                                title="Open Dedicated Variant Restock Popup"
+                              >
+                                <PackagePlus className="w-3 h-3" />
+                                <span>+ Restock</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSlug(p.slug);
+                                  fetchAdminData(p.slug);
+                                  setActiveTab("variation-engine");
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-medium transition-colors"
+                                title="Edit in Variation Engine"
+                              >
+                                Edit
+                              </button>
+
+                              <Link
+                                href={`/products/${p.slug}`}
+                                target="_blank"
+                                className="p-1.5 text-zinc-400 hover:text-zinc-700 transition-colors"
+                                title="View on Storefront"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -2212,6 +2712,707 @@ export default function AdminPage() {
           </div>
         )}
       </main>
+
+      {/* =========================================================================
+          MODAL 1: VARIANT RESTOCK POPUP MODAL
+          Allows restocking variant by variant, color by color (e.g., A1 green: 5, black: 2, blue: 4; A2 white: 8, green: 7)
+          ========================================================================= */}
+      {isRestockModalOpen && restockTargetProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-3xl max-h-[90vh] bg-white rounded-3xl border border-zinc-200 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 sm:p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/80 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
+                  <PackagePlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
+                      Restock Variants & Colors
+                    </h2>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold uppercase">
+                      {restockTargetProduct.category || "General Goods"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-500 font-mono">
+                    Product: <span className="font-semibold text-zinc-900">{restockTargetProduct.name}</span> ({restockTargetProduct.productId || restockTargetProduct.sku})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRestockModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body: Scrollable list of variants grouped by Architecture/Fit */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Info Banner */}
+              <div className="p-3.5 rounded-2xl bg-blue-50/60 border border-blue-100 text-xs text-zinc-600 flex items-start gap-2.5">
+                <Zap className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-blue-950">Precise Inventory Control</p>
+                  <p className="text-[11px] text-zinc-600 leading-relaxed">
+                    Never blindly guess which variant is restocked. Adjust quantity counters directly for each architecture and colorway. Live total will be recalculated automatically and pushed to edge CloudFront caches.
+                  </p>
+                </div>
+              </div>
+
+              {/* Group variants by specOverride (Architecture e.g. A1, A2) */}
+              {(() => {
+                const variantsList = restockTargetProduct.childVariants && restockTargetProduct.childVariants.length > 0
+                  ? restockTargetProduct.childVariants
+                  : (restockTargetProduct.variants || []).map((v, i) => ({
+                      sku: `${restockTargetProduct.productId || restockTargetProduct.id.toUpperCase()}-VAR-${i + 1}`,
+                      color: v.name,
+                      specOverride: "Standard Architecture",
+                      price: restockTargetProduct.price,
+                      discount: 0,
+                      stock: Math.max(1, Math.floor(restockTargetProduct.stock / Math.max(1, restockTargetProduct.variants.length))),
+                      images: [v.image],
+                    }));
+
+                // Group by specOverride
+                const groups: Record<string, typeof variantsList> = {};
+                variantsList.forEach((v) => {
+                  const arch = v.specOverride || "Standard Edition";
+                  if (!groups[arch]) groups[arch] = [];
+                  groups[arch].push(v);
+                });
+
+                return Object.entries(groups).map(([archName, items]) => {
+                  const archTotalStock = items.reduce((sum, item) => sum + (variantStockDrafts[item.sku] ?? item.stock), 0);
+
+                  return (
+                    <div key={archName} className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-xs">
+                      {/* Architecture Group Header */}
+                      <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-zinc-500" />
+                          <span className="text-xs font-bold text-zinc-900 font-mono">
+                            Architecture / Cut: {archName}
+                          </span>
+                          <span className="text-[10px] font-mono bg-zinc-200 text-zinc-700 px-1.5 py-0.5 rounded">
+                            {items.length} {items.length === 1 ? "colorway" : "colorways"}
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-zinc-700">
+                          Group Units: <span className="text-blue-600">{archTotalStock}</span>
+                        </span>
+                      </div>
+
+                      {/* Items in Architecture */}
+                      <div className="divide-y divide-zinc-100">
+                        {items.map((v) => {
+                          const currentDraftStock = variantStockDrafts[v.sku] ?? v.stock;
+                          const diff = currentDraftStock - v.stock;
+
+                          return (
+                            <div key={v.sku} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-zinc-50/50 transition-colors">
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  {/* Color Dot */}
+                                  <span
+                                    className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0"
+                                    style={{
+                                      backgroundColor:
+                                        v.color.toLowerCase().includes("green") ? "#2E5339" :
+                                        v.color.toLowerCase().includes("black") ? "#1A1A1A" :
+                                        v.color.toLowerCase().includes("blue") ? "#3B6978" :
+                                        v.color.toLowerCase().includes("white") ? "#F5F5F5" :
+                                        v.color.toLowerCase().includes("silver") ? "#D1D5DB" :
+                                        v.color.toLowerCase().includes("sandstone") ? "#D4B996" :
+                                        "#4F46E5",
+                                    }}
+                                  />
+                                  <span className="text-xs font-bold text-zinc-900">{v.color}</span>
+                                  <span className="text-[10px] font-mono bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">
+                                    {v.sku}
+                                  </span>
+                                  <span className="text-[11px] text-zinc-400 font-mono">
+                                    ${v.price}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                                  <span>Original: <strong className="font-mono text-zinc-700">{v.stock}</strong> units</span>
+                                  {diff !== 0 && (
+                                    <span className={`font-mono font-semibold ${diff > 0 ? "text-emerald-600" : "text-amber-600"}`}>
+                                      ({diff > 0 ? `+${diff}` : diff} units)
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Quantity Stepper & Quick Add Chips */}
+                              <div className="flex items-center gap-3 self-end sm:self-auto">
+                                {/* Quick Chips */}
+                                <div className="hidden md:flex items-center gap-1">
+                                  {[1, 5, 10, 25].map((addQty) => (
+                                    <button
+                                      key={addQty}
+                                      type="button"
+                                      onClick={() => {
+                                        setVariantStockDrafts((prev) => ({
+                                          ...prev,
+                                          [v.sku]: (prev[v.sku] ?? v.stock) + addQty,
+                                        }));
+                                      }}
+                                      className="px-2 py-1 rounded-md bg-zinc-100 hover:bg-blue-50 hover:text-blue-600 text-[10px] font-mono font-semibold text-zinc-600 transition-colors cursor-pointer"
+                                    >
+                                      +{addQty}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {/* Stepper */}
+                                <div className="flex items-center border border-zinc-300 rounded-xl bg-white shadow-2xs overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setVariantStockDrafts((prev) => ({
+                                        ...prev,
+                                        [v.sku]: Math.max(0, (prev[v.sku] ?? v.stock) - 1),
+                                      }));
+                                    }}
+                                    className="w-8 h-8 flex items-center justify-center text-zinc-600 hover:bg-zinc-100 font-bold transition-colors cursor-pointer"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={currentDraftStock}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, parseInt(e.target.value) || 0);
+                                      setVariantStockDrafts((prev) => ({
+                                        ...prev,
+                                        [v.sku]: val,
+                                      }));
+                                    }}
+                                    className="w-14 text-center font-mono font-bold text-sm text-zinc-900 border-x border-zinc-200 py-1 focus:outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setVariantStockDrafts((prev) => ({
+                                        ...prev,
+                                        [v.sku]: (prev[v.sku] ?? v.stock) + 1,
+                                      }));
+                                    }}
+                                    className="w-8 h-8 flex items-center justify-center text-zinc-600 hover:bg-zinc-100 font-bold transition-colors cursor-pointer"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+
+                                <span
+                                  className={`text-[10px] font-mono px-2 py-1 rounded-md font-semibold ${
+                                    currentDraftStock === 0
+                                      ? "bg-red-100 text-red-700"
+                                      : currentDraftStock <= 5
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-emerald-100 text-emerald-800"
+                                  }`}
+                                >
+                                  {currentDraftStock === 0 ? "SOLD OUT" : currentDraftStock <= 5 ? "LOW STOCK" : "IN STOCK"}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Footer Calculation & Actions */}
+            <div className="p-4 sm:p-6 border-t border-zinc-200 bg-zinc-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+              <div>
+                {(() => {
+                  const originalSum = restockTargetProduct.childVariants && restockTargetProduct.childVariants.length > 0
+                    ? restockTargetProduct.childVariants.reduce((sum, v) => sum + v.stock, 0)
+                    : restockTargetProduct.stock;
+                  const newSum = restockTargetProduct.childVariants && restockTargetProduct.childVariants.length > 0
+                    ? restockTargetProduct.childVariants.reduce((sum, v) => sum + (variantStockDrafts[v.sku] ?? v.stock), 0)
+                    : Object.values(variantStockDrafts).reduce((a, b) => a + b, 0);
+                  const netChange = newSum - originalSum;
+
+                  return (
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-zinc-500 font-mono uppercase">Master Inventory:</span>
+                        <span className="font-mono text-zinc-400 line-through">{originalSum} units</span>
+                        <span>&rarr;</span>
+                        <span className="font-mono font-bold text-sm text-zinc-950">{newSum} units</span>
+                        {netChange !== 0 && (
+                          <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded-full ${netChange > 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                            {netChange > 0 ? `+${netChange}` : netChange} units
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-zinc-500">
+                        Calculated dynamically by summing all child variant stocks.
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsRestockModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-zinc-300 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveBatchRestock}
+                  disabled={isSubmittingRestock}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-all shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmittingRestock ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Restocking & Purging...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Apply Variant Restock</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL 2: DYNAMIC PRODUCT CREATOR STUDIO
+          Supports ANY e-commerce category (10 Top-Selling Categories)
+          ========================================================================= */}
+      {isNewProductModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-4xl max-h-[92vh] bg-white rounded-3xl border border-zinc-200 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 sm:p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/80 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
+                    Dynamic Product Studio
+                  </h2>
+                  <p className="text-xs text-zinc-500">
+                    Add any product category: Apparel, Electronics, Beauty, Home, Fitness, Decor, Wearables & more
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewProductModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body: Form */}
+            <form onSubmit={handleCreateNewProduct} className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Step 1: 10 Top-Selling E-Commerce Categories */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-900 uppercase font-mono tracking-wider">
+                    1. Select E-Commerce Category
+                  </label>
+                  <span className="text-[10px] text-zinc-400 font-mono">10 Top-Selling Market Niches</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {ECOMMERCE_CATEGORIES.map((cat) => {
+                    const isSelected = newProdCategory === cat.slug;
+                    return (
+                      <button
+                        key={cat.slug}
+                        type="button"
+                        onClick={() => handleCategorySelect(cat.slug)}
+                        className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                          isSelected
+                            ? "bg-emerald-50 border-emerald-500 text-emerald-950 shadow-xs ring-1 ring-emerald-500"
+                            : "bg-zinc-50 border-zinc-200 hover:bg-zinc-100 text-zinc-700"
+                        }`}
+                      >
+                        <span className="text-xs font-bold truncate">{cat.name}</span>
+                        <span className="text-[9px] text-zinc-400 truncate mt-1">{cat.topSellingItems.split(",")[0]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Step 2: Core Details */}
+              <div className="space-y-4 pt-4 border-t border-zinc-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-900 uppercase font-mono tracking-wider">
+                    2. Core Product Information
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleLoadProductAExample}
+                    className="text-[11px] text-emerald-600 hover:text-emerald-700 font-semibold underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Load "Product A" Example (A1 & A2 Architecture)</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-700">Product Title *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newProdName}
+                      onChange={(e) => {
+                        setNewProdName(e.target.value);
+                        if (!newProdSlug) {
+                          setNewProdSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
+                        }
+                      }}
+                      placeholder="e.g. Product A - Studio Minimalist Hoodie"
+                      className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-700">URL Slug / Identifier *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newProdSlug}
+                      onChange={(e) => setNewProdSlug(e.target.value)}
+                      placeholder="product-a"
+                      className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-700">Model / Edition Tag</label>
+                    <input
+                      type="text"
+                      value={newProdModel}
+                      onChange={(e) => setNewProdModel(e.target.value)}
+                      placeholder="ORGANIC HEAVYWEIGHT 450 GSM"
+                      className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-700">Retail Price ($) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      required
+                      value={newProdPrice}
+                      onChange={(e) => setNewProdPrice(parseFloat(e.target.value) || 0)}
+                      className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-700">Original MSRP ($)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newProdOriginalPrice}
+                      onChange={(e) => setNewProdOriginalPrice(parseFloat(e.target.value) || 0)}
+                      className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm font-mono focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-zinc-700">Tagline / Key Value Highlight</label>
+                  <input
+                    type="text"
+                    value={newProdTagline}
+                    onChange={(e) => setNewProdTagline(e.target.value)}
+                    placeholder="Ultra-dense combed cotton with tailored architectural cut."
+                    className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-zinc-700">Description</label>
+                  <textarea
+                    rows={2}
+                    value={newProdDescription}
+                    onChange={(e) => setNewProdDescription(e.target.value)}
+                    placeholder="Detailed description of features, materials, and origin..."
+                    className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Step 3: Dynamic Category Specifications */}
+              <div className="space-y-3 pt-4 border-t border-zinc-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-bold text-zinc-900 uppercase font-mono tracking-wider">
+                      3. Technical & Category Specifications
+                    </label>
+                    <p className="text-[11px] text-zinc-500">Key-value parameters displayed on the storefront specifications table</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNewProdSpecs([...newProdSpecs, { key: "New Spec", value: "Value" }])}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Spec Row</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {newProdSpecs.map((spec, sIdx) => (
+                    <div key={sIdx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={spec.key}
+                        onChange={(e) => {
+                          const updated = [...newProdSpecs];
+                          updated[sIdx].key = e.target.value;
+                          setNewProdSpecs(updated);
+                        }}
+                        placeholder="Spec Attribute"
+                        className="w-1/3 px-3 py-1.5 rounded-lg border border-zinc-200 text-xs font-semibold focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={spec.value}
+                        onChange={(e) => {
+                          const updated = [...newProdSpecs];
+                          updated[sIdx].value = e.target.value;
+                          setNewProdSpecs(updated);
+                        }}
+                        placeholder="Spec Value"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-zinc-200 text-xs focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...newProdSpecs];
+                          updated.splice(sIdx, 1);
+                          setNewProdSpecs(updated);
+                        }}
+                        className="p-1.5 text-zinc-400 hover:text-red-600 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 4: Multi-Variant Architecture & Colors Builder */}
+              <div className="space-y-3 pt-4 border-t border-zinc-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-bold text-zinc-900 uppercase font-mono tracking-wider">
+                      4. Variant Architectures & Colorways
+                    </label>
+                    <p className="text-[11px] text-zinc-500">
+                      Support multiple architectures (A1, A2) and individual color stocks
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextNum = newProdVariants.length + 1;
+                      setNewProdVariants([
+                        ...newProdVariants,
+                        {
+                          sku: `PROD-VAR-${nextNum}`,
+                          color: "New Color",
+                          hex: "#333333",
+                          specOverride: "A1 (Regular Fit)",
+                          price: newProdPrice,
+                          stock: 5,
+                          images: ["/images/hero-silver.jpg"],
+                        },
+                      ]);
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Variant</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  {newProdVariants.map((v, vIdx) => (
+                    <div key={vIdx} className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center">
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] font-mono text-zinc-500 uppercase">Architecture / Fit</label>
+                          <input
+                            type="text"
+                            value={v.specOverride}
+                            onChange={(e) => {
+                              const updated = [...newProdVariants];
+                              updated[vIdx].specOverride = e.target.value;
+                              setNewProdVariants(updated);
+                            }}
+                            placeholder="e.g. A1 (Regular Fit)"
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium bg-white"
+                          />
+                        </div>
+
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] font-mono text-zinc-500 uppercase">Colorway</label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="color"
+                              value={v.hex}
+                              onChange={(e) => {
+                                const updated = [...newProdVariants];
+                                updated[vIdx].hex = e.target.value;
+                                setNewProdVariants(updated);
+                              }}
+                              className="w-6 h-6 rounded border border-zinc-300 p-0 cursor-pointer shrink-0"
+                            />
+                            <input
+                              type="text"
+                              value={v.color}
+                              onChange={(e) => {
+                                const updated = [...newProdVariants];
+                                updated[vIdx].color = e.target.value;
+                                setNewProdVariants(updated);
+                              }}
+                              placeholder="Color Name"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] font-mono text-zinc-500 uppercase">Variant SKU</label>
+                          <input
+                            type="text"
+                            value={v.sku}
+                            onChange={(e) => {
+                              const updated = [...newProdVariants];
+                              updated[vIdx].sku = e.target.value;
+                              setNewProdVariants(updated);
+                            }}
+                            placeholder="SKU Code"
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono bg-white"
+                          />
+                        </div>
+
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] font-mono text-zinc-500 uppercase">Initial Units</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={v.stock}
+                            onChange={(e) => {
+                              const updated = [...newProdVariants];
+                              updated[vIdx].stock = parseInt(e.target.value) || 0;
+                              setNewProdVariants(updated);
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono font-bold bg-white"
+                          />
+                        </div>
+
+                        <div className="flex items-end justify-between sm:justify-end gap-2 pt-1 sm:pt-0">
+                          <div className="space-y-0.5 flex-1">
+                            <label className="text-[10px] font-mono text-zinc-500 uppercase">Price ($)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={v.price}
+                              onChange={(e) => {
+                                const updated = [...newProdVariants];
+                                updated[vIdx].price = parseFloat(e.target.value) || 0;
+                                setNewProdVariants(updated);
+                              }}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono bg-white"
+                            />
+                          </div>
+                          {newProdVariants.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = [...newProdVariants];
+                                updated.splice(vIdx, 1);
+                                setNewProdVariants(updated);
+                              }}
+                              className="p-2 text-zinc-400 hover:text-red-600 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-3 bg-zinc-100 rounded-xl flex items-center justify-between text-xs font-mono">
+                  <span className="text-zinc-600">Calculated Master Inventory:</span>
+                  <span className="font-bold text-zinc-950">
+                    {newProdVariants.reduce((sum, v) => sum + (v.stock || 0), 0)} units total
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-zinc-100 flex items-center justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsNewProductModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-zinc-300 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingProduct}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-all shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                >
+                  {isCreatingProduct ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Creating & Purging Cache...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Deploy Product to Catalog</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -753,13 +753,13 @@ export function ProductDetailView({
                 </div>
               )}
 
-              {/* Dynamic Child Variants: Hardware Feature Variance */}
+              {/* Dynamic Child Variants: Hardware Feature & Architecture Variance */}
               {product.childVariants && product.childVariants.length > 0 && (
                 <div className="space-y-2.5 pt-3 border-t border-zinc-100">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-zinc-900 flex items-center gap-1.5 font-mono uppercase tracking-wider">
                       <Layers className="w-3.5 h-3.5 text-blue-600" />
-                      Hardware Variant Architecture
+                      {product.type || product.category || "Product"} Variant Architecture
                     </span>
                     <span className="text-[10px] text-zinc-400 font-mono">
                       {product.childVariants.length} configurations
@@ -767,7 +767,7 @@ export function ProductDetailView({
                   </div>
 
                   <p className="text-[11px] text-zinc-500">
-                    Engineered feature sets and microphone acoustic options:
+                    Select your preferred edition, architectural cut, or specification:
                   </p>
 
                   <div className="grid grid-cols-1 gap-2">
@@ -1044,49 +1044,53 @@ export function ProductDetailView({
                 SECTION C · TECHNICAL BENCHMARK MATRIX
               </span>
               <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
-                Detailed Hardware Specifications
+                {product.categorySlug === "headphones" || product.categorySlug === "earbuds"
+                  ? "Detailed Hardware Specifications"
+                  : `${product.category || "Product"} Specifications & Materials`}
               </h2>
             </div>
 
-            {/* 3 Tabs Toggle */}
-            <div className="flex items-center p-1 bg-zinc-100 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setActiveSpecTab("core")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                  activeSpecTab === "core"
-                    ? "bg-white text-zinc-900 shadow-xs"
-                    : "text-zinc-600 hover:text-black"
-                }`}
-              >
-                <Cpu className="w-3.5 h-3.5 text-blue-600" />
-                <span>Core Specs</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSpecTab("battery")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                  activeSpecTab === "battery"
-                    ? "bg-white text-zinc-900 shadow-xs"
-                    : "text-zinc-600 hover:text-black"
-                }`}
-              >
-                <BatteryCharging className="w-3.5 h-3.5 text-blue-600" />
-                <span>Battery & Charging</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSpecTab("connectivity")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                  activeSpecTab === "connectivity"
-                    ? "bg-white text-zinc-900 shadow-xs"
-                    : "text-zinc-600 hover:text-black"
-                }`}
-              >
-                <Radio className="w-3.5 h-3.5 text-blue-600" />
-                <span>Connectivity & Intelligence</span>
-              </button>
-            </div>
+            {/* 3 Tabs Toggle if tabbedSpecs available */}
+            {product.tabbedSpecs && (
+              <div className="flex items-center p-1 bg-zinc-100 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setActiveSpecTab("core")}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    activeSpecTab === "core"
+                      ? "bg-white text-zinc-900 shadow-xs"
+                      : "text-zinc-600 hover:text-black"
+                  }`}
+                >
+                  <Cpu className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Core Specs</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSpecTab("battery")}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    activeSpecTab === "battery"
+                      ? "bg-white text-zinc-900 shadow-xs"
+                      : "text-zinc-600 hover:text-black"
+                  }`}
+                >
+                  <BatteryCharging className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Battery & Charging</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSpecTab("connectivity")}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    activeSpecTab === "connectivity"
+                      ? "bg-white text-zinc-900 shadow-xs"
+                      : "text-zinc-600 hover:text-black"
+                  }`}
+                >
+                  <Radio className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Connectivity & Intelligence</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Tabbed Specs Table */}
@@ -1111,6 +1115,29 @@ export function ProductDetailView({
                         {row.badge}
                       </span>
                     )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Dynamic Global Specs Table (Category-Agnostic: Apparel, Tech, Home, Beauty, Fitness, etc.) */}
+          {(!product.tabbedSpecs && product.globalSpecs) && (
+            <div className="rounded-2xl border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
+              {Object.entries(product.globalSpecs).map(([label, value], idx) => (
+                <div
+                  key={label}
+                  className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                    idx % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"
+                  }`}
+                >
+                  <span className="text-xs font-medium text-zinc-600 sm:w-1/3">
+                    {label}
+                  </span>
+                  <div className="sm:w-2/3 flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-zinc-900 font-mono">
+                      {value}
+                    </span>
                   </div>
                 </div>
               ))}

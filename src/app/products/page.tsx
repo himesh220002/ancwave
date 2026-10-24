@@ -21,7 +21,7 @@ import { sampleCatalog } from "@/lib/store";
 import { useCart } from "@/context/CartContext";
 import { ProductData } from "@/types";
 
-type CategoryFilter = "all" | "headphones" | "earbuds" | "earphones";
+type CategoryFilter = string;
 type SortOption = "featured" | "price-asc" | "price-desc" | "rating";
 
 export default function ProductsCatalogPage() {
@@ -42,6 +42,20 @@ export default function ProductsCatalogPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Compute dynamic category tabs from products
+  const categoryTabs = useMemo(() => {
+    const map = new Map<string, string>();
+    map.set("all", `All Platforms (${catalogProducts.length})`);
+    catalogProducts.forEach((p) => {
+      const slug = p.categorySlug || "other";
+      const name = p.category || (slug === "headphones" ? "Over-Ear Headphones" : slug === "earbuds" ? "True Wireless Earbuds" : slug);
+      if (!map.has(slug)) {
+        map.set(slug, name);
+      }
+    });
+    return Array.from(map.entries()).map(([slug, label]) => ({ slug, label }));
+  }, [catalogProducts]);
 
   // Filter & sort logic
   const filteredProducts = useMemo(() => {
@@ -120,46 +134,19 @@ export default function ProductsCatalogPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           {/* Category Filter Pills */}
           <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
-            <button
-              onClick={() => setSelectedCategory("all")}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all shrink-0 ${
-                selectedCategory === "all"
-                  ? "bg-black text-white shadow-xs"
-                  : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-400"
-              }`}
-            >
-              All Platforms ({sampleCatalog.length})
-            </button>
-            <button
-              onClick={() => setSelectedCategory("headphones")}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all shrink-0 ${
-                selectedCategory === "headphones"
-                  ? "bg-black text-white shadow-xs"
-                  : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-400"
-              }`}
-            >
-              Over-Ear Headphones
-            </button>
-            <button
-              onClick={() => setSelectedCategory("earbuds")}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all shrink-0 ${
-                selectedCategory === "earbuds"
-                  ? "bg-black text-white shadow-xs"
-                  : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-400"
-              }`}
-            >
-              True Wireless Earbuds
-            </button>
-            <button
-              onClick={() => setSelectedCategory("earphones")}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all shrink-0 ${
-                selectedCategory === "earphones"
-                  ? "bg-black text-white shadow-xs"
-                  : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-400"
-              }`}
-            >
-              Sports Earphones
-            </button>
+            {categoryTabs.map((cat) => (
+              <button
+                key={cat.slug}
+                onClick={() => setSelectedCategory(cat.slug)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all shrink-0 cursor-pointer ${
+                  selectedCategory === cat.slug
+                    ? "bg-black text-white shadow-xs font-semibold"
+                    : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-400"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
           </div>
 
           {/* Sort Dropdown */}
@@ -263,19 +250,31 @@ export default function ProductsCatalogPage() {
                     </p>
                   </div>
 
-                  {/* Core Metrics Pills */}
+                  {/* Core Metrics / Attribute Pills */}
                   <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-100 text-center">
                     <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-100">
-                      <span className="block text-[10px] text-zinc-400 uppercase font-mono">Playtime</span>
-                      <span className="text-xs font-bold text-zinc-900">{product.metrics.playtime}</span>
+                      <span className="block text-[10px] text-zinc-400 uppercase font-mono">
+                        {product.metrics?.playtime ? "Playtime" : "In Stock"}
+                      </span>
+                      <span className="text-xs font-bold text-zinc-900">
+                        {product.metrics?.playtime || `${product.stock} units`}
+                      </span>
                     </div>
                     <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-100">
-                      <span className="block text-[10px] text-zinc-400 uppercase font-mono">Driver</span>
-                      <span className="text-xs font-bold text-zinc-900">{product.metrics.driverSize}</span>
+                      <span className="block text-[10px] text-zinc-400 uppercase font-mono">
+                        {product.metrics?.driverSize ? "Driver" : "Rating"}
+                      </span>
+                      <span className="text-xs font-bold text-zinc-900">
+                        {product.metrics?.driverSize || `${product.averageRating || product.rating}★`}
+                      </span>
                     </div>
                     <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-100">
-                      <span className="block text-[10px] text-zinc-400 uppercase font-mono">Weight</span>
-                      <span className="text-xs font-bold text-zinc-900">{product.metrics.weight}</span>
+                      <span className="block text-[10px] text-zinc-400 uppercase font-mono">
+                        {product.metrics?.weight ? "Weight" : "Variants"}
+                      </span>
+                      <span className="text-xs font-bold text-zinc-900">
+                        {product.metrics?.weight || `${product.childVariants?.length || product.variants.length} ed.`}
+                      </span>
                     </div>
                   </div>
                 </div>

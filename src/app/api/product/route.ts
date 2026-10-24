@@ -58,6 +58,7 @@ export async function PATCH(req: NextRequest) {
       productId,
       variantSku,
       variantStock,
+      variantUpdates,
       childVariants,
       name,
       description,
@@ -70,11 +71,15 @@ export async function PATCH(req: NextRequest) {
     const targetSlug = slug || "form-01";
     let updatedProduct = store.getProduct(targetSlug);
 
-    // 1. If updating a specific child variant's stock
-    if (variantSku && typeof variantStock === "number") {
+    // 1. Batch variant restock (from Restock Modal)
+    if (variantUpdates && Array.isArray(variantUpdates)) {
+      updatedProduct = store.updateMultipleVariantStocks(targetSlug, variantUpdates);
+    }
+    // 2. Single variant stock adjustment
+    else if (variantSku && typeof variantStock === "number") {
       updatedProduct = store.updateVariantStock(targetSlug, variantSku, variantStock);
     }
-    // 2. If updating full child variants list or product metadata
+    // 3. Full child variants list or metadata
     else if (childVariants && Array.isArray(childVariants)) {
       updatedProduct = store.updateProductWithVariants({
         slug: targetSlug,
@@ -88,7 +93,7 @@ export async function PATCH(req: NextRequest) {
         childVariants: childVariants as IVariant[],
       });
     }
-    // 3. Simple master stock adjustment
+    // 4. Simple master stock adjustment
     else if (typeof stock === "number") {
       updatedProduct = store.updateStock(stock, activeDiscount, targetSlug);
     }
@@ -132,7 +137,7 @@ export async function PATCH(req: NextRequest) {
       productId: updatedProduct.productId,
       newStock: updatedProduct.stock,
       activeDiscount: updatedProduct.activeDiscount,
-      variantUpdated: variantSku || "all",
+      variantUpdated: variantSku || (variantUpdates ? "batch-restock" : "all"),
       trigger: "RealTimeInventoryAdjustment",
     });
 
@@ -144,5 +149,186 @@ export async function PATCH(req: NextRequest) {
   } catch (error) {
     console.error("Error in /api/product PATCH:", error);
     return NextResponse.json({ success: false, error: "Failed to update product" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const {
+      name,
+      slug,
+      productId,
+      category,
+      categorySlug,
+      model,
+      tagline,
+      description,
+      price,
+      originalPrice,
+      basePrice,
+      baseDiscount,
+      type,
+      globalSpecs,
+      childVariants,
+      variants,
+      specs,
+      metrics,
+    } = body;
+
+    const rawName = name || body.title;
+    if (!rawName || !rawName.trim()) {
+      return NextResponse.json({ success: false, error: "Product name or title is required" }, { status: 400 });
+    }
+
+    const productName = rawName.trim();
+    const generatedSlug = (slug || productName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const generatedProductId = productId || `PROD-${Date.now().toString(36).toUpperCase()}`;
+
+    // Accept childVariants or variants array with architecture/specOverride
+    const inputVariants = childVariants || variants;
+    const parsedVariants: IVariant[] = Array.isArray(inputVariants) && inputVariants.length > 0
+      ? inputVariants.map((v: any, i: number) => ({
+          sku: v.sku || `${generatedProductId}-VAR-${i + 1}`,
+          color: v.color || "Standard",
+          specOverride: v.specOverride || v.architecture || "Standard Fit / Cut",
+          price: Number(v.price) || Number(price) || 99,
+          discount: Number(v.discount) || 0,
+          stock: Number(v.stock) || 0,
+          images: Array.isArray(v.images) && v.images.length > 0 ? v.images : [v.image || "/images/hero-silver.jpg"],
+        }))
+      : [
+          {
+            sku: `${generatedProductId}-VAR-1`,
+            color: "Standard",
+            specOverride: "Default Edition",
+            price: Number(price) || 99,
+            discount: 0,
+            stock: 10,
+            images: ["/images/hero-silver.jpg"],
+          },
+        ];
+
+    const initialTotalStock = parsedVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+
+    const newProduct = store.addProduct({
+      id: generatedSlug,
+      slug: generatedSlug,
+      productId: generatedProductId,
+      name: productName,
+      model: model || category || "PREMIUM HARDWARE",
+      category: category || "General Goods",
+      categorySlug: categorySlug || generatedSlug,
+      tagline: tagline || "Engineered for precision and utility.",
+      description: description || "Authentic quality product crafted with high-grade components.",
+      price: Number(price) || Number(basePrice) || 99,
+      basePrice: Number(basePrice) || Number(price) || 99,
+      originalPrice: Number(originalPrice) || (Number(price) || 99) * 1.2,
+      activeDiscount: Number(baseDiscount) || 0,
+      baseDiscount: Number(baseDiscount) || 0,
+      type: type || category || "Tech & Goods",
+      stock: initialTotalStock,
+      lowStockThreshold: 5,
+      isFlashSale: false,
+      warrantyYears: 2,
+      returnDays: 30,
+      deliveryEstimate: "Ready to ship · Fast delivery in 2–4 business days",
+      rating: 5.0,
+      averageRating: 5.0,
+      reviewCount: 0,
+      sku: `${generatedProductId}-MASTER`,
+      globalSpecs: globalSpecs || {},
+      childVariants: parsedVariants,
+      variants: Array.isArray(variants) && variants.length > 0 ? variants : parsedVariants.map((cv, idx) => ({
+        id: cv.color.toLowerCase().replace(/[^a-z0-9]/g, "-") || `var-${idx}`,
+        name: cv.color,
+        hex: idx === 0 ? "#111111" : idx === 1 ? "#C4C8D0" : "#D6C4A6",
+        borderHex: "#333333",
+        image: cv.images?.[0] || "/images/hero-silver.jpg",
+        images: cv.images || ["/images/hero-silver.jpg"],
+        tag: String(idx + 1).padStart(2, "0"),
+      })),
+      specs: specs || {},
+      metrics: metrics || {},
+      lastRevalidatedAt: new Date().toISOString(),
+    });
+
+    // Persist to MongoDB
+    const db = await connectDB();
+    if (db) {
+      try {
+        await ProductModel.findOneAndUpdate(
+          { $or: [{ slug: generatedSlug }, { productId: generatedProductId }] },
+          { $set: newProduct },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        console.warn("MongoDB Product creation notice:", err);
+      }
+    }
+
+    // Revalidate edge caches
+    try {
+      revalidatePath("/");
+      revalidatePath("/products");
+      revalidatePath(`/products/${generatedSlug}`);
+      revalidatePath("/api/product");
+    } catch {
+      // ignore
+    }
+
+    // Dispatch AWS EventBridge Event: ProductCreated
+    await dispatchEventBridgeEvent("ProductCreated", {
+      productId: generatedProductId,
+      slug: generatedSlug,
+      name: newProduct.name,
+      category: newProduct.category,
+      stock: newProduct.stock,
+      variantCount: parsedVariants.length,
+      trigger: "AdminDynamicProductCreation",
+    });
+
+    return NextResponse.json({
+      success: true,
+      product: newProduct,
+      message: "Product created successfully and published to edge CDN.",
+    });
+  } catch (error) {
+    console.error("Error in /api/product POST:", error);
+    return NextResponse.json({ success: false, error: "Failed to create product" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const slug = searchParams.get("slug");
+    if (!slug) {
+      return NextResponse.json({ success: false, error: "Slug is required" }, { status: 400 });
+    }
+
+    store.deleteProduct(slug);
+
+    const db = await connectDB();
+    if (db) {
+      try {
+        await ProductModel.deleteOne({ slug });
+      } catch (err) {
+        console.warn("MongoDB delete notice:", err);
+      }
+    }
+
+    try {
+      revalidatePath("/");
+      revalidatePath("/products");
+      revalidatePath(`/products/${slug}`);
+    } catch {
+      // ignore
+    }
+
+    return NextResponse.json({ success: true, message: `Product ${slug} deleted successfully.` });
+  } catch (error) {
+    console.error("Error in /api/product DELETE:", error);
+    return NextResponse.json({ success: false, error: "Failed to delete product" }, { status: 500 });
   }
 }

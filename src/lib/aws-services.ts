@@ -27,7 +27,7 @@ export const AWS_DEFAULT_CONFIG: AWSConfig = {
  * In local/demo: executes with full realistic AWS ARN format, Lambda response, and event bus routing
  */
 export async function dispatchEventBridgeEvent(
-  detailType: "OrderPlaced" | "StockUpdated" | "FlashDiscountTriggered" | "CachePurged",
+  detailType: "OrderPlaced" | "StockUpdated" | "FlashDiscountTriggered" | "CachePurged" | "ProductCreated" | "ProductDeleted" | string,
   detail: Record<string, unknown>
 ): Promise<AWSEventLog> {
   const eventId = "eb-" + Math.random().toString(36).substring(2, 10);
