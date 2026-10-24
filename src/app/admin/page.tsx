@@ -63,6 +63,23 @@ import { toast } from "@/components/Toaster";
 
 const DEFAULT_REVALIDATE_SECRET = "ancwave_revalidation_secret_token_2026";
 
+export interface INewProdColor {
+  id: string;
+  color: string;
+  hex: string;
+  sku: string;
+  stock: number;
+  price: number;
+  images: string[];
+}
+
+export interface INewProdArchitecture {
+  id: string;
+  name: string;
+  price: number;
+  colors: INewProdColor[];
+}
+
 export default function AdminPage() {
   const {
     user,
@@ -152,59 +169,25 @@ export default function AdminPage() {
     { key: "Fit Architecture", value: "A1 Regular Fit & A2 Streetwear Oversized Cut" },
     { key: "Care Instructions", value: "Cold wash inside out, lay flat to dry" },
   ]);
-  const [newProdVariants, setNewProdVariants] = useState<Array<{
-    sku: string;
-    color: string;
-    hex: string;
-    specOverride: string;
-    price: number;
-    stock: number;
-    images: string[];
-  }>>([
+  const [newProdArchitectures, setNewProdArchitectures] = useState<INewProdArchitecture[]>([
     {
-      sku: "PROD-A1-GREEN",
-      color: "Forest Green",
-      hex: "#2E5339",
-      specOverride: "A1 (Regular Fit)",
+      id: "A1",
+      name: "A1 (Regular Fit)",
       price: 120,
-      stock: 5,
-      images: ["/images/lifestyle-workspace.jpg"],
+      colors: [
+        { id: "c1", color: "Forest Green", hex: "#2E5339", sku: "PROD-A1-GREEN", stock: 5, price: 120, images: ["/images/lifestyle-workspace.jpg"] },
+        { id: "c2", color: "Pitch Black", hex: "#1A1A1A", sku: "PROD-A1-BLACK", stock: 2, price: 120, images: ["/images/hero-graphite.jpg"] },
+        { id: "c3", color: "Mineral Blue", hex: "#3B6978", sku: "PROD-A1-BLUE", stock: 4, price: 120, images: ["/images/hero-silver.jpg"] },
+      ],
     },
     {
-      sku: "PROD-A1-BLACK",
-      color: "Pitch Black",
-      hex: "#1A1A1A",
-      specOverride: "A1 (Regular Fit)",
-      price: 120,
-      stock: 2,
-      images: ["/images/hero-graphite.jpg"],
-    },
-    {
-      sku: "PROD-A1-BLUE",
-      color: "Mineral Blue",
-      hex: "#3B6978",
-      specOverride: "A1 (Regular Fit)",
-      price: 120,
-      stock: 4,
-      images: ["/images/hero-silver.jpg"],
-    },
-    {
-      sku: "PROD-A2-WHITE",
-      color: "Arctic White",
-      hex: "#ECECEC",
-      specOverride: "A2 (Oversized Fit)",
+      id: "A2",
+      name: "A2 (Oversized Fit)",
       price: 130,
-      stock: 8,
-      images: ["/images/hero-sandstone.jpg"],
-    },
-    {
-      sku: "PROD-A2-GREEN",
-      color: "Forest Green",
-      hex: "#2E5339",
-      specOverride: "A2 (Oversized Fit)",
-      price: 130,
-      stock: 7,
-      images: ["/images/lifestyle-cafe.jpg"],
+      colors: [
+        { id: "c4", color: "Arctic White", hex: "#ECECEC", sku: "PROD-A2-WHITE", stock: 8, price: 130, images: ["/images/hero-sandstone.jpg"] },
+        { id: "c5", color: "Forest Green", hex: "#2E5339", sku: "PROD-A2-GREEN", stock: 7, price: 130, images: ["/images/lifestyle-cafe.jpg"] },
+      ],
     },
   ]);
   const [isCreatingProduct, setIsCreatingProduct] = useState<boolean>(false);
@@ -937,6 +920,122 @@ export default function AdminPage() {
     }
   };
 
+  // Architecture & Colorway Studio Helpers for Dynamic Product Creation
+  const handleNewProdAddArchitecture = () => {
+    const nextNum = newProdArchitectures.length + 1;
+    const nextId = `A${nextNum}`;
+    setNewProdArchitectures((prev) => [
+      ...prev,
+      {
+        id: nextId,
+        name: `${nextId} (Edition ${nextNum})`,
+        price: newProdPrice || 120,
+        colors: [
+          {
+            id: `color-${Date.now()}-1`,
+            color: "Pitch Black",
+            hex: "#1A1A1A",
+            sku: `PROD-${nextId}-BLK`,
+            stock: 5,
+            price: newProdPrice || 120,
+            images: ["/images/hero-graphite.jpg"],
+          },
+        ],
+      },
+    ]);
+  };
+
+  const handleNewProdRemoveArchitecture = (archIdx: number) => {
+    if (newProdArchitectures.length <= 1) {
+      toast({
+        type: "error",
+        title: "Architecture Required",
+        description: "Product must have at least one architecture cut.",
+      });
+      return;
+    }
+    setNewProdArchitectures((prev) => prev.filter((_, idx) => idx !== archIdx));
+  };
+
+  const handleNewProdAddColor = (archIdx: number) => {
+    setNewProdArchitectures((prev) => {
+      const updated = [...prev];
+      const arch = { ...updated[archIdx] };
+      const nextColorNum = arch.colors.length + 1;
+      const archId = arch.id || `A${archIdx + 1}`;
+      const defaultHex = nextColorNum === 2 ? "#ECECEC" : nextColorNum === 3 ? "#3B6978" : "#2563EB";
+      const defaultName = nextColorNum === 2 ? "Arctic White" : nextColorNum === 3 ? "Mineral Blue" : `Color ${nextColorNum}`;
+
+      arch.colors = [
+        ...arch.colors,
+        {
+          id: `color-${Date.now()}-${nextColorNum}`,
+          color: defaultName,
+          hex: defaultHex,
+          sku: `PROD-${archId}-${defaultName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 4).toUpperCase() || nextColorNum}`,
+          stock: 5,
+          price: arch.price || newProdPrice || 120,
+          images: ["/images/hero-silver.jpg"],
+        },
+      ];
+      updated[archIdx] = arch;
+      return updated;
+    });
+  };
+
+  const handleNewProdRemoveColor = (archIdx: number, colorIdx: number) => {
+    setNewProdArchitectures((prev) => {
+      const updated = [...prev];
+      const arch = { ...updated[archIdx] };
+      if (arch.colors.length <= 1) {
+        toast({
+          type: "error",
+          title: "Color Required",
+          description: "Architecture cut must have at least one colorway.",
+        });
+        return prev;
+      }
+      arch.colors = arch.colors.filter((_, idx) => idx !== colorIdx);
+      updated[archIdx] = arch;
+      return updated;
+    });
+  };
+
+  const handleNewProdUpdateColor = (
+    archIdx: number,
+    colorIdx: number,
+    field: "color" | "hex" | "sku" | "stock" | "price",
+    value: any
+  ) => {
+    setNewProdArchitectures((prev) => {
+      const updated = [...prev];
+      const arch = { ...updated[archIdx] };
+      const colors = [...arch.colors];
+      colors[colorIdx] = {
+        ...colors[colorIdx],
+        [field]: value,
+      };
+      arch.colors = colors;
+      updated[archIdx] = arch;
+      return updated;
+    });
+  };
+
+  const handleNewProdUpdateArchitecture = (
+    archIdx: number,
+    field: "name" | "id" | "price",
+    value: any
+  ) => {
+    setNewProdArchitectures((prev) => {
+      const updated = [...prev];
+      updated[archIdx] = {
+        ...updated[archIdx],
+        [field]: value,
+      };
+      return updated;
+    });
+  };
+
   // Load Example Product A Variant Structure (A1 & A2)
   const handleLoadProductAExample = () => {
     setNewProdCategory("apparel-fashion");
@@ -954,12 +1053,26 @@ export default function AdminPage() {
       { key: "Care Instructions", value: "Cold wash inside out, lay flat to dry" },
       { key: "Origin", value: "Ethically milled and tailored in Portugal" },
     ]);
-    setNewProdVariants([
-      { sku: "PROD-A1-GREEN", color: "Forest Green", hex: "#2E5339", specOverride: "A1 (Regular Fit)", price: 120, stock: 5, images: ["/images/lifestyle-workspace.jpg"] },
-      { sku: "PROD-A1-BLACK", color: "Pitch Black", hex: "#1A1A1A", specOverride: "A1 (Regular Fit)", price: 120, stock: 2, images: ["/images/hero-graphite.jpg"] },
-      { sku: "PROD-A1-BLUE", color: "Mineral Blue", hex: "#3B6978", specOverride: "A1 (Regular Fit)", price: 120, stock: 4, images: ["/images/hero-silver.jpg"] },
-      { sku: "PROD-A2-WHITE", color: "Arctic White", hex: "#ECECEC", specOverride: "A2 (Oversized Fit)", price: 130, stock: 8, images: ["/images/hero-sandstone.jpg"] },
-      { sku: "PROD-A2-GREEN", color: "Forest Green", hex: "#2E5339", specOverride: "A2 (Oversized Fit)", price: 130, stock: 7, images: ["/images/lifestyle-cafe.jpg"] },
+    setNewProdArchitectures([
+      {
+        id: "A1",
+        name: "A1 (Regular Fit)",
+        price: 120,
+        colors: [
+          { id: "c-a1-1", sku: "PROD-A1-GREEN", color: "Forest Green", hex: "#2E5339", stock: 5, price: 120, images: ["/images/lifestyle-workspace.jpg"] },
+          { id: "c-a1-2", sku: "PROD-A1-BLACK", color: "Pitch Black", hex: "#1A1A1A", stock: 2, price: 120, images: ["/images/hero-graphite.jpg"] },
+          { id: "c-a1-3", sku: "PROD-A1-BLUE", color: "Mineral Blue", hex: "#3B6978", stock: 4, price: 120, images: ["/images/hero-silver.jpg"] },
+        ],
+      },
+      {
+        id: "A2",
+        name: "A2 (Oversized Fit)",
+        price: 130,
+        colors: [
+          { id: "c-a2-1", sku: "PROD-A2-WHITE", color: "Arctic White", hex: "#ECECEC", stock: 8, price: 130, images: ["/images/hero-sandstone.jpg"] },
+          { id: "c-a2-2", sku: "PROD-A2-GREEN", color: "Forest Green", hex: "#2E5339", stock: 7, price: 130, images: ["/images/lifestyle-cafe.jpg"] },
+        ],
+      },
     ]);
     toast({
       type: "info",
@@ -975,8 +1088,10 @@ export default function AdminPage() {
       toast({ type: "error", title: "Product Title Required", description: "Please enter product name." });
       return;
     }
-    if (newProdVariants.length === 0) {
-      toast({ type: "error", title: "Variant Required", description: "Product must have at least one variant." });
+
+    const totalColorsCount = newProdArchitectures.reduce((sum, a) => sum + (a.colors?.length || 0), 0);
+    if (totalColorsCount === 0) {
+      toast({ type: "error", title: "Variant Required", description: "Product must have at least one colorway variant." });
       return;
     }
 
@@ -993,25 +1108,55 @@ export default function AdminPage() {
         return acc;
       }, {} as Record<string, string>);
 
-      const formattedChildVariants: IVariant[] = newProdVariants.map((v, i) => ({
-        sku: v.sku.trim() || `PROD-${Date.now().toString(36).toUpperCase()}-V${i + 1}`,
-        color: v.color.trim() || "Standard",
-        specOverride: v.specOverride.trim() || "Standard Fit / Architecture",
-        price: Number(v.price) || Number(newProdPrice) || 99,
+      // Map newProdArchitectures to IVariantGroup
+      const formattedVariantGroups: IVariantGroup[] = newProdArchitectures.map((arch) => ({
+        id: arch.id.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        name: arch.name.trim() || `${arch.id} Architecture`,
+        price: Number(arch.price) || Number(newProdPrice) || 99,
         discount: 0,
-        stock: Number(v.stock) || 0,
-        images: v.images && v.images.length > 0 ? v.images : ["/images/hero-silver.jpg"],
+        colors: arch.colors.map((c) => ({
+          id: c.id,
+          sku: c.sku.trim() || `PROD-${arch.id.toUpperCase()}-${c.color.replace(/[^a-z0-9]+/gi, "").toUpperCase()}`,
+          color: c.color.trim() || "Standard",
+          hex: c.hex || "#333333",
+          stock: Number(c.stock) || 0,
+          price: Number(c.price) || Number(arch.price) || Number(newProdPrice) || 99,
+          images: c.images && c.images.length > 0 ? c.images : ["/images/hero-silver.jpg"],
+        })),
       }));
 
-      const formattedColorVariants = newProdVariants.map((v, i) => ({
-        id: (v.color || `color-${i + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        name: v.color || "Standard",
-        hex: v.hex || "#333333",
-        borderHex: "#111111",
-        image: v.images?.[0] || "/images/hero-silver.jpg",
-        images: v.images && v.images.length > 0 ? v.images : ["/images/hero-silver.jpg"],
-        tag: `0${i + 1}`,
-      }));
+      // Flatten to IVariant for childVariants
+      const formattedChildVariants: IVariant[] = [];
+      formattedVariantGroups.forEach((vg) => {
+        vg.colors.forEach((c) => {
+          formattedChildVariants.push({
+            sku: c.sku,
+            color: c.color,
+            specOverride: vg.name,
+            price: c.price ?? vg.price ?? newProdPrice,
+            discount: 0,
+            stock: c.stock,
+            images: c.images,
+          });
+        });
+      });
+
+      const formattedColorVariants = formattedChildVariants.map((v, i) => {
+        const matchingHex = formattedVariantGroups
+          .flatMap((g) => g.colors)
+          .find((c) => c.sku === v.sku)?.hex || "#333333";
+        return {
+          id: (v.color || `color-${i + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          name: v.color || "Standard",
+          hex: matchingHex,
+          borderHex: "#111111",
+          image: v.images?.[0] || "/images/hero-silver.jpg",
+          images: v.images && v.images.length > 0 ? v.images : ["/images/hero-silver.jpg"],
+          tag: String(i + 1).padStart(2, "0"),
+        };
+      });
+
+      const totalMasterStock = formattedChildVariants.reduce((sum, v) => sum + (v.stock || 0), 0);
 
       const payload = {
         name: newProdName.trim(),
@@ -1027,6 +1172,8 @@ export default function AdminPage() {
         originalPrice: Number(newProdOriginalPrice) || (Number(newProdPrice) || 99) * 1.25,
         type: selectedCategoryDef?.name || "Standard Goods",
         globalSpecs: globalSpecsRecord,
+        stock: totalMasterStock,
+        variantGroups: formattedVariantGroups,
         childVariants: formattedChildVariants,
         variants: formattedColorVariants,
       };
@@ -1861,11 +2008,13 @@ export default function AdminPage() {
                     Current Architecture & Color Allocations:
                   </span>
                   <div className="space-y-1.5">
-                    {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g) => (
-                      <div key={g.id} className="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1.5">
+                    {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g, gIdx) => (
+                      <div key={g.id || gIdx} className="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1.5">
                         <div className="flex items-center justify-between text-xs font-bold text-zinc-900 font-mono">
                           <span className="flex items-center gap-1.5">
-                            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">{g.id}</span>
+                            <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold font-mono shrink-0">
+                              {g.id.length <= 4 ? g.id : `Arch 0${gIdx + 1}`}
+                            </span>
                             <span>{g.name}</span>
                           </span>
                           <span className="text-[10px] text-zinc-500 font-normal">
@@ -1968,17 +2117,17 @@ export default function AdminPage() {
                 </div>
 
                 <div className="space-y-4">
-                  {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g) => {
+                  {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g, gIdx) => {
                     const groupUnits = (g.colors || []).reduce((sum, c) => sum + (c.stock || 0), 0);
                     return (
                       <div
-                        key={g.id}
+                        key={g.id || gIdx}
                         className="rounded-2xl bg-zinc-50 border border-zinc-200 overflow-hidden shadow-2xs space-y-3 p-4 transition-all"
                       >
                         <div className="flex items-center justify-between border-b border-zinc-200/70 pb-2.5">
                           <div className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold font-mono">
-                              {g.id}
+                            <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold font-mono shrink-0 whitespace-nowrap">
+                              {g.id.length <= 4 ? g.id : `Arch 0${gIdx + 1}`}
                             </span>
                             <span className="text-xs font-bold text-zinc-900 font-sans">
                               {g.name}
@@ -2195,26 +2344,53 @@ export default function AdminPage() {
                           </td>
 
                           <td className="py-3 px-3">
-                            <div className="flex flex-wrap gap-1 max-w-xs">
-                              {(p.childVariants && p.childVariants.length > 0) ? (
-                                p.childVariants.map((cv) => (
-                                  <span
-                                    key={cv.sku}
-                                    className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200 whitespace-nowrap"
-                                  >
-                                    {cv.specOverride ? `${cv.specOverride} ` : ""}{cv.color} ({cv.stock})
-                                  </span>
-                                ))
-                              ) : (
-                                (p.variants || []).map((v) => (
-                                  <span
-                                    key={v.id}
-                                    className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200 whitespace-nowrap"
-                                  >
-                                    {v.name}
-                                  </span>
-                                ))
-                              )}
+                            <div className="flex flex-col gap-1.5 max-w-sm">
+                              {(() => {
+                                const groups = p.variantGroups && p.variantGroups.length > 0
+                                  ? p.variantGroups
+                                  : p.childVariants && p.childVariants.length > 0
+                                  ? childVariantsToVariantGroups(p.childVariants)
+                                  : [];
+                                if (groups.length === 0) {
+                                  return (
+                                    <div className="flex flex-wrap gap-1">
+                                      {(p.variants || []).map((v) => (
+                                        <span
+                                          key={v.id}
+                                          className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200"
+                                        >
+                                          {v.name}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  );
+                                }
+                                return groups.map((vg, vgIdx) => {
+                                  const archBadge = vg.id?.length <= 4 ? vg.id : `Arch 0${vgIdx + 1}`;
+                                  return (
+                                    <div key={vg.id || vgIdx} className="flex flex-wrap items-center gap-1.5">
+                                      <span
+                                        className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200/60 shrink-0"
+                                        title={vg.name}
+                                      >
+                                        {archBadge}
+                                      </span>
+                                      <div className="flex flex-wrap gap-1">
+                                        {(vg.colors || []).map((c) => (
+                                          <span
+                                            key={c.sku}
+                                            className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-white text-zinc-700 border border-zinc-200 shadow-2xs"
+                                          >
+                                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.hex || "#666" }} />
+                                            <span>{c.color}</span>
+                                            <span className="font-bold text-blue-600">({c.stock})</span>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                });
+                              })()}
                             </div>
                           </td>
 
@@ -3674,183 +3850,243 @@ export default function AdminPage() {
               </div>
 
               {/* Step 4: Multi-Variant Architecture & Colors Builder */}
-              <div className="space-y-3 pt-4 border-t border-zinc-100">
-                <div className="flex items-center justify-between">
+              <div className="space-y-4 pt-4 border-t border-zinc-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <label className="text-xs font-bold text-zinc-900 uppercase font-mono tracking-wider">
-                      4. Variant Architectures & Colorways
+                    <label className="text-xs font-bold text-zinc-900 uppercase font-mono tracking-wider flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-emerald-600" />
+                      <span>4. Variant Architectures & Colorways</span>
                     </label>
-                    <p className="text-[11px] text-zinc-500">
-                      Support multiple architectures (A1, A2) and individual color stocks
+                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                      Organize products into architecture cuts (A1, A2, or custom cuts) with nested color stocks and pricing
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const lastArch = newProdVariants[newProdVariants.length - 1]?.specOverride || "A1 (Regular Fit)";
-                        const nextNum = newProdVariants.length + 1;
-                        setNewProdVariants([
-                          ...newProdVariants,
-                          {
-                            sku: `PROD-VAR-${nextNum}`,
-                            color: "New Color",
-                            hex: "#333333",
-                            specOverride: lastArch,
-                            price: newProdPrice,
-                            stock: 5,
-                            images: ["/images/hero-silver.jpg"],
-                          },
-                        ]);
-                      }}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>+ Add Color to Arch</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const archIndex = new Set(newProdVariants.map((v) => v.specOverride)).size + 1;
-                        const archLetter = `A${archIndex}`;
-                        setNewProdVariants([
-                          ...newProdVariants,
-                          {
-                            sku: `PROD-${archLetter}-BLK`,
-                            color: "Pitch Black",
-                            hex: "#1A1A1A",
-                            specOverride: `${archLetter} (Edition ${archIndex})`,
-                            price: newProdPrice,
-                            stock: 5,
-                            images: ["/images/hero-graphite.jpg"],
-                          },
-                        ]);
-                      }}
-                      className="text-xs text-zinc-700 hover:text-zinc-900 font-semibold flex items-center gap-1 cursor-pointer bg-zinc-100 px-2.5 py-1 rounded-lg border border-zinc-200"
-                    >
-                      <Layers className="w-3.5 h-3.5" />
-                      <span>+ New Arch Cut</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleNewProdAddArchitecture}
+                    className="text-xs text-white bg-zinc-950 hover:bg-zinc-800 font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer self-start sm:self-auto shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add Architecture Cut</span>
+                  </button>
                 </div>
 
-                <div className="space-y-2.5">
-                  {newProdVariants.map((v, vIdx) => (
-                    <div key={vIdx} className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-2">
-                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center">
-                        <div className="space-y-0.5">
-                          <label className="text-[10px] font-mono text-zinc-500 uppercase">Architecture / Fit</label>
-                          <input
-                            type="text"
-                            value={v.specOverride}
-                            onChange={(e) => {
-                              const updated = [...newProdVariants];
-                              updated[vIdx].specOverride = e.target.value;
-                              setNewProdVariants(updated);
-                            }}
-                            placeholder="e.g. A1 (Regular Fit)"
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium bg-white"
-                          />
-                        </div>
+                {/* Architecture Cuts List */}
+                <div className="space-y-4">
+                  {newProdArchitectures.map((arch, archIdx) => {
+                    const archTotalUnits = (arch.colors || []).reduce((sum, c) => sum + (Number(c.stock) || 0), 0);
 
-                        <div className="space-y-0.5">
-                          <label className="text-[10px] font-mono text-zinc-500 uppercase">Colorway</label>
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="color"
-                              value={v.hex}
-                              onChange={(e) => {
-                                const updated = [...newProdVariants];
-                                updated[vIdx].hex = e.target.value;
-                                setNewProdVariants(updated);
-                              }}
-                              className="w-6 h-6 rounded border border-zinc-300 p-0 cursor-pointer shrink-0"
-                            />
-                            <input
-                              type="text"
-                              value={v.color}
-                              onChange={(e) => {
-                                const updated = [...newProdVariants];
-                                updated[vIdx].color = e.target.value;
-                                setNewProdVariants(updated);
-                              }}
-                              placeholder="Color Name"
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium bg-white"
-                            />
+                    return (
+                      <div
+                        key={arch.id || archIdx}
+                        className="rounded-2xl border border-zinc-200 bg-zinc-50/70 overflow-hidden shadow-xs transition-all space-y-3 p-4"
+                      >
+                        {/* Architecture Cut Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200/80">
+                          <div className="flex flex-wrap items-center gap-2 flex-1">
+                            <span className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-mono font-bold shrink-0">
+                              Cut #{String(archIdx + 1).padStart(2, "0")}
+                            </span>
+
+                            <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                              <input
+                                type="text"
+                                value={arch.id}
+                                onChange={(e) => handleNewProdUpdateArchitecture(archIdx, "id", e.target.value)}
+                                placeholder="A1"
+                                className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono font-bold bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                title="Architecture ID (e.g. A1, A2, CUT-1)"
+                              />
+                              <input
+                                type="text"
+                                value={arch.name}
+                                onChange={(e) => handleNewProdUpdateArchitecture(archIdx, "name", e.target.value)}
+                                placeholder="e.g. A1 (Regular Fit) or Attached Mic"
+                                className="flex-1 px-3 py-1.5 rounded-lg border border-zinc-200 text-xs font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                            <div className="flex items-center gap-1 bg-white border border-zinc-200 px-2.5 py-1 rounded-lg">
+                              <span className="text-[10px] text-zinc-400 font-mono">Base $</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={arch.price}
+                                onChange={(e) => handleNewProdUpdateArchitecture(archIdx, "price", parseFloat(e.target.value) || 0)}
+                                className="w-14 text-xs font-mono font-bold text-zinc-900 focus:outline-none"
+                              />
+                            </div>
+
+                            <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-lg bg-zinc-200/80 text-zinc-800">
+                              {archTotalUnits} units
+                            </span>
+
+                            {newProdArchitectures.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleNewProdRemoveArchitecture(archIdx)}
+                                className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                title="Delete Architecture Cut"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
 
-                        <div className="space-y-0.5">
-                          <label className="text-[10px] font-mono text-zinc-500 uppercase">Variant SKU</label>
-                          <input
-                            type="text"
-                            value={v.sku}
-                            onChange={(e) => {
-                              const updated = [...newProdVariants];
-                              updated[vIdx].sku = e.target.value;
-                              setNewProdVariants(updated);
-                            }}
-                            placeholder="SKU Code"
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono bg-white"
-                          />
-                        </div>
-
-                        <div className="space-y-0.5">
-                          <label className="text-[10px] font-mono text-zinc-500 uppercase">Initial Units</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={v.stock}
-                            onChange={(e) => {
-                              const updated = [...newProdVariants];
-                              updated[vIdx].stock = parseInt(e.target.value) || 0;
-                              setNewProdVariants(updated);
-                            }}
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono font-bold bg-white"
-                          />
-                        </div>
-
-                        <div className="flex items-end justify-between sm:justify-end gap-2 pt-1 sm:pt-0">
-                          <div className="space-y-0.5 flex-1">
-                            <label className="text-[10px] font-mono text-zinc-500 uppercase">Price ($)</label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={v.price}
-                              onChange={(e) => {
-                                const updated = [...newProdVariants];
-                                updated[vIdx].price = parseFloat(e.target.value) || 0;
-                                setNewProdVariants(updated);
-                              }}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono bg-white"
-                            />
+                        {/* Colorways Table inside this Architecture Cut */}
+                        <div className="space-y-2">
+                          <div className="hidden sm:grid grid-cols-12 gap-2 text-[10px] font-mono text-zinc-500 uppercase px-2 font-semibold">
+                            <div className="col-span-4">Colorway & Swatch</div>
+                            <div className="col-span-3">Variant SKU</div>
+                            <div className="col-span-2">Initial Units</div>
+                            <div className="col-span-2">Price ($)</div>
+                            <div className="col-span-1 text-right">Action</div>
                           </div>
-                          {newProdVariants.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = [...newProdVariants];
-                                updated.splice(vIdx, 1);
-                                setNewProdVariants(updated);
-                              }}
-                              className="p-2 text-zinc-400 hover:text-red-600 transition-colors cursor-pointer"
+
+                          {arch.colors.map((c, cIdx) => (
+                            <div
+                              key={c.id || cIdx}
+                              className="p-2.5 sm:p-2 rounded-xl bg-white border border-zinc-200/90 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center shadow-2xs"
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
+                              {/* Color & Hex */}
+                              <div className="sm:col-span-4 flex items-center gap-2">
+                                <input
+                                  type="color"
+                                  value={c.hex || "#333333"}
+                                  onChange={(e) => handleNewProdUpdateColor(archIdx, cIdx, "hex", e.target.value)}
+                                  className="w-7 h-7 rounded border border-zinc-300 p-0 cursor-pointer shrink-0"
+                                  title="Pick Color Hex Swatch"
+                                />
+                                <input
+                                  type="text"
+                                  value={c.color}
+                                  onChange={(e) => handleNewProdUpdateColor(archIdx, cIdx, "color", e.target.value)}
+                                  placeholder="Color Name (e.g. Pitch Black)"
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </div>
+
+                              {/* SKU */}
+                              <div className="sm:col-span-3">
+                                <label className="sm:hidden text-[10px] font-mono text-zinc-400 uppercase">SKU</label>
+                                <input
+                                  type="text"
+                                  value={c.sku}
+                                  onChange={(e) => handleNewProdUpdateColor(archIdx, cIdx, "sku", e.target.value)}
+                                  placeholder="PROD-A1-BLK"
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono text-zinc-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </div>
+
+                              {/* Stock */}
+                              <div className="sm:col-span-2">
+                                <label className="sm:hidden text-[10px] font-mono text-zinc-400 uppercase">Stock Units</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={c.stock}
+                                  onChange={(e) => handleNewProdUpdateColor(archIdx, cIdx, "stock", parseInt(e.target.value) || 0)}
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </div>
+
+                              {/* Price */}
+                              <div className="sm:col-span-2">
+                                <label className="sm:hidden text-[10px] font-mono text-zinc-400 uppercase">Price ($)</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={c.price}
+                                  onChange={(e) => handleNewProdUpdateColor(archIdx, cIdx, "price", parseFloat(e.target.value) || 0)}
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono text-zinc-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </div>
+
+                              {/* Delete Color */}
+                              <div className="sm:col-span-1 flex items-center justify-end">
+                                {arch.colors.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleNewProdRemoveColor(archIdx, cIdx)}
+                                    className="p-1.5 text-zinc-400 hover:text-red-600 rounded transition-colors cursor-pointer"
+                                    title="Remove this color"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* + Add Color Button for THIS Architecture Cut */}
+                        <div className="pt-1 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => handleNewProdAddColor(archIdx)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold transition-colors border border-blue-200/80 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>+ Add Color to {arch.id || `Arch ${archIdx + 1}`}</span>
+                          </button>
+
+                          <span className="text-[11px] font-mono text-zinc-500">
+                            {arch.colors.length} {arch.colors.length === 1 ? "colorway" : "colorways"}
+                          </span>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                <div className="p-3 bg-zinc-100 rounded-xl flex items-center justify-between text-xs font-mono">
-                  <span className="text-zinc-600">Calculated Master Inventory:</span>
-                  <span className="font-bold text-zinc-950">
-                    {newProdVariants.reduce((sum, v) => sum + (v.stock || 0), 0)} units total
-                  </span>
-                </div>
+                {/* Master Inventory Calculated Box */}
+                {(() => {
+                  const masterTotalUnits = newProdArchitectures.reduce(
+                    (total, arch) => total + (arch.colors || []).reduce((sum, c) => sum + (Number(c.stock) || 0), 0),
+                    0
+                  );
+                  const totalColorways = newProdArchitectures.reduce(
+                    (total, arch) => total + (arch.colors || []).length,
+                    0
+                  );
+
+                  return (
+                    <div className="p-4 bg-zinc-900 text-white rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                          Calculated Master Inventory
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-base font-bold font-mono text-emerald-400">
+                            {masterTotalUnits} units total
+                          </span>
+                          <span className="text-xs text-zinc-400 font-mono">
+                            across {newProdArchitectures.length} {newProdArchitectures.length === 1 ? "cut" : "cuts"} & {totalColorways} colorways
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {newProdArchitectures.map((arch, aIdx) => {
+                          const units = (arch.colors || []).reduce((s, c) => s + (Number(c.stock) || 0), 0);
+                          return (
+                            <span
+                              key={arch.id || aIdx}
+                              className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-200"
+                            >
+                              <strong className="text-white">{arch.id || `A${aIdx + 1}`}</strong>: {units} u
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Action Buttons */}
