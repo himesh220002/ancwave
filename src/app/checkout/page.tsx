@@ -22,12 +22,15 @@ import {
   User as UserIcon,
   LogOut,
   ChevronDown,
+  Download,
+  Package,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useCart, CustomerCheckoutDetails } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { Order } from "@/types";
 import { toast } from "@/components/Toaster";
+import { downloadOrderInvoicePdf } from "@/lib/invoice-generator";
 
 declare global {
   interface Window {
@@ -509,19 +512,40 @@ export default function CheckoutPage() {
             </div>
 
             <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link
-                href="/"
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs"
-              >
-                Back to Homepage
-              </Link>
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium"
+                onClick={() => {
+                  try {
+                    downloadOrderInvoicePdf(confirmedOrder);
+                    toast({
+                      type: "success",
+                      title: "Tax Invoice Downloaded",
+                      description: `Saved ancwave-invoice-${confirmedOrder.orderNumber}.pdf`,
+                    });
+                  } catch {
+                    window.print();
+                  }
+                }}
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-xs font-semibold shadow-xs flex items-center justify-center gap-2 cursor-pointer"
               >
-                Print Receipt
+                <Download className="w-4 h-4" />
+                <span>Download Bill (PDF)</span>
               </button>
+
+              <Link
+                href={`/orders?order=${confirmedOrder.orderNumber}`}
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 text-zinc-800 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <Package className="w-4 h-4 text-blue-600" />
+                <span>View in My Orders</span>
+              </Link>
+
+              <Link
+                href="/"
+                className="w-full sm:w-auto px-5 py-3.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-medium transition-colors"
+              >
+                Back to Store
+              </Link>
             </div>
           </div>
         ) : (

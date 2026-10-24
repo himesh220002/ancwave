@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   LogOut,
   ChevronDown,
+  Package,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -100,6 +101,12 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
           >
             Reviews
           </a>
+          <Link
+            href="/orders"
+            className="hover:text-black transition-colors"
+          >
+            Orders
+          </Link>
         </nav>
 
         {/* Right: Actions */}
@@ -179,6 +186,15 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
                       <span>Operations Console</span>
                     </Link>
                   )}
+
+                  <Link
+                    href="/orders"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition-colors"
+                  >
+                    <Package className="w-4 h-4 text-blue-600" />
+                    <span>My Orders</span>
+                  </Link>
 
                   <button
                     onClick={async () => {
@@ -326,6 +342,17 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
               <span>Reviews</span>
               <span className="text-xs font-mono text-zinc-400 font-normal">Verified Acoustics</span>
             </a>
+            <Link
+              href="/orders"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="py-1 hover:text-blue-600 transition-colors flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-blue-600" />
+                <span>My Orders</span>
+              </div>
+              <span className="text-xs font-mono text-blue-600 font-normal">History & Bills</span>
+            </Link>
           </nav>
 
           <div className="pt-4 border-t border-zinc-100 space-y-3">

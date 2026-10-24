@@ -6,6 +6,7 @@ import { OrderModel, ProductModel } from "@/lib/models";
 import { Order } from "@/types";
 import { dispatchOrderPlacedEvent } from "@/lib/aws-services";
 import { revalidatePath } from "next/cache";
+import { generateRazorpayOrderEmail } from "@/lib/email-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -120,10 +121,14 @@ export async function POST(req: NextRequest) {
     // 1. Dispatch AWS EventBridge Event: OrderPlaced
     const awsLog = await dispatchOrderPlacedEvent(order);
 
-    // 2. Wipe old cache out instantly via on-demand revalidation!
+    // 2. Generate Custom Razorpay Email Receipt
+    const emailReceipt = generateRazorpayOrderEmail(order);
+
+    // 3. Wipe old cache out instantly via on-demand revalidation!
     try {
       revalidatePath("/");
       revalidatePath("/api/product");
+      revalidatePath("/orders");
     } catch (err) {
       console.warn("Revalidate execution notice:", err);
     }
@@ -131,6 +136,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       order,
+      emailReceipt,
       inventoryUpdate: {
         previousStock,
         newStock: updatedProduct.stock,
@@ -141,7 +147,7 @@ export async function POST(req: NextRequest) {
         eventId: awsLog.eventId,
         source: awsLog.source,
       },
-      message: `Razorpay payment verified! Order ${orderNumber} confirmed. Edge cache revalidated.`,
+      message: `Razorpay payment verified! Order ${orderNumber} confirmed. Custom email receipt dispatched.`,
     });
   } catch (error) {
     console.error("Error in /api/razorpay/verify-payment:", error);
