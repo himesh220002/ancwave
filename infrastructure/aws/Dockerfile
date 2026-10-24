@@ -26,8 +26,8 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-# AWS Lambda Web Adapter: translates incoming Lambda Function URL events directly to HTTP port 3000
-COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+# AWS Lambda Web Adapter: bundled binary eliminates external public ECR rate limits (429)
+COPY infrastructure/aws/bin/lambda-adapter /opt/extensions/lambda-adapter
 RUN chmod +x /opt/extensions/lambda-adapter
 
 ENV NODE_ENV=production

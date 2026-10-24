@@ -30,13 +30,20 @@
         "cloudfront:CreateInvalidation",
         "cloudfront:GetInvalidation"
       ],
-      "Resource": "arn:aws:cloudfront::*:distribution/E3HVB881LFOYR6"
+      "Resource": [
+        "arn:aws:cloudfront::*:distribution/E3HVB881LFOYR6",
+        "arn:aws:cloudfront::*:distribution/E1GFGU80FWV7ZM"
+      ]
     },
     {
-      "Sid": "AllowLambdaInvocation",
+      "Sid": "AllowLambdaManagement",
       "Effect": "Allow",
       "Action": [
-        "lambda:InvokeFunction"
+        "lambda:InvokeFunction",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration"
       ],
       "Resource": "arn:aws:lambda:ap-south-1:*:function:ancwave-*"
     },
@@ -48,7 +55,7 @@
         "logs:CreateLogStream",
         "logs:PutLogEvents"
       ],
-      "Resource": "arn:aws:logs:us-east-1:*:log-group:/aws/ancwave/*"
+      "Resource": "arn:aws:logs:*:*:log-group:/aws/*"
     }
   ]
 }
