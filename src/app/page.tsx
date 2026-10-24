@@ -7,6 +7,7 @@ import { FeaturesSection } from "@/components/FeaturesSection";
 import { SpecsSection } from "@/components/SpecsSection";
 import { ReviewsLifestyleSection } from "@/components/ReviewsLifestyleSection";
 import { CheckoutSection } from "@/components/CheckoutSection";
+import { ContactFaqSection } from "@/components/ContactFaqSection";
 import { CartDrawer } from "@/components/CartDrawer";
 import { Footer } from "@/components/Footer";
 import { initialProductData } from "@/lib/store";
@@ -111,6 +112,9 @@ export default function HomePage() {
           onColorChange={(color) => setSelectedColor(color)}
           onOrderSuccess={handleOrderSuccess}
         />
+
+        {/* Section 6: Support, FAQs & Direct Inquiries (05 / HERE WHEN YOU NEED US) */}
+        <ContactFaqSection />
       </main>
 
       {/* Cart Drawer ('Your bag' matching Screenshot 6) */}
