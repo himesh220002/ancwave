@@ -48,7 +48,7 @@ export default function ProductsCatalogPage() {
           setCatalogProducts(data.products);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Compute category tabs
@@ -221,11 +221,10 @@ export default function ProductsCatalogPage() {
                 <button
                   key={cat.slug}
                   onClick={() => setSelectedCategory(cat.slug)}
-                  className={`px-4 py-2 rounded-full text-xs font-medium transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
-                    isActive
-                      ? "bg-blue-600 text-white shadow-xs font-semibold"
-                      : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300 hover:text-zinc-900"
-                  }`}
+                  className={`px-4 py-2 rounded-full text-xs font-medium transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${isActive
+                    ? "bg-blue-600 text-white shadow-xs font-semibold"
+                    : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300 hover:text-zinc-900"
+                    }`}
                 >
                   <span>{cat.label}</span>
                   <span className={`text-[10px] font-mono ${isActive ? "text-blue-100" : "text-zinc-400"}`}>
@@ -932,10 +931,10 @@ function ProductCatalogCard({
             {product.categorySlug === "headphones"
               ? "AUDIO / OVER-EAR"
               : product.categorySlug === "earbuds"
-              ? "AUDIO / TRUE WIRELESS"
-              : product.categorySlug === "earphones"
-              ? "AUDIO / IN-EAR SPORTS"
-              : product.category?.toUpperCase() || "HARDWARE"}
+                ? "AUDIO / TRUE WIRELESS"
+                : product.categorySlug === "earphones"
+                  ? "AUDIO / IN-EAR SPORTS"
+                  : product.category?.toUpperCase() || "HARDWARE"}
           </div>
 
           {/* Title & Price Header */}
@@ -977,7 +976,7 @@ function ProductCatalogCard({
 
           {/* Colorway Swatches Row */}
           <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2.5">
               {product.variants.map((v) => {
                 const isSelected = activeColorId === v.id;
                 return (
@@ -985,11 +984,10 @@ function ProductCatalogCard({
                     key={v.id}
                     type="button"
                     onClick={() => setActiveColorId(v.id)}
-                    className={`w-4 h-4 rounded-full border transition-all cursor-pointer relative ${
-                      isSelected
-                        ? "ring-2 ring-blue-600 ring-offset-2 scale-110 shadow-xs"
-                        : "border-black/20 hover:scale-105 opacity-80 hover:opacity-100"
-                    }`}
+                    className={`w-4 h-4 rounded-full border transition-all cursor-pointer relative ${isSelected
+                      ? "ring-2 ring-blue-600 ring-offset-2 scale-110 shadow-xs"
+                      : "border-black/20 hover:scale-105 opacity-80 hover:opacity-100"
+                      }`}
                     style={{ backgroundColor: v.hex }}
                     title={`${v.name} (Click to switch preview)`}
                     aria-label={`Select ${v.name} color`}
@@ -1038,18 +1036,16 @@ function ProductCatalogCard({
           <button
             type="button"
             onClick={onToggleCompare}
-            className={`w-full py-2 px-3 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-all cursor-pointer border ${
-              isCompared
-                ? "bg-blue-50 border-blue-400 text-blue-700 font-semibold shadow-2xs"
-                : "bg-white border-zinc-200 text-zinc-600 hover:text-blue-600 hover:border-blue-300 hover:bg-zinc-50"
-            }`}
+            className={`w-full py-2 px-3 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-all cursor-pointer border ${isCompared
+              ? "bg-blue-50 border-blue-400 text-blue-700 font-semibold shadow-2xs"
+              : "bg-white border-zinc-200 text-zinc-600 hover:text-blue-600 hover:border-blue-300 hover:bg-zinc-50"
+              }`}
           >
             <span
-              className={`w-4 h-4 rounded flex items-center justify-center border text-[11px] font-bold transition-colors ${
-                isCompared
-                  ? "bg-blue-600 border-blue-600 text-white"
-                  : "border-zinc-300 bg-white text-zinc-400"
-              }`}
+              className={`w-4 h-4 rounded flex items-center justify-center border text-[11px] font-bold transition-colors ${isCompared
+                ? "bg-blue-600 border-blue-600 text-white"
+                : "border-zinc-300 bg-white text-zinc-400"
+                }`}
             >
               {isCompared ? "✓" : "+"}
             </span>

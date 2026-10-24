@@ -54,11 +54,11 @@ export function ReviewsLifestyleSection() {
           setReviewsList(data.reviews);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   return (
-    <section id="reviews" className="py-20 md:py-24 bg-white border-t border-[#EAEAE5]">
+    <section id="reviews" className="py-20 md:py-24 bg-blue-50 border-t border-[#EAEAE5]">
       <div className="max-w-7xl mx-auto px-6 sm:px-10 space-y-20">
         {/* Section Header */}
         <div className="space-y-3 sm:space-y-4">
@@ -93,11 +93,10 @@ export function ReviewsLifestyleSection() {
                     {[...Array(5)].map((_, i) => (
                       <Star
                         key={i}
-                        className={`w-3.5 h-3.5 ${
-                          i < rev.rating
-                            ? "fill-blue-600 text-blue-600"
-                            : "text-zinc-200"
-                        }`}
+                        className={`w-3.5 h-3.5 ${i < rev.rating
+                          ? "fill-blue-600 text-blue-600"
+                          : "text-zinc-200"
+                          }`}
                       />
                     ))}
                   </div>
@@ -184,9 +183,8 @@ export function ReviewsLifestyleSection() {
             {lifestyleCards.map((card, idx) => (
               <div
                 key={card.id}
-                className={`space-y-3 cursor-pointer transition-opacity ${
-                  activeSlide === idx ? "opacity-100" : "opacity-90 hover:opacity-100"
-                }`}
+                className={`space-y-3 cursor-pointer transition-opacity ${activeSlide === idx ? "opacity-100" : "opacity-90 hover:opacity-100"
+                  }`}
                 onClick={() => setActiveSlide(idx)}
               >
                 <div className="relative aspect-4/3 rounded-2xl overflow-hidden bg-[#ECECE7]">

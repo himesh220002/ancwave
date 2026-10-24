@@ -56,7 +56,7 @@ export function ContactFaqSection() {
   };
 
   return (
-    <section id="contact" className="py-20 md:py-28 bg-[#FFFFFF] border-t border-[#EAEAE5]">
+    <section id="contact" className="py-20 md:py-28 bg-gray-50 border-t border-[#EAEAE5]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-14 sm:space-y-16">
         {/* Section Eyebrow & Big Typography Header */}
         <div className="space-y-3 sm:space-y-4">
@@ -167,9 +167,8 @@ export function ContactFaqSection() {
                           {faq.question}
                         </span>
                         <span
-                          className={`text-xl font-light transition-colors duration-200 shrink-0 leading-none ${
-                            isOpen ? "text-blue-600 font-medium" : "text-zinc-500 group-hover:text-zinc-800"
-                          }`}
+                          className={`text-xl font-light transition-colors duration-200 shrink-0 leading-none ${isOpen ? "text-blue-600 font-medium" : "text-zinc-500 group-hover:text-zinc-800"
+                            }`}
                         >
                           {isOpen ? "−" : "+"}
                         </span>

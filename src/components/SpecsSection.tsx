@@ -52,7 +52,7 @@ export function SpecsSection({ product }: SpecsSectionProps) {
   ];
 
   return (
-    <section id="specs" className="py-20 md:py-24 bg-white border-t border-[#EAEAE5]">
+    <section id="specs" className="py-20 md:py-24 bg-gray-50 border-t border-[#EAEAE5]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-8 sm:space-y-12">
         {/* Section Header with Metric/Imperial Toggle */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">

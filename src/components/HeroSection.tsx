@@ -47,7 +47,7 @@ export function HeroSection({
   const isLowStock = product.stock <= product.lowStockThreshold;
 
   return (
-    <section className="relative pt-10 pb-16 md:pt-16 md:pb-20 bg-white">
+    <section className="relative pt-10 pb-16 md:pt-18 md:pb-30 bg-gray-50">
       <div className="max-w-7xl mx-auto px-6 sm:px-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
           {/* Left Column: Headline & Action */}
