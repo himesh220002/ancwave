@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Space_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
@@ -59,6 +60,10 @@ export default function RootLayout({
             <Toaster />
           </CartProvider>
         </AuthProvider>
+        <Script
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   );

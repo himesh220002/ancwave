@@ -83,18 +83,32 @@ export default function CheckoutPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Load Razorpay Checkout.js script
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    document.body.appendChild(script);
+  // Helper to ensure Razorpay checkout script is loaded
+  const loadRazorpayScript = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined") return resolve(false);
+      if ((window as any).Razorpay) return resolve(true);
 
-    return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
+      const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+      if (existing) {
+        if ((window as any).Razorpay) return resolve(true);
+        existing.addEventListener("load", () => resolve(true));
+        existing.addEventListener("error", () => resolve(false));
+        return;
       }
-    };
+
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  // Pre-load Razorpay Checkout.js script on mount
+  useEffect(() => {
+    loadRazorpayScript();
   }, []);
 
   // 4. The Safe Handshake: Sync user data & immediately resume payment once user logs in
@@ -200,18 +214,26 @@ export default function CheckoutPage() {
 
       setCreatedOrderId(orderData.orderId);
 
-      // 5. The Razorpay Pop-up: Trigger dynamically as soon as API returns (No fragile setTimeout delay!)
+      // 5. The Razorpay Pop-up: Ensure script is ready, resolve key, and open standard checkout
+      await loadRazorpayScript();
+
+      const razorpayKey =
+        orderData.keyId ||
+        process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+        "rzp_live_ThR51B1sJfYQvr";
+
       if (
         typeof window !== "undefined" &&
-        window.Razorpay &&
-        process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+        (window as any).Razorpay &&
+        razorpayKey
       ) {
+        const itemNames = items && items.length > 0 ? items.map((i) => i.name).join(", ") : "Form 01";
         const options = {
-          key: orderData.keyId,
+          key: razorpayKey,
           amount: orderData.amount,
-          currency: orderData.currency,
+          currency: orderData.currency || "USD",
           name: "ancwave",
-          description: "Form 01 / Wireless Over-Ear Active Noise Cancelling",
+          description: `${itemNames} / Official Checkout`,
           image: "/images/hero-silver.jpg",
           order_id: orderData.orderId,
           handler: async function (response: {
@@ -249,11 +271,19 @@ export default function CheckoutPage() {
           },
         };
 
-        const rzp = new window.Razorpay(options);
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on("payment.failed", function (resp: any) {
+          toast({
+            type: "error",
+            title: "Payment Declined",
+            description: resp.error?.description || "Payment could not be processed.",
+          });
+          setIsSubmitting(false);
+        });
         rzp.open();
         setIsSubmitting(false);
       } else {
-        // Authentic in-app Razorpay standard popup
+        // Fallback only if Razorpay checkout script could not load (e.g. adblocker)
         setIsRazorpayModalOpen(true);
         setIsSubmitting(false);
       }
