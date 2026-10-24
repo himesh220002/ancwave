@@ -677,13 +677,13 @@ function ProductCatalogCard({
   return (
     <div className="group flex flex-col rounded-3xl bg-white border border-[#EAEAE5] overflow-hidden hover:border-zinc-400 transition-all duration-300 hover:shadow-xl">
       {/* Top Media Image Container */}
-      <div className="relative aspect-4/3 bg-[#F0EFEA] p-6 overflow-hidden flex items-center justify-center">
+      <div className="relative aspect-4/3 bg-[#F0EFEA] overflow-hidden">
         <Link href={configureHref} className="relative w-full h-full block">
           <Image
             src={displayImage}
             alt={`${product.name} - ${activeVariant?.name || "Standard"}`}
             fill
-            className="object-contain p-2 group-hover:scale-105 transition-transform duration-500 ease-out"
+            className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         </Link>
