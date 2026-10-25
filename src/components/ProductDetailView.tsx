@@ -158,13 +158,22 @@ export function ProductDetailView({
 
   // Derived current color variant
   const currentVariant =
-    p.variants?.find((v) => v.id === selectedColor) || p.variants?.[0] || product.variants[0];
+    p.variants?.find((v) => v.id === selectedColor) ||
+    p.variants?.[0] ||
+    product.variants?.[0] || {
+      id: "silver",
+      name: "Silver",
+      hex: "#C4C8D0",
+      borderHex: "#949DAA",
+      image: "/images/hero-silver.jpg",
+      tag: "01",
+    };
 
   // Derived current child variant (hardware architecture / sku variance)
   const currentChildVariant =
     p.childVariants?.find((cv) => cv.sku === selectedVariantSku) ||
     p.childVariants?.find(
-      (cv) => cv.color.toLowerCase() === currentVariant?.name.toLowerCase()
+      (cv) => cv.color?.toLowerCase() === (currentVariant?.name || "").toLowerCase()
     ) ||
     p.childVariants?.[0];
 
@@ -651,7 +660,7 @@ export function ProductDetailView({
 
                 {/* Color Variant Pill Indicator */}
                 <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 text-[11px] font-mono text-zinc-600 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full border border-zinc-200">
-                  {(currentChildVariant?.color || currentVariant.name).toUpperCase()} · {currentChildVariant?.sku || product.model}
+                  {(currentChildVariant?.color || currentVariant?.name || "Standard").toUpperCase()} · {currentChildVariant?.sku || p.model || product.model}
                 </div>
               </div>
 
@@ -860,10 +869,10 @@ export function ProductDetailView({
               <div className="space-y-2.5 pt-2 border-t border-zinc-100">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-zinc-700">
-                    Finish: <span className="font-bold text-zinc-900">{currentVariant.name}</span>
+                    Finish: <span className="font-bold text-zinc-900">{currentVariant?.name || "Standard"}</span>
                   </span>
                   <span className="text-zinc-400 font-mono text-[11px]">
-                    Option {currentVariant.tag} of {product.variants.length}
+                    Option {currentVariant?.tag || "01"} of {p.variants?.length || product.variants?.length || 1}
                   </span>
                 </div>
 
