@@ -10,12 +10,33 @@ export interface ToastMessage {
   description?: string;
 }
 
-let toastListeners: ((toast: ToastMessage) => void)[] = [];
+let lastToastKey = "";
+let lastToastTime = 0;
+const toastListeners = new Set<(toast: ToastMessage) => void>();
 
 export function toast(message: Omit<ToastMessage, "id">) {
+  // Deduplicate identical toasts within 400ms (prevents double triggers / StrictMode duplicate displays)
+  const signature = `${message.type}|${message.title}|${message.description || ""}`;
+  const now = Date.now();
+  if (signature === lastToastKey && now - lastToastTime < 400) {
+    return;
+  }
+  lastToastKey = signature;
+  lastToastTime = now;
+
   const id = Math.random().toString(36).substring(2, 9);
   const newToast: ToastMessage = { ...message, id };
-  toastListeners.forEach((listener) => listener(newToast));
+
+  // Dispatch via microtask so it never runs synchronously inside a component's render or state reducer
+  const dispatch = () => {
+    toastListeners.forEach((listener) => listener(newToast));
+  };
+
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(dispatch);
+  } else {
+    setTimeout(dispatch, 0);
+  }
 }
 
 export function Toaster() {
@@ -23,15 +44,19 @@ export function Toaster() {
 
   useEffect(() => {
     const handler = (newToast: ToastMessage) => {
-      setToasts((prev) => [...prev, newToast]);
+      setToasts((prev) => {
+        if (prev.some((t) => t.id === newToast.id)) return prev;
+        return [...prev, newToast];
+      });
+
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== newToast.id));
       }, 4500);
     };
 
-    toastListeners.push(handler);
+    toastListeners.add(handler);
     return () => {
-      toastListeners = toastListeners.filter((l) => l !== handler);
+      toastListeners.delete(handler);
     };
   }, []);
 

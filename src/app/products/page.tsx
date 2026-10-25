@@ -122,25 +122,23 @@ export default function ProductsCatalogPage() {
   const toggleCompare = (slug: string) => {
     const targetProduct = catalogProducts.find((p) => p.slug === slug);
     const prodName = targetProduct?.name || slug;
+    const isAlready = comparedSlugs.includes(slug);
 
-    setComparedSlugs((prev) => {
-      const isAlready = prev.includes(slug);
-      if (isAlready) {
-        toast({
-          type: "info",
-          title: "Removed from Comparison",
-          description: `${prodName} removed from comparison matrix.`,
-        });
-        return prev.filter((s) => s !== slug);
-      } else {
-        toast({
-          type: "success",
-          title: "Added to Comparison",
-          description: `${prodName} added. Scroll down to view the matrix.`,
-        });
-        return [...prev, slug];
-      }
-    });
+    if (isAlready) {
+      setComparedSlugs((prev) => prev.filter((s) => s !== slug));
+      toast({
+        type: "info",
+        title: "Removed from Comparison",
+        description: `${prodName} removed from comparison matrix.`,
+      });
+    } else {
+      setComparedSlugs((prev) => [...prev, slug]);
+      toast({
+        type: "success",
+        title: "Added to Comparison",
+        description: `${prodName} added. Scroll down to view the matrix.`,
+      });
+    }
   };
 
   const handleQuickAdd = (product: ProductData, variant?: any, childVariant?: any) => {
@@ -267,7 +265,7 @@ export default function ProductsCatalogPage() {
 
       {/* Product Cards Grid */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProducts.map((product) => (
             <ProductCatalogCard
               key={product.id}
@@ -363,12 +361,12 @@ export default function ProductsCatalogPage() {
                             <X className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        <div className="relative w-20 h-20 rounded-xl bg-[#F0EFEA] border border-zinc-200 overflow-hidden mx-auto mb-3">
+                        <div className="relative w-20 h-20 rounded-xl bg-[#F0EFEA] shadow-md border border-zinc-200 overflow-hidden mx-auto mb-3">
                           <Image
                             src={mainImg}
                             alt={p.name}
                             fill
-                            className="object-contain p-1"
+                            className="object-cover rounded-xl"
                           />
                         </div>
 
@@ -514,7 +512,7 @@ export default function ProductsCatalogPage() {
                     </td>
                   ))}
                 </tr>
-                <tr>
+                {/* <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Stock Availability</td>
                   {activeComparedProducts.map((p) => (
                     <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
@@ -524,7 +522,7 @@ export default function ProductsCatalogPage() {
                       </span>
                     </td>
                   ))}
-                </tr>
+                </tr> */}
               </tbody>
             </table>
           </div>
@@ -895,7 +893,7 @@ function ProductCatalogCard({
   const configureHref = `/products/${product.slug}${activeColorId ? `?color=${activeColorId}` : ""}`;
 
   return (
-    <div className="group flex flex-col rounded-3xl bg-white border border-[#EAEAE5] overflow-hidden hover:border-zinc-400 transition-all duration-300 hover:shadow-xl">
+    <div className="group flex flex-col rounded-2xl bg-white border border-[#EAEAE5] overflow-hidden hover:border-zinc-400 transition-all duration-300 hover:shadow-xl">
       {/* Top Media Image Container */}
       <div className="relative aspect-4/3 bg-[#F0EFEA] overflow-hidden">
         <Link href={configureHref} className="relative w-full h-full block">
@@ -910,14 +908,14 @@ function ProductCatalogCard({
 
         {/* Top Badges */}
         <div className="absolute top-4 left-4 flex flex-col gap-1.5 items-start">
-          <span className="px-2.5 py-1 rounded-md bg-white/95 backdrop-blur-md text-[10px] font-mono tracking-wider font-semibold text-zinc-800 border border-zinc-200/80 shadow-2xs">
+          <span className="px-2.5 py-1 rounded-md bg-white/95 backdrop-blur-md text-[10px] tracking-wider text-blue-600 border border-zinc-200/80 shadow-2xs">
             {badgeLabel}
           </span>
         </div>
 
         {/* Rating Badge */}
         <div className="absolute bottom-4 right-4 flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md text-xs font-semibold text-zinc-900 border border-zinc-200 shadow-2xs">
-          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+          <Star className="w-3.5 h-3.5  text-blue-400" />
           <span>{product.averageRating || product.rating}</span>
           <span className="text-[10px] text-zinc-400 font-normal">({product.reviewCount})</span>
         </div>
@@ -955,13 +953,13 @@ function ProductCatalogCard({
           </p>
 
           {/* 3-Column Specifications Row */}
-          <div className="grid grid-cols-3 gap-2 py-3 border-y border-zinc-100 text-left">
+          <div className="grid grid-cols-3 gap-2 py-3 border-y border-zinc-200 text-left">
             {specsRow.map((col, idx) => (
               <div key={idx} className="space-y-0.5">
                 <span className="block text-[9px] font-mono text-zinc-400 uppercase tracking-wider truncate">
                   {col.label}
                 </span>
-                <span className="block text-xs font-bold text-zinc-900 font-mono truncate" title={col.value}>
+                <span className="block text-xs font-bold text-zinc-900 truncate" title={col.value}>
                   {col.value}
                 </span>
               </div>
@@ -976,7 +974,7 @@ function ProductCatalogCard({
 
           {/* Colorway Swatches Row */}
           <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 pl-1">
               {product.variants.map((v) => {
                 const isSelected = activeColorId === v.id;
                 return (
@@ -985,7 +983,7 @@ function ProductCatalogCard({
                     type="button"
                     onClick={() => setActiveColorId(v.id)}
                     className={`w-4 h-4 rounded-full border transition-all cursor-pointer relative ${isSelected
-                      ? "ring-2 ring-blue-600 ring-offset-2 scale-110 shadow-xs"
+                      ? "ring-1 ring-blue-600 ring-offset-2 scale-110 shadow-xs"
                       : "border-black/20 hover:scale-105 opacity-80 hover:opacity-100"
                       }`}
                     style={{ backgroundColor: v.hex }}
