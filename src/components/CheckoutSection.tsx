@@ -34,17 +34,28 @@ export function CheckoutSection({
   const [isAddedRecently, setIsAddedRecently] = useState(false);
 
   const currentVariant =
-    product.variants.find((v) => v.id === selectedColor) || product.variants[0];
+    product.variants?.find((v) => v.id === selectedColor) ||
+    product.variants?.[0] || {
+      id: "silver",
+      name: "Silver",
+      hex: "#C4C8D0",
+      borderHex: "#949DAA",
+      image: "/images/hero-silver.jpg",
+      tag: "01",
+    };
 
   const isLowStock = product.stock <= (product.lowStockThreshold || 10);
-  const variantCoverImage = currentVariant.images?.[0] || currentVariant.image || "/images/checkout-floating.jpg";
+  const variantCoverImage =
+    currentVariant?.images?.[0] ||
+    currentVariant?.image ||
+    "/images/checkout-floating.jpg";
 
   const handleAddToCart = () => {
     addItem({
       productId: product.id,
-      name: `${product.name} - ${currentVariant.name}`,
-      variant: currentVariant.id,
-      variantName: currentVariant.name,
+      name: `${product.name} - ${currentVariant?.name || "Standard"}`,
+      variant: currentVariant?.id || "silver",
+      variantName: currentVariant?.name || "Standard",
       price: product.price,
       image: variantCoverImage,
       fit: "One size · adjustable",
@@ -82,11 +93,11 @@ export function CheckoutSection({
           <div className="lg:col-span-6 space-y-4 sm:space-y-6">
             <div className="relative aspect-4/3 rounded-3xl bg-[#F0EFEA] overflow-hidden border border-[#E8E7E2] shadow-xs">
               <div className="absolute top-4 left-4 sm:top-5 sm:left-6 text-[10px] font-mono tracking-[0.18em] text-zinc-700 uppercase z-10 bg-white/85 backdrop-blur-md px-2.5 py-1 rounded-md shadow-2xs">
-                FORM 01 / {currentVariant.name.toUpperCase()}
+                FORM 01 / {(currentVariant?.name || "Silver").toUpperCase()}
               </div>
               <Image
                 src={variantCoverImage}
-                alt={`${product.name} in ${currentVariant.name}`}
+                alt={`${product.name} in ${currentVariant?.name || "Standard"}`}
                 fill
                 className="object-cover transition-all duration-300"
                 sizes="(max-width: 1024px) 100vw, 50vw"
@@ -147,16 +158,16 @@ export function CheckoutSection({
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-xs flex-wrap gap-1">
                   <span className="font-semibold text-zinc-900">
-                    Finish — <span className="text-zinc-500 font-normal">{currentVariant.name}</span>
+                    Finish — <span className="text-zinc-500 font-normal">{currentVariant?.name || "Standard"}</span>
                   </span>
                   <span className="text-[11px] font-mono text-zinc-400">
                     MATTE ANODIZED FINISH
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  {product.variants.map((v) => (
+                  {(product.variants || []).map((v, vIdx) => (
                     <button
-                      key={v.id}
+                      key={`co-v-${v.id || v.name || vIdx}-${vIdx}`}
                       onClick={() => onColorChange(v.id)}
                       className={`group relative flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs transition-all ${selectedColor === v.id
                         ? "bg-white border-zinc-900 shadow-xs ring-1 ring-zinc-900 font-medium text-zinc-900"
@@ -216,10 +227,10 @@ export function CheckoutSection({
                       addItem({
                         productId: product.id,
                         name: product.name,
-                        variant: currentVariant.id,
-                        variantName: currentVariant.name,
+                        variant: currentVariant?.id || "silver",
+                        variantName: currentVariant?.name || "Standard",
                         price: product.price,
-                        image: currentVariant.image,
+                        image: currentVariant?.image || variantCoverImage,
                         fit: "One size · adjustable",
                       });
                     }}

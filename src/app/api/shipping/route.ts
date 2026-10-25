@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
           key: "global_shipping_fixtures",
           ...updatedSettings,
         },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: "after" }
       );
     }
 

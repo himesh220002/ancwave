@@ -223,7 +223,7 @@ export async function PATCH(req: NextRequest) {
               colorVariants: updatedProduct.variants || [],
             },
           },
-          { upsert: true, new: true }
+          { upsert: true, returnDocument: "after" }
         );
       } catch (err) {
         console.warn("DB product sync notice:", err);
@@ -379,7 +379,7 @@ export async function POST(req: NextRequest) {
         await ProductModel.findOneAndUpdate(
           { $or: [{ slug: generatedSlug }, { productId: generatedProductId }] },
           { $set: newProduct },
-          { upsert: true, new: true }
+          { upsert: true, returnDocument: "after" }
         );
       } catch (err) {
         console.warn("MongoDB Product creation notice:", err);

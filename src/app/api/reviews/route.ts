@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
         await ProductModel.findOneAndUpdate(
           { $or: [{ productId }, { slug }] },
           { averageRating, reviewCount, rating: averageRating },
-          { new: true }
+          { returnDocument: "after" }
         );
       } catch (err) {
         console.warn("Product rating update notice:", err);

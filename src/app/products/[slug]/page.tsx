@@ -3,6 +3,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProductBySlug, sampleCatalog } from "@/lib/store";
 import { ProductDetailView } from "@/components/ProductDetailView";
+import { ProductData, ColorVariant } from "@/types";
 
 export const instant = false;
 
@@ -68,21 +69,25 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function ProductSlugPage({ params }: PageProps) {
   const { slug } = await params;
 
-  const product = getProductBySlug(slug);
+  const rawProduct = getProductBySlug(slug);
 
-  if (!product) {
+  if (!rawProduct) {
     notFound();
   }
 
+  const product: ProductData = JSON.parse(JSON.stringify(rawProduct));
+
   // Filter other products for the "More from ancwave Acoustics" lineup recommendations
-  const relatedProducts = sampleCatalog.filter((p) => p.slug !== product.slug);
+  const relatedProducts: ProductData[] = JSON.parse(
+    JSON.stringify(sampleCatalog.filter((p) => p.slug !== product.slug))
+  );
 
   // Structured JSON-LD SEO Schema per specification
   const productJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: `ancwave ${product.name}`,
-    image: product.variants.map((v) => `https://ancwave.com${v.image}`),
+    image: (product.variants || []).map((v: ColorVariant) => `https://ancwave.com${v.image}`),
     description: product.description,
     sku: product.sku,
     mpn: product.sku,

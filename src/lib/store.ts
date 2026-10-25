@@ -1344,10 +1344,14 @@ class AncWaveStore {
   }
 
   addProduct(newProduct: ProductData): ProductData {
-    const slug = newProduct.slug || newProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    const productId = newProduct.productId || `PROD-${Date.now().toString(36).toUpperCase()}`;
+    const raw = JSON.parse(JSON.stringify(newProduct));
+    if (raw._id && typeof raw._id !== "string") {
+      raw._id = String(raw._id);
+    }
+    const slug = raw.slug || (raw.name ? raw.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") : "form-01");
+    const productId = raw.productId || `PROD-${Date.now().toString(36).toUpperCase()}`;
     const p: ProductData = {
-      ...newProduct,
+      ...raw,
       slug,
       productId,
       id: slug,
@@ -1360,8 +1364,9 @@ class AncWaveStore {
       p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
       p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
     }
-    this.products.set(slug, p);
-    return { ...p };
+    const clean = JSON.parse(JSON.stringify(p));
+    this.products.set(slug, clean);
+    return clean;
   }
 
   deleteProduct(slug: string): boolean {
@@ -1764,14 +1769,18 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export function getProductBySlug(slug: string): ProductData | undefined {
-  return store.getProductBySlug?.(slug) || sampleCatalog.find((p) => p.slug === slug);
+  const p = store.getProductBySlug?.(slug) || sampleCatalog.find((p) => p.slug === slug);
+  if (!p) return undefined;
+  return JSON.parse(JSON.stringify(p));
 }
 
 export function getAllProducts(): ProductData[] {
-  return store.getAllProducts?.() || sampleCatalog;
+  const list = store.getAllProducts?.() || sampleCatalog;
+  return JSON.parse(JSON.stringify(list));
 }
 
 export function getReviewsByProductId(productId: string): (Review & IReview)[] {
-  return store.getReviews(productId);
+  const r = store.getReviews(productId);
+  return JSON.parse(JSON.stringify(r));
 }
 

@@ -551,7 +551,7 @@ export function ProductDetailView({
   return (
     <div className="min-h-screen bg-[#FBFBFA] flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Sticky Header */}
-      <Navbar subtitle={`/ ${product.name.toUpperCase()}`} />
+      <Navbar subtitle={`/ ${(p?.name || product?.name || "Form 01").toUpperCase()}`} />
 
       {/* Breadcrumb Navigation Bar */}
       <div className="bg-white border-b border-[#EAEAE5] py-2.5">
@@ -668,7 +668,7 @@ export function ProductDetailView({
               <div className="flex items-center gap-3 overflow-x-auto pb-2 pt-1 scrollbar-thin">
                 {mediaGallery.map((media, idx) => (
                   <button
-                    key={media.id || idx}
+                    key={`thumb-${media.id || idx}-${idx}`}
                     onClick={() => setActiveMediaIndex(idx)}
                     className={`relative shrink-0 w-24 sm:w-28 aspect-4/3 rounded-2xl bg-[#F0EFEA] p-1.5 overflow-hidden border transition-all text-left flex flex-col justify-end group/thumb ${
                       activeMediaIndex === idx
@@ -761,11 +761,11 @@ export function ProductDetailView({
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {product.twsComponents.map((comp) => {
+                    {(p?.twsComponents || product?.twsComponents || []).map((comp, compIdx) => {
                       const isSelected = selectedTwsComponent === comp.id;
                       return (
                         <button
-                          key={comp.id}
+                          key={`pdv-comp-${comp.id || compIdx}-${compIdx}`}
                           type="button"
                           onClick={() => setSelectedTwsComponent(comp.id)}
                           className={`p-3 rounded-xl border text-left transition-all ${
@@ -814,11 +814,11 @@ export function ProductDetailView({
                   </p>
 
                   <div className="grid grid-cols-1 gap-2">
-                    {product.childVariants.map((v) => {
+                    {(p?.childVariants || product?.childVariants || []).map((v, cvIdx) => {
                       const isSelected = selectedVariantSku === v.sku;
                       return (
                         <button
-                          key={v.sku}
+                          key={`pdv-cv-${v.sku || cvIdx}-${cvIdx}`}
                           type="button"
                           onClick={() => {
                             setSelectedVariantSku(v.sku);
@@ -877,11 +877,11 @@ export function ProductDetailView({
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {product.variants.map((v) => {
+                  {(p?.variants || product?.variants || []).map((v, vIdx) => {
                     const isSelected = selectedColor === v.id;
                     return (
                       <button
-                        key={v.id}
+                        key={`pdv-var-${v.id || v.name || vIdx}-${vIdx}`}
                         type="button"
                         onClick={() => handleColorSelect(v.id)}
                         className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all ${
@@ -1312,9 +1312,9 @@ export function ProductDetailView({
 
             {/* Reviews Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {filteredReviews.map((review) => (
+              {filteredReviews.map((review, rIdx) => (
                 <div
-                  key={review.id || review.reviewId}
+                  key={`rev-${review.id || review.reviewId || rIdx}-${rIdx}`}
                   className="rounded-3xl bg-white border border-[#EAEAE5] p-6 space-y-4 flex flex-col justify-between shadow-2xs"
                 >
                   <div className="space-y-3">
@@ -1519,15 +1519,15 @@ export function ProductDetailView({
                         onChange={(e) => setFormVariantSku(e.target.value)}
                         className="w-full sm:w-80 px-3.5 py-2 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-800 bg-zinc-50 focus:outline-none"
                       >
-                        {product.childVariants && product.childVariants.length > 0 ? (
-                          product.childVariants.map((v) => (
-                            <option key={v.sku} value={v.sku}>
+                        {(p?.childVariants || product?.childVariants || []).length > 0 ? (
+                          (p?.childVariants || product?.childVariants || []).map((v, cvIdx) => (
+                            <option key={`opt-cv-${v.sku || cvIdx}-${cvIdx}`} value={v.sku}>
                               {v.color} ({v.specOverride || "Standard"})
                             </option>
                           ))
                         ) : (
-                          product.variants.map((v) => (
-                            <option key={v.id} value={v.name}>
+                          (p?.variants || product?.variants || []).map((v, vIdx) => (
+                            <option key={`opt-var-${v.id || v.name || vIdx}-${vIdx}`} value={v.name}>
                               {v.name} Finish
                             </option>
                           ))
