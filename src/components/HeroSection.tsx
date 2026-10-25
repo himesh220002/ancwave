@@ -141,9 +141,9 @@ export function HeroSection({
               <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 bg-white/90 backdrop-blur-xs border-t border-[#E8E7E2]">
                 {/* Variant Switcher Pill matching Figma: ⚪ Silver mist / 01 */}
                 <div className="flex items-center gap-2">
-                  {product.variants.map((v) => (
+                  {product.variants.map((v, idx) => (
                     <button
-                      key={v.id}
+                      key={`hero-var-${v.id || v.name || idx}-${idx}`}
                       onClick={() => handleColorSwitch(v.id)}
                       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-all ${activeColor === v.id
                         ? "bg-white text-zinc-900 font-medium shadow-xs border border-zinc-200/80"
@@ -161,9 +161,9 @@ export function HeroSection({
 
                 {/* Dash Indicators matching Figma */}
                 <div className="flex items-center gap-1.5">
-                  {product.variants.map((v) => (
+                  {product.variants.map((v, idx) => (
                     <span
-                      key={v.id}
+                      key={`hero-dash-${v.id || v.name || idx}-${idx}`}
                       className={`h-0.5 rounded-full transition-all ${activeColor === v.id
                         ? "w-5 bg-blue-600"
                         : "w-2 bg-zinc-300"

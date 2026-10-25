@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { getProductBySlug, sampleCatalog } from "@/lib/store";
 import { ProductDetailView } from "@/components/ProductDetailView";
 
+export const instant = false;
+
 interface PageProps {
   params: Promise<{ slug: string }>;
 }

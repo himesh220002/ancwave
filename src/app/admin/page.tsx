@@ -3021,9 +3021,9 @@ export default function AdminPage() {
                                 if (groups.length === 0) {
                                   return (
                                     <div className="flex flex-wrap gap-1">
-                                      {(p.variants || []).map((v) => (
+                                      {(p.variants || []).map((v, vIdx) => (
                                         <span
-                                          key={v.id}
+                                          key={`${p.slug || p.id}-var-${v.id || v.name || vIdx}-${vIdx}`}
                                           className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200"
                                         >
                                           {v.name}
@@ -3035,7 +3035,7 @@ export default function AdminPage() {
                                 return groups.map((vg, vgIdx) => {
                                   const archBadge = vg.id?.length <= 4 ? vg.id : `Arch 0${vgIdx + 1}`;
                                   return (
-                                    <div key={vg.id || vgIdx} className="flex flex-wrap items-center gap-1.5">
+                                    <div key={vg.id || `vg-${vgIdx}`} className="flex flex-wrap items-center gap-1.5">
                                       <span
                                         className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200/60 shrink-0"
                                         title={vg.name}
@@ -3043,9 +3043,9 @@ export default function AdminPage() {
                                         {archBadge}
                                       </span>
                                       <div className="flex flex-wrap gap-1">
-                                        {(vg.colors || []).map((c) => (
+                                        {(vg.colors || []).map((c, cIdx) => (
                                           <span
-                                            key={c.sku}
+                                            key={`${vg.id || vgIdx}-${c.sku || c.color || cIdx}-${cIdx}`}
                                             className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-white text-zinc-700 border border-zinc-200 shadow-2xs"
                                           >
                                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.hex || "#666" }} />
