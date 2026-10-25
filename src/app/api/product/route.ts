@@ -4,7 +4,7 @@ import { connectDB } from "@/lib/db";
 import { ProductModel } from "@/lib/models";
 import { revalidatePath } from "next/cache";
 import { dispatchEventBridgeEvent } from "@/lib/aws-services";
-import { IVariant, IVariantGroup, IVariantColor, variantGroupsToChildVariants } from "@/types";
+import { IVariant, IVariantGroup, IVariantColor, variantGroupsToChildVariants, normalizeProductData } from "@/types";
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,12 +21,7 @@ export async function GET(req: NextRequest) {
           const dbProducts = await ProductModel.find({}).lean();
           if (dbProducts && dbProducts.length > 0) {
             products = dbProducts.map((p: any) => {
-              const formatted = {
-                ...p,
-                id: p.slug || p.id,
-                variants: p.colorVariants?.length ? p.colorVariants : (p.variants || []),
-                colorVariants: p.colorVariants || p.variants || [],
-              };
+              const formatted = normalizeProductData(p);
               if (typeof store?.addProduct === "function") {
                 store.addProduct(formatted as any);
               }
@@ -65,12 +60,7 @@ export async function GET(req: NextRequest) {
           $or: [{ slug: targetSlug }, { productId: targetSlug }, { id: targetSlug }],
         }).lean();
         if (doc) {
-          product = {
-            ...doc,
-            id: (doc as any).slug || (doc as any).id,
-            variants: (doc as any).colorVariants?.length ? (doc as any).colorVariants : ((doc as any).variants || []),
-            colorVariants: (doc as any).colorVariants || (doc as any).variants || [],
-          };
+          product = normalizeProductData(doc);
           if (typeof store?.addProduct === "function") {
             store.addProduct(product as any);
           }
@@ -81,7 +71,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!product) {
-      product = store.getProduct(targetSlug);
+      product = normalizeProductData(store.getProduct(targetSlug));
     }
 
     return NextResponse.json(
@@ -205,22 +195,24 @@ export async function PATCH(req: NextRequest) {
       updatedProduct.isFlashSale = isFlashSale;
     }
 
+    const cleanProduct = normalizeProductData(updatedProduct);
+    const { _id, ...cleanProductWithoutId } = cleanProduct as any;
     // Persist to MongoDB if connected
     const db = await connectDB();
     if (db) {
       try {
         await ProductModel.findOneAndUpdate(
-          { $or: [{ slug: targetSlug }, { productId: updatedProduct.productId }] },
+          { $or: [{ slug: targetSlug }, { productId: cleanProduct.productId }] },
           {
             $set: {
-              ...updatedProduct,
-              price: updatedProduct.price,
-              basePrice: updatedProduct.basePrice || updatedProduct.price,
-              priceInr: updatedProduct.priceInr,
-              variants: updatedProduct.childVariants || [],
-              childVariants: updatedProduct.childVariants || [],
-              variantGroups: updatedProduct.variantGroups || [],
-              colorVariants: updatedProduct.variants || [],
+              ...cleanProductWithoutId,
+              price: cleanProduct.price,
+              basePrice: cleanProduct.basePrice || cleanProduct.price,
+              priceInr: cleanProduct.priceInr,
+              variants: cleanProduct.variants,
+              colorVariants: cleanProduct.variants,
+              childVariants: cleanProduct.childVariants,
+              variantGroups: cleanProduct.variantGroups,
             },
           },
           { upsert: true, returnDocument: "after" }
@@ -372,13 +364,23 @@ export async function POST(req: NextRequest) {
       lastRevalidatedAt: new Date().toISOString(),
     });
 
+    const cleanProduct = normalizeProductData(newProduct);
+    const { _id: _newId, ...cleanProductWithoutId } = cleanProduct as any;
     // Persist to MongoDB
     const db = await connectDB();
     if (db) {
       try {
         await ProductModel.findOneAndUpdate(
           { $or: [{ slug: generatedSlug }, { productId: generatedProductId }] },
-          { $set: newProduct },
+          {
+            $set: {
+              ...cleanProductWithoutId,
+              variants: cleanProduct.variants,
+              colorVariants: cleanProduct.variants,
+              childVariants: cleanProduct.childVariants,
+              variantGroups: cleanProduct.variantGroups,
+            },
+          },
           { upsert: true, returnDocument: "after" }
         );
       } catch (err) {

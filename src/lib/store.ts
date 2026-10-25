@@ -11,6 +11,7 @@ import {
   ShippingSettings,
   childVariantsToVariantGroups,
   variantGroupsToChildVariants,
+  normalizeProductData,
 } from "@/types";
 
 export const initialProductData: ProductData = {
@@ -958,11 +959,108 @@ export const productAData: ProductData = {
   lastRevalidatedAt: "2026-10-24T12:00:00.000Z",
 };
 
+export const novaX1ProductData: ProductData = {
+  id: "nova-x1-smartphone",
+  slug: "nova-x1-smartphone",
+  productId: "SMART-X1",
+  categorySlug: "electronics-accessories",
+  name: "Nova X1 Flagship Smartphone",
+  model: "X1 SERIES FLAGSHIP 5G",
+  category: "Electronics & Mobile Accessories",
+  tagline: "Powerful smartphone built for all-day performance with dual display architectures.",
+  description:
+    "Nova X1 delivers flagship-grade Snapdragon 8 performance with dual architectural formats: A1 Large Display Edition (6.0\", 5500mAh, Gorilla Glass Victus) and A2 Compact Edition (5.5\", 4700mAh, Dragon Shield Glass).",
+  price: 499,
+  basePrice: 499,
+  priceInr: 41417,
+  originalPrice: 599,
+  activeDiscount: 0,
+  baseDiscount: 0,
+  type: "Smartphones",
+  stock: 132,
+  lowStockThreshold: 5,
+  isFlashSale: false,
+  warrantyYears: 2,
+  returnDays: 30,
+  deliveryEstimate: "Ready to ship · Fast delivery in 2–4 business days",
+  rating: 5.0,
+  averageRating: 5.0,
+  reviewCount: 24,
+  sku: "SMART-X1-MASTER",
+  globalSpecs: {
+    Brand: "Nova",
+    Processor: "Snapdragon 8 Series",
+    RAM: "8GB LPDDR5X",
+    Storage: "128GB UFS 4.0",
+    "Rear Camera": "50MP Main + 12MP Ultra-Wide",
+    "Front Camera": "16MP HDR",
+    OS: "Android 16",
+    "Fast Charging": "65W Wired Fast Charging",
+    Network: "5G Dual SIM + Wi-Fi 7",
+    Fingerprint: "Ultrasonic In-Display",
+    "Water Resistance": "IP68 Certified",
+  },
+  variantGroups: [
+    {
+      id: "a1",
+      name: "Large Display Edition",
+      specOverride: "Large Display Edition",
+      price: 499,
+      variantSpecs: {
+        "Display Size": "6.0 inch LTPO AMOLED",
+        "Screen Protection": "Corning Gorilla Glass Victus",
+        "Battery Capacity": "5500mAh Dual-Cell",
+        Weight: "210g",
+      },
+      colors: [
+        { id: "c-a1-blk", sku: "NVX1-A1-BLK", color: "Midnight Black", hex: "#101010", stock: 35, price: 499, images: ["/images/hero-graphite.jpg"] },
+        { id: "c-a1-blu", sku: "NVX1-A1-BLU", color: "Ocean Blue", hex: "#1565C0", stock: 22, price: 499, images: ["/images/hero-silver.jpg"] },
+        { id: "c-a1-slv", sku: "NVX1-A1-SLV", color: "Titanium Silver", hex: "#C0C0C0", stock: 18, price: 519, images: ["/images/lifestyle-workspace.jpg"] },
+      ],
+    },
+    {
+      id: "a2",
+      name: "Compact Edition",
+      specOverride: "Compact Edition",
+      price: 449,
+      variantSpecs: {
+        "Display Size": "5.5 inch Compact AMOLED",
+        "Screen Protection": "Dragon Shield Glass",
+        "Battery Capacity": "4700mAh High-Density",
+        Weight: "185g",
+      },
+      colors: [
+        { id: "c-a2-grn", sku: "NVX1-A2-GRN", color: "Forest Green", hex: "#2E7D32", stock: 30, price: 449, images: ["/images/lifestyle-cafe.jpg"] },
+        { id: "c-a2-wht", sku: "NVX1-A2-WHT", color: "Pearl White", hex: "#FAFAFA", stock: 16, price: 459, images: ["/images/hero-sandstone.jpg"] },
+        { id: "c-a2-red", sku: "NVX1-A2-RED", color: "Crimson Red", hex: "#B71C1C", stock: 11, price: 469, images: ["/images/lifestyle-urban.jpg"] },
+      ],
+    },
+  ],
+  childVariants: [
+    { sku: "NVX1-A1-BLK", color: "Midnight Black", specOverride: "Large Display Edition", variantSpecs: { "Display Size": "6.0 inch LTPO AMOLED", "Battery Capacity": "5500mAh Dual-Cell" }, price: 499, priceInr: 41417, discount: 0, stock: 35, images: ["/images/hero-graphite.jpg"] },
+    { sku: "NVX1-A1-BLU", color: "Ocean Blue", specOverride: "Large Display Edition", variantSpecs: { "Display Size": "6.0 inch LTPO AMOLED", "Battery Capacity": "5500mAh Dual-Cell" }, price: 499, priceInr: 41417, discount: 0, stock: 22, images: ["/images/hero-silver.jpg"] },
+    { sku: "NVX1-A1-SLV", color: "Titanium Silver", specOverride: "Large Display Edition", variantSpecs: { "Display Size": "6.0 inch LTPO AMOLED", "Battery Capacity": "5500mAh Dual-Cell" }, price: 519, priceInr: 43077, discount: 0, stock: 18, images: ["/images/lifestyle-workspace.jpg"] },
+    { sku: "NVX1-A2-GRN", color: "Forest Green", specOverride: "Compact Edition", variantSpecs: { "Display Size": "5.5 inch Compact AMOLED", "Battery Capacity": "4700mAh High-Density" }, price: 449, priceInr: 37267, discount: 0, stock: 30, images: ["/images/lifestyle-cafe.jpg"] },
+    { sku: "NVX1-A2-WHT", color: "Pearl White", specOverride: "Compact Edition", variantSpecs: { "Display Size": "5.5 inch Compact AMOLED", "Battery Capacity": "4700mAh High-Density" }, price: 459, priceInr: 38097, discount: 0, stock: 16, images: ["/images/hero-sandstone.jpg"] },
+    { sku: "NVX1-A2-RED", color: "Crimson Red", specOverride: "Compact Edition", variantSpecs: { "Display Size": "5.5 inch Compact AMOLED", "Battery Capacity": "4700mAh High-Density" }, price: 469, priceInr: 38927, discount: 0, stock: 11, images: ["/images/lifestyle-urban.jpg"] },
+  ],
+  variants: [
+    { id: "c-a1-blk", name: "Midnight Black", hex: "#101010", borderHex: "#050505", image: "/images/hero-graphite.jpg", images: ["/images/hero-graphite.jpg"], tag: "01", price: 499, priceInr: 41417, stock: 35 },
+    { id: "c-a1-blu", name: "Ocean Blue", hex: "#1565C0", borderHex: "#0D3C73", image: "/images/hero-silver.jpg", images: ["/images/hero-silver.jpg"], tag: "02", price: 499, priceInr: 41417, stock: 22 },
+    { id: "c-a1-slv", name: "Titanium Silver", hex: "#C0C0C0", borderHex: "#909090", image: "/images/lifestyle-workspace.jpg", images: ["/images/lifestyle-workspace.jpg"], tag: "03", price: 519, priceInr: 43077, stock: 18 },
+    { id: "c-a2-grn", name: "Forest Green", hex: "#2E7D32", borderHex: "#1B4D1F", image: "/images/lifestyle-cafe.jpg", images: ["/images/lifestyle-cafe.jpg"], tag: "04", price: 449, priceInr: 37267, stock: 30 },
+    { id: "c-a2-wht", name: "Pearl White", hex: "#FAFAFA", borderHex: "#D0D0D0", image: "/images/hero-sandstone.jpg", images: ["/images/hero-sandstone.jpg"], tag: "05", price: 459, priceInr: 38097, stock: 16 },
+    { id: "c-a2-red", name: "Crimson Red", hex: "#B71C1C", borderHex: "#6D1111", image: "/images/lifestyle-urban.jpg", images: ["/images/lifestyle-urban.jpg"], tag: "06", price: 469, priceInr: 38927, stock: 11 },
+  ],
+  lastRevalidatedAt: new Date().toISOString(),
+};
+
 export const sampleCatalog: ProductData[] = [
   initialProductData,
   earbudProductData,
   earphoneProductData,
   productAData,
+  novaX1ProductData,
 ];
 
 export const sampleReviews: (Review & IReview)[] = [
@@ -1198,49 +1296,34 @@ class AncWaveStore {
   }
 
   getProduct(slug = "form-01"): ProductData {
-    let p = this.products.get(slug);
+    let p = this.products.get(slug) || sampleCatalog.find((x) => x.slug === slug);
     if (!p) p = { ...initialProductData };
-    if (!p.variantGroups || p.variantGroups.length === 0) {
-      if (p.childVariants && p.childVariants.length > 0) {
-        p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
-      }
-    }
-    return { ...p };
+    return normalizeProductData(p);
   }
 
   getProductById(id: string): ProductData | undefined {
     for (const p of this.products.values()) {
       if (p.id === id || p.slug === id || p.productId === id) {
-        if (!p.variantGroups || p.variantGroups.length === 0) {
-          if (p.childVariants && p.childVariants.length > 0) {
-            p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
-          }
-        }
-        return { ...p };
+        return normalizeProductData(p);
       }
     }
+    const fromSample = sampleCatalog.find((p) => p.id === id || p.slug === id || p.productId === id);
+    if (fromSample) return normalizeProductData(fromSample);
     return undefined;
   }
 
   getProductBySlug(slug: string): ProductData | undefined {
-    const p = this.products.get(slug);
-    if (p && (!p.variantGroups || p.variantGroups.length === 0)) {
-      if (p.childVariants && p.childVariants.length > 0) {
-        p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
-      }
-    }
-    return p ? { ...p } : undefined;
+    const p = this.products.get(slug) || sampleCatalog.find((x) => x.slug === slug);
+    if (!p) return undefined;
+    return normalizeProductData(p);
   }
 
   getAllProducts(): ProductData[] {
-    return Array.from(this.products.values()).map((p) => {
-      if (!p.variantGroups || p.variantGroups.length === 0) {
-        if (p.childVariants && p.childVariants.length > 0) {
-          p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
-        }
-      }
-      return { ...p };
-    });
+    const fromMap = Array.from(this.products.values());
+    if (fromMap.length > 0) {
+      return fromMap.map(normalizeProductData);
+    }
+    return sampleCatalog.map(normalizeProductData);
   }
 
   updateStock(
@@ -1345,28 +1428,9 @@ class AncWaveStore {
 
   addProduct(newProduct: ProductData): ProductData {
     const raw = JSON.parse(JSON.stringify(newProduct));
-    if (raw._id && typeof raw._id !== "string") {
-      raw._id = String(raw._id);
-    }
-    const slug = raw.slug || (raw.name ? raw.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") : "form-01");
-    const productId = raw.productId || `PROD-${Date.now().toString(36).toUpperCase()}`;
-    const p: ProductData = {
-      ...raw,
-      slug,
-      productId,
-      id: slug,
-      lastRevalidatedAt: new Date().toISOString(),
-    };
-    if (p.variantGroups && p.variantGroups.length > 0) {
-      p.childVariants = variantGroupsToChildVariants(p.variantGroups, p.basePrice || p.price);
-      p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
-    } else if (p.childVariants && p.childVariants.length > 0) {
-      p.variantGroups = childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price);
-      p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
-    }
-    const clean = JSON.parse(JSON.stringify(p));
-    this.products.set(slug, clean);
-    return clean;
+    const normalized = normalizeProductData(raw);
+    this.products.set(normalized.slug, normalized);
+    return normalized;
   }
 
   deleteProduct(slug: string): boolean {
@@ -1771,12 +1835,12 @@ if (process.env.NODE_ENV !== "production") {
 export function getProductBySlug(slug: string): ProductData | undefined {
   const p = store.getProductBySlug?.(slug) || sampleCatalog.find((p) => p.slug === slug);
   if (!p) return undefined;
-  return JSON.parse(JSON.stringify(p));
+  return normalizeProductData(p);
 }
 
 export function getAllProducts(): ProductData[] {
   const list = store.getAllProducts?.() || sampleCatalog;
-  return JSON.parse(JSON.stringify(list));
+  return list.map(normalizeProductData);
 }
 
 export function getReviewsByProductId(productId: string): (Review & IReview)[] {

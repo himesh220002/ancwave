@@ -24,7 +24,7 @@ import { CartDrawer } from "@/components/CartDrawer";
 import { sampleCatalog } from "@/lib/store";
 import { useCart } from "@/context/CartContext";
 import { toast } from "@/components/Toaster";
-import { ProductData } from "@/types";
+import { ProductData, normalizeProductData } from "@/types";
 
 type CategoryFilter = string;
 type SortOption = "featured" | "price-asc" | "price-desc" | "rating";
@@ -33,7 +33,9 @@ export default function ProductsCatalogPage() {
   const { addItem } = useCart();
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
   const [sortOption, setSortOption] = useState<SortOption>("featured");
-  const [catalogProducts, setCatalogProducts] = useState<ProductData[]>(sampleCatalog);
+  const [catalogProducts, setCatalogProducts] = useState<ProductData[]>(() =>
+    sampleCatalog.map(normalizeProductData)
+  );
   const [comparedSlugs, setComparedSlugs] = useState<string[]>([]);
   const [isSpecialistModalOpen, setIsSpecialistModalOpen] = useState(false);
   const [specialistStep, setSpecialistStep] = useState<1 | 2>(1);
@@ -45,7 +47,7 @@ export default function ProductsCatalogPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.products && Array.isArray(data.products)) {
-          setCatalogProducts(data.products);
+          setCatalogProducts(data.products.map(normalizeProductData));
         }
       })
       .catch(() => { });
@@ -266,9 +268,9 @@ export default function ProductsCatalogPage() {
       {/* Product Cards Grid */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProducts.map((product) => (
+          {filteredProducts.map((product, pIdx) => (
             <ProductCatalogCard
-              key={product.id}
+              key={`cat-card-${product.id || product.slug || pIdx}-${pIdx}`}
               product={product}
               onQuickAdd={handleQuickAdd}
               isCompared={comparedSlugs.includes(product.slug)}
@@ -340,7 +342,7 @@ export default function ProductsCatalogPage() {
                   <th className="p-5 text-[11px] font-mono uppercase tracking-wider text-blue-600 font-bold w-52 shrink-0 align-bottom">
                     SPECIFICATIONS & ARCHITECTURE
                   </th>
-                  {activeComparedProducts.map((p) => {
+                  {activeComparedProducts.map((p, idx) => {
                     const mainImg =
                       p.variants?.[0]?.images?.[0] ||
                       p.variants?.[0]?.image ||
@@ -350,7 +352,7 @@ export default function ProductsCatalogPage() {
                     const configureHref = `/products/${p.slug}`;
 
                     return (
-                      <th key={p.id} className="p-5 min-w-[220px] align-top relative border-l border-zinc-100">
+                      <th key={`cmp-hdr-${p.id || p.slug || idx}-${idx}`} className="p-5 min-w-[220px] align-top relative border-l border-zinc-100">
                         {isSelected && (
                           <button
                             type="button"
@@ -402,23 +404,23 @@ export default function ProductsCatalogPage() {
               <tbody className="divide-y divide-zinc-100 text-xs text-zinc-600">
                 <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Category & Form</td>
-                  {activeComparedProducts.map((p) => (
-                    <td key={p.id} className="p-4 sm:p-5 font-medium text-zinc-900 border-l border-zinc-100">
+                  {activeComparedProducts.map((p, idx) => (
+                    <td key={`cmp-cat-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 font-medium text-zinc-900 border-l border-zinc-100">
                       {p.category || (p.categorySlug === "headphones" ? "Wireless Over-Ear" : p.categorySlug === "earbuds" ? "True Wireless Earbuds" : "Smart Instrument")}
                     </td>
                   ))}
                 </tr>
                 <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Core Philosophy</td>
-                  {activeComparedProducts.map((p) => (
-                    <td key={p.id} className="p-4 sm:p-5 text-zinc-700 border-l border-zinc-100">
+                  {activeComparedProducts.map((p, idx) => (
+                    <td key={`cmp-phi-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 text-zinc-700 border-l border-zinc-100">
                       {p.tagline || (p.description ? p.description.slice(0, 80) + "..." : "Precision engineered")}
                     </td>
                   ))}
                 </tr>
                 <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Driver & Hardware</td>
-                  {activeComparedProducts.map((p) => {
+                  {activeComparedProducts.map((p, idx) => {
                     const spec =
                       p.specs?.driver ||
                       p.globalSpecs?.["Display Size"] ||
@@ -426,7 +428,7 @@ export default function ProductsCatalogPage() {
                       p.globalSpecs?.["Processor"] ||
                       "40 mm custom biocellulose driver";
                     return (
-                      <td key={p.id} className="p-4 sm:p-5 font-medium text-zinc-900 border-l border-zinc-100">
+                      <td key={`cmp-drv-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 font-medium text-zinc-900 border-l border-zinc-100">
                         {spec}
                       </td>
                     );
@@ -434,14 +436,14 @@ export default function ProductsCatalogPage() {
                 </tr>
                 <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Battery & Playtime</td>
-                  {activeComparedProducts.map((p) => {
+                  {activeComparedProducts.map((p, idx) => {
                     const batt =
                       p.specs?.batteryLife ||
                       p.globalSpecs?.["Battery Capacity"] ||
                       p.globalSpecs?.["Battery"] ||
                       (p.isTws ? "Up to 8.5 h (34 h with case)" : "Up to 40 h · 38 h with ANC");
                     return (
-                      <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                      <td key={`cmp-bat-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
                         {batt}
                       </td>
                     );
@@ -449,13 +451,13 @@ export default function ProductsCatalogPage() {
                 </tr>
                 <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Noise Control / Processor</td>
-                  {activeComparedProducts.map((p) => {
+                  {activeComparedProducts.map((p, idx) => {
                     const noise =
                       p.specs?.noiseControl ||
                       p.globalSpecs?.["Chipset / Processor"] ||
                       "Adaptive Hybrid ANC with Transparency";
                     return (
-                      <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                      <td key={`cmp-noi-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
                         {noise}
                       </td>
                     );
@@ -463,13 +465,13 @@ export default function ProductsCatalogPage() {
                 </tr>
                 <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Charging & Durability</td>
-                  {activeComparedProducts.map((p) => {
+                  {activeComparedProducts.map((p, idx) => {
                     const charge =
                       p.specs?.charging ||
                       p.globalSpecs?.["Water Resistance"] ||
                       "USB-C Rapid Charge";
                     return (
-                      <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                      <td key={`cmp-chg-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
                         {charge}
                       </td>
                     );
@@ -477,13 +479,13 @@ export default function ProductsCatalogPage() {
                 </tr>
                 <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Connectivity</td>
-                  {activeComparedProducts.map((p) => {
+                  {activeComparedProducts.map((p, idx) => {
                     const conn =
                       p.specs?.connectivity ||
                       p.globalSpecs?.["Connectivity"] ||
                       "Bluetooth 5.3 · Multi-device Multipoint";
                     return (
-                      <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                      <td key={`cmp-con-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
                         {conn}
                       </td>
                     );
@@ -491,14 +493,14 @@ export default function ProductsCatalogPage() {
                 </tr>
                 <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Materials & Weight</td>
-                  {activeComparedProducts.map((p) => {
+                  {activeComparedProducts.map((p, idx) => {
                     const mat =
                       p.specs?.materials ||
                       p.globalSpecs?.["Build Material"] ||
                       "Anodized Aluminum · Slow-Recovery Foam";
                     const wt = p.specs?.weightMetric || "256 g";
                     return (
-                      <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
+                      <td key={`cmp-mat-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
                         {mat} ({wt})
                       </td>
                     );
@@ -506,8 +508,8 @@ export default function ProductsCatalogPage() {
                 </tr>
                 <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Warranty & Trial</td>
-                  {activeComparedProducts.map((p) => (
-                    <td key={p.id} className="p-4 sm:p-5 text-emerald-700 font-medium border-l border-zinc-100">
+                  {activeComparedProducts.map((p, idx) => (
+                    <td key={`cmp-war-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 text-emerald-700 font-medium border-l border-zinc-100">
                       {p.warrantyYears || 2}-Year Warranty · {p.returnDays || 30}-Day Returns
                     </td>
                   ))}
@@ -776,15 +778,27 @@ interface ProductCatalogCardProps {
 }
 
 function ProductCatalogCard({
-  product,
+  product: rawProduct,
   onQuickAdd,
   isCompared,
   onToggleCompare,
 }: ProductCatalogCardProps) {
+  const product = useMemo(() => normalizeProductData(rawProduct), [rawProduct]);
   const [activeColorId, setActiveColorId] = useState<string>(
     product.variants?.[0]?.id || "standard"
   );
   const [justAdded, setJustAdded] = useState(false);
+
+  useEffect(() => {
+    if (
+      product.variants?.[0]?.id &&
+      (!activeColorId ||
+        activeColorId === "standard" ||
+        !product.variants.some((v) => v.id === activeColorId))
+    ) {
+      setActiveColorId(product.variants[0].id);
+    }
+  }, [product.variants, activeColorId]);
 
   const activeVariant =
     product.variants?.find((v) => v.id === activeColorId) || product.variants?.[0];
@@ -975,20 +989,20 @@ function ProductCatalogCard({
           {/* Colorway Swatches Row */}
           <div className="flex items-center justify-between pt-1">
             <div className="flex items-center gap-2 pl-1">
-              {product.variants.map((v) => {
+              {product.variants.map((v, vIdx) => {
                 const isSelected = activeColorId === v.id;
                 return (
                   <button
-                    key={v.id}
+                    key={`card-color-${product.slug}-${v.id}-${vIdx}`}
                     type="button"
                     onClick={() => setActiveColorId(v.id)}
                     className={`w-4 h-4 rounded-full border transition-all cursor-pointer relative ${isSelected
                       ? "ring-1 ring-blue-600 ring-offset-2 scale-110 shadow-xs"
                       : "border-black/20 hover:scale-105 opacity-80 hover:opacity-100"
                       }`}
-                    style={{ backgroundColor: v.hex }}
-                    title={`${v.name} (Click to switch preview)`}
-                    aria-label={`Select ${v.name} color`}
+                    style={{ backgroundColor: v.hex || "#949DAA" }}
+                    title={`${v.name || "Variant"} (Click to switch preview)`}
+                    aria-label={`Select ${v.name || "variant"} color`}
                   />
                 );
               })}

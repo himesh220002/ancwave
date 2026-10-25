@@ -1717,20 +1717,25 @@ export function ProductDetailView({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-            {relatedProducts.map((rel) => (
-              <div
-                key={rel.id}
-                className="group rounded-3xl bg-[#FBFBFA] border border-[#EAEAE5] p-5 flex flex-col justify-between hover:border-zinc-400 transition-all hover:shadow-md"
-              >
-                <div className="space-y-4">
-                  <div className="relative aspect-4/3 rounded-2xl bg-white p-4 overflow-hidden border border-zinc-100">
-                    <Image
-                      src={rel.variants[0].image}
-                      alt={rel.name}
-                      fill
-                      className="object-contain p-2 group-hover:scale-105 transition-transform duration-300"
-                      sizes="300px"
-                    />
+            {relatedProducts.map((rel, relIdx) => {
+              const relCover =
+                rel.variants?.[0]?.image ||
+                rel.childVariants?.[0]?.images?.[0] ||
+                "/images/hero-silver.jpg";
+              return (
+                <div
+                  key={`rel-${rel.id || rel.slug || relIdx}-${relIdx}`}
+                  className="group rounded-3xl bg-[#FBFBFA] border border-[#EAEAE5] p-5 flex flex-col justify-between hover:border-zinc-400 transition-all hover:shadow-md"
+                >
+                  <div className="space-y-4">
+                    <div className="relative aspect-4/3 rounded-2xl bg-white p-4 overflow-hidden border border-zinc-100">
+                      <Image
+                        src={relCover}
+                        alt={rel.name}
+                        fill
+                        className="object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                        sizes="300px"
+                      />
                     <span className="absolute top-3 left-3 text-[9px] font-mono tracking-wider px-2 py-0.5 rounded bg-zinc-100 font-semibold text-zinc-800">
                       {rel.model}
                     </span>
@@ -1765,7 +1770,8 @@ export function ProductDetailView({
                   </Link>
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
         </div>
       </section>

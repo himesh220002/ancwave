@@ -54,8 +54,8 @@ const ProductSchema = new Schema(
     basePrice: { type: Number, required: true },
     baseDiscount: { type: Number, default: 0 },
     type: { type: String, default: "Over-Ear Headphones" },
-    variants: [VariantSchema],
-    childVariants: [VariantSchema],
+    variants: { type: Schema.Types.Mixed, default: [] },
+    childVariants: { type: Schema.Types.Mixed, default: [] },
     variantGroups: { type: Schema.Types.Mixed, default: [] },
     averageRating: { type: Number, default: 5.0 },
     reviewCount: { type: Number, default: 0 },
@@ -79,20 +79,7 @@ const ProductSchema = new Schema(
     rating: { type: Number, default: 5.0 },
     sku: { type: String, default: "ANC-MASTER-01" },
 
-    colorVariants: [
-      {
-        id: String,
-        name: String,
-        hex: String,
-        borderHex: String,
-        image: String,
-        images: [String],
-        tag: String,
-        price: Number,
-        priceInr: Number,
-        stock: Number,
-      },
-    ],
+    colorVariants: { type: Schema.Types.Mixed, default: [] },
     specs: {
       dimensionsMetric: String,
       dimensionsImperial: String,

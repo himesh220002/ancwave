@@ -10,6 +10,7 @@ export interface ColorVariant {
   tag: string;
   price?: number;
   priceInr?: number;
+  stock?: number;
 }
 
 export type ProductVariant = ColorVariant;
@@ -177,6 +178,287 @@ export function childVariantsToVariantGroups(childVariants: IVariant[], basePric
     });
   });
   return Array.from(map.values());
+}
+
+export function getColorHex(colorName: string = ""): { hex: string; borderHex: string } {
+  const c = (colorName || "").toLowerCase().trim();
+  if (c.includes("silver") || c.includes("mist") || c.includes("titanium") || c.includes("platinum")) {
+    return { hex: "#C4C8D0", borderHex: "#949DAA" };
+  }
+  if (c.includes("graphite") || c.includes("charcoal") || c.includes("obsidian")) {
+    return { hex: "#22252A", borderHex: "#111215" };
+  }
+  if (c.includes("black") || c.includes("pitch") || c.includes("midnight") || c.includes("stealth") || c.includes("matte obsidian")) {
+    return { hex: "#121214", borderHex: "#050507" };
+  }
+  if (c.includes("sandstone") || c.includes("gold") || c.includes("beige") || c.includes("desert") || c.includes("champagne")) {
+    return { hex: "#D6C4A6", borderHex: "#B8A27E" };
+  }
+  if (c.includes("white") || c.includes("polar") || c.includes("pearl") || c.includes("arctic") || c.includes("ivory")) {
+    return { hex: "#F5F5F7", borderHex: "#D2D2D7" };
+  }
+  if (c.includes("green") || c.includes("forest") || c.includes("sage") || c.includes("olive") || c.includes("emerald")) {
+    return { hex: "#2E5339", borderHex: "#1E3826" };
+  }
+  if (c.includes("blue") || c.includes("ocean") || c.includes("mineral") || c.includes("navy") || c.includes("cobalt")) {
+    return { hex: "#2B4C7E", borderHex: "#1A3254" };
+  }
+  if (c.includes("red") || c.includes("crimson") || c.includes("ruby") || c.includes("scarlet") || c.includes("burgundy")) {
+    return { hex: "#A92424", borderHex: "#6E1313" };
+  }
+  if (c.includes("teal") || c.includes("cyan") || c.includes("glacier")) {
+    return { hex: "#16697A", borderHex: "#0D404A" };
+  }
+  if (c.includes("yellow") || c.includes("amber")) {
+    return { hex: "#D97706", borderHex: "#92400E" };
+  }
+  if (c.includes("purple") || c.includes("violet") || c.includes("lavender")) {
+    return { hex: "#7C3AED", borderHex: "#5B21B6" };
+  }
+  return { hex: "#4B5563", borderHex: "#1F2937" };
+}
+
+export function normalizeProductData(raw: any): ProductData {
+  if (!raw || typeof raw !== "object") {
+    return {
+      id: "unknown",
+      slug: "unknown",
+      name: "Product",
+      categorySlug: "general",
+      category: "General",
+      model: "Standard Edition",
+      tagline: "",
+      description: "",
+      price: 99,
+      originalPrice: 120,
+      activeDiscount: 0,
+      stock: 0,
+      lowStockThreshold: 5,
+      isFlashSale: false,
+      warrantyYears: 2,
+      returnDays: 30,
+      deliveryEstimate: "Ready to ship · 2–4 days",
+      rating: 5.0,
+      reviewCount: 0,
+      sku: "PROD-UNKNOWN",
+      variants: [
+        {
+          id: "standard",
+          name: "Standard",
+          hex: "#22252A",
+          borderHex: "#111215",
+          image: "/images/hero-silver.jpg",
+          images: ["/images/hero-silver.jpg"],
+          tag: "01",
+          price: 99,
+          priceInr: 8217,
+          stock: 10,
+        },
+      ],
+      lastRevalidatedAt: new Date().toISOString(),
+    };
+  }
+
+  const clean = JSON.parse(JSON.stringify(raw));
+  if (clean._id && typeof clean._id !== "string") {
+    clean._id = String(clean._id);
+  }
+
+  const slug = clean.slug || clean.id || (clean.name ? clean.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") : "product");
+  const productId = clean.productId || `PROD-${slug.toUpperCase()}`;
+  const price = Number(clean.price) || Number(clean.basePrice) || 99;
+  const basePrice = Number(clean.basePrice) || price;
+  const priceInr = Number(clean.priceInr) || Math.round(price * 83);
+  const originalPrice = Number(clean.originalPrice) || Math.round(price * 1.25);
+
+  const rawVariants: any[] = Array.isArray(clean.variants) ? clean.variants : [];
+  const rawColorVariants: any[] = Array.isArray(clean.colorVariants) ? clean.colorVariants : [];
+  const rawChildVariants: any[] = Array.isArray(clean.childVariants) ? clean.childVariants : [];
+  const rawVariantGroups: any[] = Array.isArray(clean.variantGroups) ? clean.variantGroups : [];
+
+  // Determine if a variant item is corrupted (missing name, color, id, and sku)
+  const isCorrupted = (item: any) =>
+    !item || (!item.name && !item.color && !item.id && !item.sku);
+
+  // Extract raw colors pool from available sources in priority order
+  let colorCandidates: any[] = [];
+  if (rawColorVariants.some((cv) => !isCorrupted(cv))) {
+    colorCandidates = rawColorVariants.filter((cv) => !isCorrupted(cv));
+  } else if (rawVariants.some((v) => !isCorrupted(v))) {
+    colorCandidates = rawVariants.filter((v) => !isCorrupted(v));
+  } else if (rawVariantGroups.length > 0) {
+    colorCandidates = rawVariantGroups.flatMap((g) => g.colors || []);
+  } else if (rawChildVariants.some((cv) => !isCorrupted(cv))) {
+    colorCandidates = rawChildVariants.filter((cv) => !isCorrupted(cv));
+  }
+
+  // If still empty (e.g. completely empty variants or all corrupted), fallback to slug defaults
+  if (colorCandidates.length === 0) {
+    if (slug === "form-01") {
+      colorCandidates = [
+        { id: "silver", name: "Silver mist", hex: "#C4C8D0", borderHex: "#949DAA", image: "/images/hero-silver.jpg", price: 349, stock: 4 },
+        { id: "graphite", name: "Graphite", hex: "#22252A", borderHex: "#111215", image: "/images/hero-graphite.jpg", price: 349, stock: 6 },
+        { id: "sandstone", name: "Sandstone", hex: "#D6C4A6", borderHex: "#B8A27E", image: "/images/hero-sandstone.jpg", price: 369, stock: 2 },
+      ];
+    } else if (slug === "form-air-tws") {
+      colorCandidates = [
+        { id: "white", name: "Polar White", hex: "#F5F5F7", borderHex: "#D2D2D7", image: "/images/earbuds-white.jpg", price: 199, stock: 12 },
+        { id: "black", name: "Matte Obsidian", hex: "#1E1E22", borderHex: "#0D0D10", image: "/images/earphones-black.jpg", price: 199, stock: 8 },
+      ];
+    } else if (slug === "form-pulse-iem") {
+      colorCandidates = [
+        { id: "black", name: "Midnight Black", hex: "#1A1A1D", borderHex: "#333338", image: "/images/earphones-black.jpg", price: 149, stock: 8 },
+        { id: "teal", name: "Glacier Teal", hex: "#0E8388", borderHex: "#2E4F4F", image: "/images/earphones-teal.jpg", price: 149, stock: 6 },
+      ];
+    } else if (slug === "nova-x1-smartphone") {
+      colorCandidates = [
+        { id: "c-a1-blk", name: "Midnight Black", hex: "#101010", borderHex: "#050505", image: "/images/hero-graphite.jpg", price: 499, stock: 35 },
+        { id: "c-a1-blu", name: "Ocean Blue", hex: "#1565C0", borderHex: "#0D3C73", image: "/images/hero-silver.jpg", price: 499, stock: 22 },
+        { id: "c-a1-slv", name: "Titanium Silver", hex: "#C0C0C0", borderHex: "#909090", image: "/images/lifestyle-workspace.jpg", price: 519, stock: 18 },
+        { id: "c-a2-grn", name: "Forest Green", hex: "#2E7D32", borderHex: "#1B4D1F", image: "/images/lifestyle-cafe.jpg", price: 449, stock: 30 },
+        { id: "c-a2-wht", name: "Pearl White", hex: "#FAFAFA", borderHex: "#D0D0D0", image: "/images/hero-sandstone.jpg", price: 459, stock: 16 },
+        { id: "c-a2-red", name: "Crimson Red", hex: "#B71C1C", borderHex: "#6D1111", image: "/images/lifestyle-urban.jpg", price: 469, stock: 11 },
+      ];
+    } else {
+      colorCandidates = [
+        {
+          id: "standard",
+          name: "Standard Edition",
+          hex: "#22252A",
+          borderHex: "#111215",
+          image: clean.image || "/images/hero-silver.jpg",
+          price,
+          stock: clean.stock || 10,
+        },
+      ];
+    }
+  }
+
+  // Deduplicate and map candidates into strict ColorVariant[]
+  const seenIds = new Set<string>();
+  const normalizedColorVariants: ColorVariant[] = colorCandidates.map((c, idx) => {
+    const rawName = c.name || c.color || (c.sku ? c.sku.split("-").pop() : `Edition ${idx + 1}`) || "Standard";
+    let baseId = (c.id || c.color || rawName)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || `var-${idx + 1}`;
+    
+    if (seenIds.has(baseId)) {
+      baseId = `${baseId}-${idx + 1}`;
+    }
+    seenIds.add(baseId);
+
+    const hexInfo = getColorHex(c.hex ? "" : rawName);
+    const hex = c.hex || hexInfo.hex;
+    const borderHex = c.borderHex || hexInfo.borderHex;
+
+    const primaryImage =
+      c.image ||
+      (Array.isArray(c.images) && c.images.length > 0 ? c.images[0] : null) ||
+      clean.image ||
+      "/images/hero-silver.jpg";
+
+    const imagesArray =
+      Array.isArray(c.images) && c.images.length > 0
+        ? c.images
+        : [primaryImage];
+
+    const varPrice = Number(c.price) || price;
+    const varPriceInr = Number(c.priceInr) || Math.round(varPrice * 83);
+    const varStock = typeof c.stock === "number" ? c.stock : 10;
+
+    return {
+      id: baseId,
+      name: rawName,
+      hex,
+      borderHex,
+      image: primaryImage,
+      images: imagesArray,
+      tag: c.tag || String(idx + 1).padStart(2, "0"),
+      price: varPrice,
+      priceInr: varPriceInr,
+      stock: varStock,
+    };
+  });
+
+  // Ensure normalizedChildVariants
+  let normalizedChildVariants: IVariant[] = [];
+  if (rawChildVariants.some((cv) => !isCorrupted(cv))) {
+    normalizedChildVariants = rawChildVariants
+      .filter((cv) => !isCorrupted(cv))
+      .map((cv, idx) => ({
+        sku: cv.sku || `${productId}-VAR-${idx + 1}`,
+        color: cv.color || normalizedColorVariants[idx % normalizedColorVariants.length]?.name || "Standard",
+        specOverride: cv.specOverride || "Standard Architecture",
+        variantSpecs: cv.variantSpecs,
+        price: Number(cv.price) || price,
+        priceInr: Number(cv.priceInr) || Math.round((Number(cv.price) || price) * 83),
+        discount: Number(cv.discount) || 0,
+        stock: typeof cv.stock === "number" ? cv.stock : 10,
+        images: Array.isArray(cv.images) && cv.images.length > 0
+          ? cv.images
+          : [cv.image || normalizedColorVariants[idx % normalizedColorVariants.length]?.image || "/images/hero-silver.jpg"],
+      }));
+  } else if (rawVariantGroups.length > 0) {
+    normalizedChildVariants = variantGroupsToChildVariants(rawVariantGroups, price);
+  } else {
+    normalizedChildVariants = normalizedColorVariants.map((v, idx) => ({
+      sku: `${productId}-${v.id.toUpperCase()}-${idx + 1}`,
+      color: v.name,
+      specOverride: "Standard Architecture",
+      price: v.price || price,
+      priceInr: v.priceInr || Math.round((v.price || price) * 83),
+      discount: 0,
+      stock: v.stock || 10,
+      images: v.images && v.images.length > 0 ? v.images : [v.image || "/images/hero-silver.jpg"],
+    }));
+  }
+
+  // Ensure normalizedVariantGroups
+  const normalizedVariantGroups: IVariantGroup[] =
+    rawVariantGroups.length > 0
+      ? rawVariantGroups
+      : childVariantsToVariantGroups(normalizedChildVariants, basePrice);
+
+  const totalCalculatedStock = normalizedChildVariants.reduce(
+    (sum, cv) => sum + (Number(cv.stock) || 0),
+    0
+  );
+
+  return {
+    ...clean,
+    id: slug,
+    slug,
+    productId,
+    name: clean.name || "Product",
+    category: clean.category || "General Goods",
+    categorySlug: clean.categorySlug || "general",
+    model: clean.model || "Official Release",
+    tagline: clean.tagline || "Engineered for utility and Scandinavian precision.",
+    description: clean.description || "Authentic quality product crafted with high-grade components.",
+    price,
+    basePrice,
+    priceInr,
+    originalPrice,
+    activeDiscount: Number(clean.activeDiscount) || 0,
+    baseDiscount: Number(clean.baseDiscount) || 0,
+    stock: totalCalculatedStock > 0 ? totalCalculatedStock : (Number(clean.stock) || 10),
+    lowStockThreshold: Number(clean.lowStockThreshold) || 5,
+    isFlashSale: Boolean(clean.isFlashSale),
+    warrantyYears: Number(clean.warrantyYears) || 2,
+    returnDays: Number(clean.returnDays) || 30,
+    deliveryEstimate: clean.deliveryEstimate || "Ready to ship · Fast delivery in 2–4 business days",
+    rating: Number(clean.rating) || 5.0,
+    averageRating: Number(clean.averageRating || clean.rating) || 5.0,
+    reviewCount: Number(clean.reviewCount) || 0,
+    sku: clean.sku || `${productId}-MASTER`,
+    globalSpecs: clean.globalSpecs || {},
+    variants: normalizedColorVariants,
+    colorVariants: normalizedColorVariants,
+    childVariants: normalizedChildVariants,
+    variantGroups: normalizedVariantGroups,
+    lastRevalidatedAt: clean.lastRevalidatedAt || new Date().toISOString(),
+  };
 }
 
 export interface IProduct {
