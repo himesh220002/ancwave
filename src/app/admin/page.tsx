@@ -4266,11 +4266,10 @@ export default function AdminPage() {
                               key={mode.id}
                               type="button"
                               onClick={() => setTransitMode(mode.id as TransportMode)}
-                              className={`flex flex-col items-center justify-center py-2.5 rounded-lg border text-xs font-medium transition-all ${
-                                isSelected
+                              className={`flex flex-col items-center justify-center py-2.5 rounded-lg border text-xs font-medium transition-all ${isSelected
                                   ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/20'
                                   : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
-                              }`}
+                                }`}
                             >
                               <Icon className="w-4 h-4 mb-1" />
                               {mode.label}
@@ -4297,11 +4296,10 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={() => setManifestVerified(!manifestVerified)}
-                          className={`w-full flex items-center justify-center gap-2 px-3 py-2 text-xs rounded-lg border font-medium transition-colors ${
-                            manifestVerified
+                          className={`w-full flex items-center justify-center gap-2 px-3 py-2 text-xs rounded-lg border font-medium transition-colors ${manifestVerified
                               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                               : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                          }`}
+                            }`}
                         >
                           <ShieldCheck className="w-3.5 h-3.5" />
                           {manifestVerified ? 'Manifest Verified' : 'Unverified Hold'}
@@ -4313,18 +4311,18 @@ export default function AdminPage() {
                     <div className="grid grid-cols-2 gap-3 mb-6">
                       <div>
                         <label className="text-xs font-medium text-zinc-500 block mb-1">Current Facility</label>
-                        <input 
-                          type="text" 
-                          value={hubName} 
+                        <input
+                          type="text"
+                          value={hubName}
                           onChange={(e) => setHubName(e.target.value)}
                           className="w-full bg-zinc-900/50 border border-zinc-800 px-3 py-1.5 text-xs rounded text-zinc-400 focus:outline-none"
                         />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-zinc-500 block mb-1">Region / Code</label>
-                        <input 
-                          type="text" 
-                          value={hubRegion} 
+                        <input
+                          type="text"
+                          value={hubRegion}
                           onChange={(e) => setHubRegion(e.target.value)}
                           className="w-full bg-zinc-900/50 border border-zinc-800 px-3 py-1.5 text-xs rounded text-zinc-400 focus:outline-none"
                         />
@@ -4402,11 +4400,10 @@ export default function AdminPage() {
                     <button
                       type="button"
                       onClick={handleTriggerGateOtp}
-                      className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg text-xs font-bold tracking-wide uppercase transition-all active:scale-95 cursor-pointer ${
-                        otpTriggered || deliveryGateStatus === 'otp_sent'
+                      className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg text-xs font-bold tracking-wide uppercase transition-all active:scale-95 cursor-pointer ${otpTriggered || deliveryGateStatus === 'otp_sent'
                           ? 'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-600/20'
                           : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20'
-                      }`}
+                        }`}
                     >
                       {otpTriggered || deliveryGateStatus === 'otp_sent' ? 'OTP Dispatched & Tracking Active ✓' : 'Reached Location ... Trigger 5-Min Alive OTP Email'}
                     </button>
@@ -4645,9 +4642,8 @@ export default function AdminPage() {
                           return (
                             <React.Fragment key={ord.id}>
                               <tr
-                                className={`hover:bg-zinc-50/80 transition-colors ${
-                                  isExpanded ? "bg-blue-50/30" : ""
-                                }`}
+                                className={`hover:bg-zinc-50/80 transition-colors ${isExpanded ? "bg-blue-50/30" : ""
+                                  }`}
                               >
                                 {/* 1. Order Number & Timestamp */}
                                 <td className="py-3.5 font-mono font-bold text-zinc-900 align-top">
@@ -4655,20 +4651,19 @@ export default function AdminPage() {
                                   <div className="text-[10px] text-zinc-400 font-normal">
                                     {ord.createdAt
                                       ? new Date(ord.createdAt).toLocaleDateString("en-US", {
-                                          month: "short",
-                                          day: "numeric",
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })
+                                        month: "short",
+                                        day: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })
                                       : "Recent"}
                                   </div>
                                   <div className="pt-1">
                                     <span
-                                      className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-mono ${
-                                        ord.awsEventBridgeDispatched
+                                      className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-mono ${ord.awsEventBridgeDispatched
                                           ? "bg-emerald-50 text-emerald-700"
                                           : "bg-amber-50 text-amber-700"
-                                      }`}
+                                        }`}
                                     >
                                       AWS-EB: {ord.awsEventBridgeDispatched ? "SYNC" : "PEND"}
                                     </span>
@@ -4796,11 +4791,10 @@ export default function AdminPage() {
                                     onClick={() =>
                                       setExpandedOrderId(isExpanded ? null : ord.id)
                                     }
-                                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
-                                      isExpanded
+                                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all cursor-pointer ${isExpanded
                                         ? "bg-zinc-900 text-white hover:bg-black shadow-xs"
                                         : "border border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-800"
-                                    }`}
+                                      }`}
                                   >
                                     <span>{isExpanded ? "Close" : "Open"}</span>
                                     {isExpanded ? (
@@ -5057,11 +5051,10 @@ export default function AdminPage() {
                                                         },
                                                       }))
                                                     }
-                                                    className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg border text-[10px] font-medium transition cursor-pointer ${
-                                                      isSelected
+                                                    className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg border text-[10px] font-medium transition cursor-pointer ${isSelected
                                                         ? "bg-purple-600 border-purple-500 text-white shadow-xs font-bold"
                                                         : "bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100"
-                                                    }`}
+                                                      }`}
                                                   >
                                                     <Icon className="w-3 h-3 mb-0.5" />
                                                     <span>{mode.label}</span>
@@ -6056,7 +6049,7 @@ export default function AdminPage() {
                 </div>
 
                 {/* Reviews List */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                   {reviews.map((rev) => (
                     <div
                       key={rev.id || rev.reviewId}

@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { store } from "@/lib/store";
 import { connectDB } from "@/lib/db";
 import { OrderModel, ProductModel } from "@/lib/models";
-import { Order } from "@/types";
+import { Order, OrderEvent } from "@/types";
 import { dispatchOrderPlacedEvent } from "@/lib/aws-services";
 import { revalidatePath } from "next/cache";
 import { generateRazorpayOrderEmail } from "@/lib/email-service";
@@ -98,6 +98,28 @@ export async function POST(req: NextRequest) {
 
     const orderNumber = "ANC-" + Math.floor(100000 + Math.random() * 900000);
 
+    const finalPaymentId = razorpay_payment_id || "pay_" + Math.random().toString(36).substring(2, 14);
+    const finalOrderId = razorpay_order_id || "order_demo";
+
+    const initialEvents: OrderEvent[] = [
+      {
+        id: "ev-" + Math.random().toString(36).substring(2, 9),
+        title: "Order Placed & Payment Verified",
+        description: `Payment ID: ${finalPaymentId}. Amount of $${total.toFixed(2)} USD successfully captured via Razorpay.`,
+        timestamp: new Date().toISOString(),
+        type: "payment",
+        actor: "Razorpay Gateway",
+      },
+      {
+        id: "ev-" + Math.random().toString(36).substring(2, 9),
+        title: "Order Allocated at Fulfillment Hub",
+        description: `Order registered in logistics pipeline and queued for dispatch at Portland Primary Logistics Center.`,
+        timestamp: new Date().toISOString(),
+        type: "delivery",
+        actor: "Portland Primary Logistics Center",
+      },
+    ];
+
     const order: Order = {
       id: "ord-" + Math.random().toString(36).substring(2, 9),
       orderNumber,
@@ -117,8 +139,19 @@ export async function POST(req: NextRequest) {
       total,
       paymentMethod: "razorpay",
       paymentStatus: "paid",
-      razorpayPaymentId: razorpay_payment_id || "pay_" + Math.random().toString(36).substring(2, 14),
-      razorpayOrderId: razorpay_order_id || "order_demo",
+      razorpayPaymentId: finalPaymentId,
+      razorpayOrderId: finalOrderId,
+      deliveryStatus: "processing",
+      currentHub: "Portland Primary Logistics Center",
+      trackingNumber: `TRK-${orderNumber.replace(/[^0-9]/g, "")}`,
+      transitMode: "van",
+      vehicleNo: "OR-EXP-8891",
+      manifestVerified: true,
+      cancellation: {
+        requested: false,
+        status: "none",
+      },
+      events: initialEvents,
       createdAt: new Date().toISOString(),
       awsEventBridgeDispatched: true,
       cacheRevalidated: true,

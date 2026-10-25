@@ -1897,14 +1897,36 @@ class AncWaveStore {
 
 // Global singleton across hot reloads in dev
 const globalStore = global as unknown as { __ancWaveStore?: AncWaveStore };
-if (
-  !globalStore.__ancWaveStore ||
-  typeof (globalStore.__ancWaveStore as any)?.addProduct !== "function" ||
-  typeof (globalStore.__ancWaveStore as any)?.getShippingFixtures !== "function"
-) {
-  globalStore.__ancWaveStore = new AncWaveStore();
+
+function initOrUpdateStore(): AncWaveStore {
+  let inst = globalStore.__ancWaveStore;
+  if (
+    !inst ||
+    typeof (inst as any)?.addProduct !== "function" ||
+    typeof (inst as any)?.getShippingFixtures !== "function" ||
+    typeof (inst as any)?.getOrder !== "function" ||
+    typeof (inst as any)?.updateOrder !== "function" ||
+    typeof (inst as any)?.addOrderEvent !== "function"
+  ) {
+    inst = new AncWaveStore();
+    globalStore.__ancWaveStore = inst;
+  }
+
+  // Ensure all prototype methods exist on the existing singleton
+  if (typeof (inst as any).getOrder !== "function") {
+    (inst as any).getOrder = AncWaveStore.prototype.getOrder.bind(inst);
+  }
+  if (typeof (inst as any).updateOrder !== "function") {
+    (inst as any).updateOrder = AncWaveStore.prototype.updateOrder.bind(inst);
+  }
+  if (typeof (inst as any).addOrderEvent !== "function") {
+    (inst as any).addOrderEvent = AncWaveStore.prototype.addOrderEvent.bind(inst);
+  }
+
+  return inst;
 }
-export const store = globalStore.__ancWaveStore;
+
+export const store = initOrUpdateStore();
 if (process.env.NODE_ENV !== "production") {
   globalStore.__ancWaveStore = store;
 }

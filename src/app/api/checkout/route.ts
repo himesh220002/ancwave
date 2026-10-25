@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { store } from "@/lib/store";
 import { connectDB } from "@/lib/db";
 import { OrderModel, ProductModel } from "@/lib/models";
-import { Order } from "@/types";
+import { Order, OrderEvent } from "@/types";
 import { dispatchOrderPlacedEvent } from "@/lib/aws-services";
 import { revalidatePath } from "next/cache";
 import { deductOrderStock } from "@/lib/inventory-service";
@@ -61,6 +61,25 @@ export async function POST(req: NextRequest) {
 
     const orderNumber = "ANC-" + Math.floor(100000 + Math.random() * 900000);
 
+    const initialEvents: OrderEvent[] = [
+      {
+        id: "ev-" + Math.random().toString(36).substring(2, 9),
+        title: "Order Placed & Payment Verified",
+        description: `Payment received via ${paymentMethod.toUpperCase()}. Amount: $${total.toFixed(2)} USD.`,
+        timestamp: new Date().toISOString(),
+        type: "payment",
+        actor: "Payment Gateway",
+      },
+      {
+        id: "ev-" + Math.random().toString(36).substring(2, 9),
+        title: "Order Queued for Fulfillment",
+        description: `Order #${orderNumber} registered. Items allocated at Portland Primary Logistics Center.`,
+        timestamp: new Date().toISOString(),
+        type: "delivery",
+        actor: "Portland Primary Logistics Center",
+      },
+    ];
+
     const order: Order = {
       id: "ord-" + Math.random().toString(36).substring(2, 9),
       orderNumber,
@@ -72,6 +91,17 @@ export async function POST(req: NextRequest) {
       total,
       paymentMethod,
       paymentStatus: "paid",
+      deliveryStatus: "processing",
+      currentHub: "Portland Primary Logistics Center",
+      trackingNumber: `TRK-${orderNumber.replace(/[^0-9]/g, "")}`,
+      transitMode: "van",
+      vehicleNo: "OR-EXP-8891",
+      manifestVerified: true,
+      cancellation: {
+        requested: false,
+        status: "none",
+      },
+      events: initialEvents,
       createdAt: new Date().toISOString(),
       awsEventBridgeDispatched: true,
       cacheRevalidated: true,

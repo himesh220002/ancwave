@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { store } from "@/lib/store";
 import { connectDB } from "@/lib/db";
 import { OrderModel, ProductModel } from "@/lib/models";
-import { Order } from "@/types";
+import { Order, OrderEvent } from "@/types";
 import { dispatchOrderPlacedEvent } from "@/lib/aws-services";
 import { revalidatePath } from "next/cache";
 
@@ -176,6 +176,34 @@ export async function POST(req: NextRequest) {
           paymentStatus: "paid",
           razorpayPaymentId,
           razorpayOrderId,
+          deliveryStatus: "processing",
+          currentHub: "Portland Primary Logistics Center",
+          trackingNumber: `TRK-${orderNumber.replace(/[^0-9]/g, "")}`,
+          transitMode: "van",
+          vehicleNo: "OR-EXP-8891",
+          manifestVerified: true,
+          cancellation: {
+            requested: false,
+            status: "none",
+          },
+          events: [
+            {
+              id: "ev-" + Math.random().toString(36).substring(2, 9),
+              title: "Payment Verified via Razorpay Webhook",
+              description: `Payment ID: ${razorpayPaymentId}. Amount: $${totalUSD.toFixed(2)} USD captured.`,
+              timestamp: new Date().toISOString(),
+              type: "payment",
+              actor: "Razorpay Webhook",
+            },
+            {
+              id: "ev-" + Math.random().toString(36).substring(2, 9),
+              title: "Order Placed & Queued for Processing",
+              description: `Order #${orderNumber} registered at Portland Primary Logistics Center.`,
+              timestamp: new Date().toISOString(),
+              type: "order",
+              actor: "Fulfillment Pipeline",
+            },
+          ],
           createdAt: new Date().toISOString(),
           awsEventBridgeDispatched: true,
           cacheRevalidated: true,

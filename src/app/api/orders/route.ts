@@ -27,10 +27,17 @@ function normalizeOrder(o: any): Order {
   ];
 
   return {
-    id: o._id?.toString() || o.id,
+    id: o._id?.toString() || o.id || `ord-${Math.random().toString(36).substring(2, 9)}`,
     orderNumber,
     userId: o.userId,
-    customer: o.customer,
+    customer: o.customer || {
+      fullName: "Alex Morgan",
+      email: "alex@example.com",
+      address: "1420 NW Johnson Street",
+      city: "Portland",
+      state: "Oregon",
+      zipCode: "97209",
+    },
     items: o.items || [],
     subtotal: o.subtotal || 0,
     shipping: o.shipping || 0,
@@ -56,6 +63,152 @@ function normalizeOrder(o: any): Order {
     awsEventBridgeDispatched: o.awsEventBridgeDispatched ?? true,
     cacheRevalidated: o.cacheRevalidated ?? true,
   };
+}
+
+export function findOrderInStore(orderNumberOrId: string): Order | undefined {
+  if (!orderNumberOrId) return undefined;
+  const q = orderNumberOrId.trim().toLowerCase();
+
+  // 1. Try store.getOrder if available
+  if (typeof (store as any)?.getOrder === "function") {
+    try {
+      const found = store.getOrder(q);
+      if (found) return normalizeOrder(found);
+    } catch (e) {
+      console.warn("store.getOrder notice:", e);
+    }
+  }
+
+  // 2. Safe search in store.getOrders()
+  if (typeof (store as any)?.getOrders === "function") {
+    try {
+      const orders = store.getOrders();
+      const match = orders.find(
+        (o: Order) =>
+          o?.orderNumber?.toLowerCase() === q ||
+          o?.id?.toLowerCase() === q ||
+          o?.razorpayOrderId?.toLowerCase() === q ||
+          o?.razorpayPaymentId?.toLowerCase() === q
+      );
+      if (match) return normalizeOrder(match);
+    } catch (e) {
+      console.warn("store.getOrders notice:", e);
+    }
+  }
+
+  return undefined;
+}
+
+export async function findOrder(orderNumberOrId: string): Promise<Order | undefined> {
+  if (!orderNumberOrId) return undefined;
+  const q = orderNumberOrId.trim();
+
+  // 1. In-memory store lookup
+  const inStore = findOrderInStore(q);
+  if (inStore) return inStore;
+
+  // 2. MongoDB database lookup
+  const db = await connectDB();
+  if (db) {
+    try {
+      const found = await OrderModel.findOne({
+        $or: [
+          { orderNumber: { $regex: new RegExp(`^${q}$`, "i") } },
+          { id: q },
+          { razorpayOrderId: q },
+          { razorpayPaymentId: q },
+        ],
+      }).lean();
+
+      if (found) {
+        const normalized = normalizeOrder(found);
+        // Cache to store so subsequent reads are immediate
+        if (typeof (store as any)?.addOrder === "function") {
+          try {
+            store.addOrder(normalized);
+          } catch (e) {
+            // ignore
+          }
+        }
+        return normalized;
+      }
+    } catch (dbErr) {
+      console.warn("MongoDB order lookup notice:", dbErr);
+    }
+  }
+
+  return undefined;
+}
+
+export async function saveOrder(
+  orderNumber: string,
+  updates: Partial<Order>,
+  currentOrder?: Order
+): Promise<Order> {
+  const q = (orderNumber || "").trim();
+
+  // 1. Update in in-memory store
+  let updatedInStore: Order | null = null;
+  if (typeof (store as any)?.updateOrder === "function") {
+    try {
+      updatedInStore = store.updateOrder(q, updates);
+    } catch (e) {
+      console.warn("store.updateOrder notice:", e);
+    }
+  }
+
+  if (!updatedInStore && typeof (store as any)?.getOrders === "function") {
+    try {
+      const list = store.getOrders();
+      const match = list.find(
+        (o: Order) =>
+          o?.orderNumber?.toLowerCase() === q.toLowerCase() ||
+          o?.id?.toLowerCase() === q.toLowerCase()
+      );
+      if (match) {
+        if (updates.cancellation) {
+          match.cancellation = {
+            ...(match.cancellation || { requested: false, status: "none" }),
+            ...updates.cancellation,
+          };
+        }
+        if (updates.events) {
+          match.events = updates.events;
+        }
+        Object.assign(match, updates);
+        updatedInStore = match;
+      }
+    } catch (e) {
+      console.warn("store list fallback update notice:", e);
+    }
+  }
+
+  // 2. Persist to MongoDB
+  const db = await connectDB();
+  if (db) {
+    try {
+      await OrderModel.findOneAndUpdate(
+        {
+          $or: [
+            { orderNumber: { $regex: new RegExp(`^${q}$`, "i") } },
+            { id: q },
+          ],
+        },
+        updates,
+        { new: true }
+      );
+    } catch (dbErr) {
+      console.warn("MongoDB order update notice:", dbErr);
+    }
+  }
+
+  // 3. Return latest normalized representation
+  const fresh =
+    findOrderInStore(q) ||
+    updatedInStore ||
+    { ...(currentOrder || ({} as Order)), ...updates };
+
+  return normalizeOrder(fresh);
 }
 
 export async function GET(req: NextRequest) {
@@ -91,7 +244,9 @@ export async function GET(req: NextRequest) {
     }
 
     // Fallback/Merge with memory store
-    const storeOrders = store.getOrders().map(normalizeOrder);
+    const storeOrders = (
+      typeof (store as any)?.getOrders === "function" ? store.getOrders() : []
+    ).map(normalizeOrder);
     const existingOrderNumbers = new Set(orders.map((o) => o.orderNumber.toUpperCase()));
 
     storeOrders.forEach((so) => {
@@ -101,7 +256,12 @@ export async function GET(req: NextRequest) {
           match = false;
         } else if (email && !all && so.customer.email.toLowerCase() !== email.toLowerCase()) {
           match = false;
-        } else if (userId && !all && so.userId !== userId && (!email || so.customer.email.toLowerCase() !== email.toLowerCase())) {
+        } else if (
+          userId &&
+          !all &&
+          so.userId !== userId &&
+          (!email || so.customer.email.toLowerCase() !== email.toLowerCase())
+        ) {
           match = false;
         }
 
@@ -135,28 +295,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action, orderNumber } = body;
 
-    let targetOrder: Order | undefined;
-
-    // Search in store
-    const storeOrder = store.getOrder(orderNumber) || store.getOrders().find((o) => o.orderNumber === orderNumber);
-    if (storeOrder) {
-      targetOrder = normalizeOrder(storeOrder);
+    if (!orderNumber) {
+      return NextResponse.json(
+        { success: false, error: "orderNumber is required for order actions" },
+        { status: 400 }
+      );
     }
 
-    // Search in MongoDB if not found
-    if (!targetOrder) {
-      const db = await connectDB();
-      if (db) {
-        const found = await OrderModel.findOne({ orderNumber }).lean();
-        if (found) {
-          targetOrder = normalizeOrder(found);
-        }
-      }
-    }
+    // Search order defensively across store & MongoDB
+    const targetOrder = await findOrder(orderNumber);
 
     if (!targetOrder) {
       return NextResponse.json(
-        { success: false, error: "Order not found" },
+        { success: false, error: `Order #${orderNumber} not found` },
         { status: 404 }
       );
     }
@@ -198,17 +349,8 @@ export async function POST(req: NextRequest) {
         events: updatedEvents,
       };
 
-      store.updateOrder(targetOrder.orderNumber, updates);
-      const db = await connectDB();
-      if (db) {
-        try {
-          await OrderModel.findOneAndUpdate({ orderNumber: targetOrder.orderNumber }, updates);
-        } catch (dbErr) {
-          console.warn("MongoDB cancellation update notice:", dbErr);
-        }
-      }
+      const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
 
-      const updated = store.getOrder(targetOrder.orderNumber) || { ...targetOrder, ...updates };
       return NextResponse.json({
         success: true,
         message: "Cancellation request received. Pending admin review.",
@@ -233,7 +375,7 @@ export async function POST(req: NextRequest) {
       };
 
       const cancellationData: OrderCancellation = {
-        ...(targetOrder.cancellation || { requested: true }),
+        ...(targetOrder.cancellation || { requested: true, status: "requested" }),
         status: isApproved ? "approved" : "rejected",
         reviewedBy,
         reviewedAt: new Date().toISOString(),
@@ -247,17 +389,8 @@ export async function POST(req: NextRequest) {
         events: updatedEvents,
       };
 
-      store.updateOrder(targetOrder.orderNumber, updates);
-      const db = await connectDB();
-      if (db) {
-        try {
-          await OrderModel.findOneAndUpdate({ orderNumber: targetOrder.orderNumber }, updates);
-        } catch (dbErr) {
-          console.warn("MongoDB review update notice:", dbErr);
-        }
-      }
+      const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
 
-      const updated = store.getOrder(targetOrder.orderNumber) || { ...targetOrder, ...updates };
       return NextResponse.json({
         success: true,
         message: isApproved
@@ -269,12 +402,23 @@ export async function POST(req: NextRequest) {
 
     // Action 4: Update delivery status & logistics hub
     if (action === "update-delivery") {
-      const { deliveryStatus, currentHub, trackingNumber, transitMode, vehicleNo, manifestVerified, note, actor = "Admin Logistics" } = body;
+      const {
+        deliveryStatus,
+        currentHub,
+        trackingNumber,
+        transitMode,
+        vehicleNo,
+        manifestVerified,
+        note,
+        actor = "Admin Logistics",
+      } = body;
 
       const deliveryEvent: OrderEvent = {
         id: "ev-dlv-" + Math.random().toString(36).substring(2, 9),
         title: `Delivery: ${String(deliveryStatus || "").toUpperCase().replace(/_/g, " ")}`,
-        description: note || `Location: ${currentHub || targetOrder.currentHub || "Fulfillment Center"}. Tracking: ${trackingNumber || targetOrder.trackingNumber || "Active"}${transitMode ? ` · Fleet: ${transitMode.toUpperCase()}` : ""}`,
+        description:
+          note ||
+          `Location: ${currentHub || targetOrder.currentHub || "Fulfillment Center"}. Tracking: ${trackingNumber || targetOrder.trackingNumber || "Active"}${transitMode ? ` · Fleet: ${transitMode.toUpperCase()}` : ""}`,
         timestamp: new Date().toISOString(),
         type: "delivery",
         actor,
@@ -287,21 +431,13 @@ export async function POST(req: NextRequest) {
         trackingNumber: trackingNumber !== undefined ? trackingNumber : targetOrder.trackingNumber,
         transitMode: transitMode || targetOrder.transitMode,
         vehicleNo: vehicleNo || targetOrder.vehicleNo,
-        manifestVerified: manifestVerified !== undefined ? manifestVerified : targetOrder.manifestVerified,
+        manifestVerified:
+          manifestVerified !== undefined ? manifestVerified : targetOrder.manifestVerified,
         events: updatedEvents,
       };
 
-      store.updateOrder(targetOrder.orderNumber, updates);
-      const db = await connectDB();
-      if (db) {
-        try {
-          await OrderModel.findOneAndUpdate({ orderNumber: targetOrder.orderNumber }, updates);
-        } catch (dbErr) {
-          console.warn("MongoDB delivery update notice:", dbErr);
-        }
-      }
+      const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
 
-      const updated = store.getOrder(targetOrder.orderNumber) || { ...targetOrder, ...updates };
       return NextResponse.json({
         success: true,
         message: "Delivery status updated successfully.",
@@ -314,11 +450,15 @@ export async function POST(req: NextRequest) {
       const { type, transitMode, vehicleNo, hubName, hubRegion, manifestVerified } = body;
       const isArrival = type === "arrival";
       const modeUpper = String(transitMode || "van").toUpperCase();
-      const facilityLabel = hubName ? `${hubName} (${hubRegion || "Active"})` : "Main Air Logistics Hub";
+      const facilityLabel = hubName
+        ? `${hubName} (${hubRegion || "Active"})`
+        : "Main Air Logistics Hub";
 
       const transitEvent: OrderEvent = {
         id: "ev-tr-" + Math.random().toString(36).substring(2, 9),
-        title: isArrival ? `Inbound Arrival: ${hubName || "Hub"}` : `Outbound Dispatch: ${hubName || "Hub"}`,
+        title: isArrival
+          ? `Inbound Arrival: ${hubName || "Hub"}`
+          : `Outbound Dispatch: ${hubName || "Hub"}`,
         description: isArrival
           ? `Consignment arrived at ${facilityLabel} via ${modeUpper} [Plate: ${vehicleNo || "STANDARD"}]. Security: ${manifestVerified ? "Manifest Verified" : "Unverified Hold"}.`
           : `Consignment dispatched outbound from ${facilityLabel} via ${modeUpper} [Plate: ${vehicleNo || "STANDARD"}]. Live telemetry and edge routing active.`,
@@ -333,31 +473,25 @@ export async function POST(req: NextRequest) {
         currentHub: hubName || targetOrder.currentHub,
         transitMode: transitMode || targetOrder.transitMode,
         vehicleNo: vehicleNo || targetOrder.vehicleNo,
-        manifestVerified: manifestVerified !== undefined ? manifestVerified : targetOrder.manifestVerified,
+        manifestVerified:
+          manifestVerified !== undefined ? manifestVerified : targetOrder.manifestVerified,
         events: updatedEvents,
       };
 
-      store.updateOrder(targetOrder.orderNumber, updates);
-      const db = await connectDB();
-      if (db) {
-        try {
-          await OrderModel.findOneAndUpdate({ orderNumber: targetOrder.orderNumber }, updates);
-        } catch (dbErr) {
-          console.warn("MongoDB transit log notice:", dbErr);
-        }
-      }
+      const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
 
-      const updated = store.getOrder(targetOrder.orderNumber) || { ...targetOrder, ...updates };
       return NextResponse.json({
         success: true,
-        message: isArrival ? "Inbound arrival logged successfully." : "Outbound dispatch logged successfully.",
+        message: isArrival
+          ? "Inbound arrival logged successfully."
+          : "Outbound dispatch logged successfully.",
         order: updated,
       });
     }
 
     // Action 4C: Doorstep Gate Arrival & 5-Min Alive OTP Trigger
     if (action === "trigger-gate-otp") {
-      const { otp = "849201", hubName } = body;
+      const { otp = "849201" } = body;
       const now = new Date();
       const expiresAt = new Date(now.getTime() + 5 * 60 * 1000).toISOString();
 
@@ -384,17 +518,8 @@ export async function POST(req: NextRequest) {
         events: updatedEvents,
       };
 
-      store.updateOrder(targetOrder.orderNumber, updates);
-      const db = await connectDB();
-      if (db) {
-        try {
-          await OrderModel.findOneAndUpdate({ orderNumber: targetOrder.orderNumber }, updates);
-        } catch (dbErr) {
-          console.warn("MongoDB gate OTP notice:", dbErr);
-        }
-      }
+      const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
 
-      const updated = store.getOrder(targetOrder.orderNumber) || { ...targetOrder, ...updates };
       return NextResponse.json({
         success: true,
         message: "5-minute alive OTP loop active.",
@@ -406,7 +531,7 @@ export async function POST(req: NextRequest) {
 
     // Action 4D: Doorstep Gate OTP Verification & Final Release
     if (action === "verify-gate-otp") {
-      const { otp, photoProof } = body;
+      const { otp } = body;
       const currentSession = targetOrder.gateOtpSession;
       const validCodes = [currentSession?.otp, "849201", "123456"].filter(Boolean);
 
@@ -437,17 +562,8 @@ export async function POST(req: NextRequest) {
         events: updatedEvents,
       };
 
-      store.updateOrder(targetOrder.orderNumber, updates);
-      const db = await connectDB();
-      if (db) {
-        try {
-          await OrderModel.findOneAndUpdate({ orderNumber: targetOrder.orderNumber }, updates);
-        } catch (dbErr) {
-          console.warn("MongoDB delivery completion notice:", dbErr);
-        }
-      }
+      const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
 
-      const updated = store.getOrder(targetOrder.orderNumber) || { ...targetOrder, ...updates };
       return NextResponse.json({
         success: true,
         message: "Doorstep delivery verified and finalized.",
@@ -470,17 +586,8 @@ export async function POST(req: NextRequest) {
       const updatedEvents = [...(targetOrder.events || []), newEvent];
       const updates: Partial<Order> = { events: updatedEvents };
 
-      store.updateOrder(targetOrder.orderNumber, updates);
-      const db = await connectDB();
-      if (db) {
-        try {
-          await OrderModel.findOneAndUpdate({ orderNumber: targetOrder.orderNumber }, updates);
-        } catch (dbErr) {
-          console.warn("MongoDB add event notice:", dbErr);
-        }
-      }
+      const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
 
-      const updated = store.getOrder(targetOrder.orderNumber) || { ...targetOrder, ...updates };
       return NextResponse.json({
         success: true,
         message: "Event logged successfully.",

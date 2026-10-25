@@ -4,6 +4,7 @@ import { store } from "@/lib/store";
 import { connectDB } from "@/lib/db";
 import { OrderModel } from "@/lib/models";
 import { Order, OrderEvent } from "@/types";
+import { findOrder, saveOrder } from "@/app/api/orders/route";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,18 +24,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Look up target order
-    let targetOrder = store.getOrder(orderNumber) || store.getOrders().find((o) => o.orderNumber === orderNumber);
-
-    if (!targetOrder) {
-      const db = await connectDB();
-      if (db) {
-        const found = await OrderModel.findOne({ orderNumber }).lean();
-        if (found) {
-          targetOrder = found as unknown as Order;
-        }
-      }
-    }
+    // Defensive lookup across store and MongoDB
+    const targetOrder = await findOrder(orderNumber);
 
     if (!targetOrder) {
       return NextResponse.json(
@@ -102,20 +93,8 @@ export async function POST(req: NextRequest) {
       events: updatedEvents,
     };
 
-    // Update memory store
-    store.updateOrder(targetOrder.orderNumber, updates);
-
-    // Update MongoDB
-    const db = await connectDB();
-    if (db) {
-      try {
-        await OrderModel.findOneAndUpdate({ orderNumber: targetOrder.orderNumber }, updates);
-      } catch (dbErr) {
-        console.warn("MongoDB refund status update notice:", dbErr);
-      }
-    }
-
-    const updatedOrder = store.getOrder(targetOrder.orderNumber) || { ...targetOrder, ...updates };
+    // Safely update memory store and MongoDB
+    const updatedOrder = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
 
     return NextResponse.json({
       success: true,
