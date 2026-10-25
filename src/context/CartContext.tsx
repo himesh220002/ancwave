@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { CartItem, ProductColor } from "@/types";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { CartItem, ProductColor, ShippingSettings } from "@/types";
 
 export interface CustomerCheckoutDetails {
   fullName: string;
@@ -25,6 +25,13 @@ export const initialCustomerDetails: CustomerCheckoutDetails = {
   zipCode: "97209",
 };
 
+export const defaultShippingSettings: ShippingSettings = {
+  generalDeliveryPriceUsd: 0,
+  generalDeliveryPriceInr: 0,
+  expressDeliveryPriceUsd: 15,
+  expressDeliveryPriceInr: 1200,
+};
+
 interface CartContextType {
   items: CartItem[];
   isCartOpen: boolean;
@@ -38,6 +45,8 @@ interface CartContextType {
   shipping: number;
   tax: number;
   total: number;
+  shippingSettings: ShippingSettings;
+  refreshShippingSettings: () => Promise<void>;
   recentAddedFlash: boolean;
   setRecentAddedFlash: (flash: boolean) => void;
   customerDetails: CustomerCheckoutDetails;
@@ -53,6 +62,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [recentAddedFlash, setRecentAddedFlash] = useState(false);
   const [customerDetails, setCustomerDetails] = useState<CustomerCheckoutDetails>(initialCustomerDetails);
+  const [shippingSettings, setShippingSettings] = useState<ShippingSettings>(defaultShippingSettings);
+
+  const refreshShippingSettings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/shipping");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.shipping) {
+          setShippingSettings(data.shipping);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Fetch shipping settings on mount
+  useEffect(() => {
+    refreshShippingSettings();
+  }, [refreshShippingSettings]);
 
   // Sync with local storage on initial mount only
   useEffect(() => {
@@ -178,7 +207,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     (sum, item) => sum + item.price * item.quantity,
     0
   );
-  const shipping = totalItemsCount > 0 ? 12.0 : 0.0;
+  const generalPrice = Number(shippingSettings?.generalDeliveryPriceUsd) || 0;
+  const shipping = totalItemsCount > 0 ? generalPrice : 0.0;
   const tax = 0.0;
   const total = subtotal + shipping + tax;
 
@@ -197,6 +227,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         shipping,
         tax,
         total,
+        shippingSettings,
+        refreshShippingSettings,
         recentAddedFlash,
         setRecentAddedFlash,
         customerDetails,

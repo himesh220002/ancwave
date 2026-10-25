@@ -45,6 +45,7 @@ import {
   FolderPlus,
   X,
   ChevronRight,
+  ChevronDown,
   Grid,
 } from "lucide-react";
 import {
@@ -104,6 +105,8 @@ export default function AdminPage() {
   const [selectedSlug, setSelectedSlug] = useState<string>("form-01");
   const [product, setProduct] = useState<ProductData | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [orderSearchQuery, setOrderSearchQuery] = useState<string>("");
   const [reviews, setReviews] = useState<(Review & IReview)[]>([]);
 
   // Daily Passcode Gate State
@@ -288,11 +291,21 @@ export default function AdminPage() {
         }
       }
 
-      // 3. Fetch completed orders
-      const ordRes = await fetch("/api/checkout");
-      if (ordRes.ok) {
-        const ordData = await ordRes.json();
-        setOrders(ordData.orders || []);
+      // 3. Fetch completed orders from MongoDB Atlas and store
+      try {
+        const ordRes = await fetch("/api/orders?all=true");
+        if (ordRes.ok) {
+          const ordData = await ordRes.json();
+          setOrders(ordData.orders || []);
+        } else {
+          const fbRes = await fetch("/api/checkout");
+          if (fbRes.ok) {
+            const fbData = await fbRes.json();
+            setOrders(fbData.orders || []);
+          }
+        }
+      } catch (ordErr) {
+        console.warn("Failed to fetch admin orders:", ordErr);
       }
 
       // 4. Fetch reviews for selected product
@@ -3104,71 +3117,402 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Completed Transactions Table */}
-            <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-                <div className="flex items-center gap-2">
-                  <ShoppingBag className="w-5 h-5 text-zinc-500" />
-                  <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
-                    Completed Customer Transactions ({orders.length})
-                  </h3>
-                </div>
-                <button
-                  onClick={handleQuickDemoVerify}
-                  className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold px-3 py-1.5 rounded-xl transition-colors"
-                >
-                  ＋ Add Demo Verified Purchase
-                </button>
-              </div>
+            {/* Completed Transactions & Buying Totals Dashboard */}
+            {(() => {
+              const totalRevenueUsd = orders.reduce((sum, ord) => sum + (Number(ord.total) || 0), 0);
+              const totalUnitsBought = orders.reduce(
+                (sum, ord) =>
+                  sum + (ord.items || []).reduce((iSum, i) => iSum + (Number(i.quantity) || 1), 0),
+                0
+              );
+              const paidOrdersCount = orders.filter((ord) => (ord.paymentStatus || "").toLowerCase() === "paid").length;
+              const aov = orders.length > 0 ? totalRevenueUsd / orders.length : 0;
+              const totalRevenueInr = Math.round(totalRevenueUsd * exchangeRate);
 
-              {orders.length === 0 ? (
-                <div className="text-center py-8 text-zinc-400 text-xs">
-                  No orders yet. Place a test order via the checkout flow.
+              const filteredOrders = orders.filter((ord) => {
+                if (!orderSearchQuery.trim()) return true;
+                const q = orderSearchQuery.toLowerCase();
+                const matchNumber = ord.orderNumber?.toLowerCase().includes(q);
+                const matchCustomer =
+                  ord.customer?.fullName?.toLowerCase().includes(q) ||
+                  ord.customer?.email?.toLowerCase().includes(q) ||
+                  ord.customer?.contact?.toLowerCase().includes(q) ||
+                  ord.customer?.city?.toLowerCase().includes(q);
+                const matchItem = ord.items?.some(
+                  (i) =>
+                    i.name?.toLowerCase().includes(q) ||
+                    i.variantName?.toLowerCase().includes(q) ||
+                    i.componentSku?.toLowerCase().includes(q)
+                );
+                return matchNumber || matchCustomer || matchItem;
+              });
+
+              return (
+                <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                  {/* Section Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <ShoppingBag className="w-5 h-5 text-blue-600" />
+                        <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
+                          Order Buying Details & Analytics ({orders.length})
+                        </h3>
+                      </div>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Real-time order buying totals, customer records, and itemized variant sales aggregated from MongoDB Atlas.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleQuickDemoVerify}
+                        className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold px-3 py-1.5 rounded-xl transition-colors"
+                      >
+                        ＋ Add Demo Verified Purchase
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Buying Totals & Analytics Summary Cards */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                      <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
+                        TOTAL GROSS REVENUE
+                      </span>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
+                        ${totalRevenueUsd.toFixed(2)}
+                      </div>
+                      <div className="text-[11px] font-mono text-zinc-500">
+                        ≈ ₹{totalRevenueInr.toLocaleString("en-IN")} INR
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                      <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
+                        TOTAL UNITS BOUGHT
+                      </span>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-blue-600">
+                        {totalUnitsBought} <span className="text-xs font-normal text-zinc-500">items</span>
+                      </div>
+                      <div className="text-[11px] text-zinc-500">Across all catalog variants</div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                      <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
+                        CONFIRMED PAID ORDERS
+                      </span>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-600">
+                        {paidOrdersCount}{" "}
+                        <span className="text-xs font-normal text-zinc-400">/ {orders.length} total</span>
+                      </div>
+                      <div className="text-[11px] text-zinc-500">
+                        {orders.length > 0 ? `${Math.round((paidOrdersCount / orders.length) * 100)}% conversion rate` : "No orders"}
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                      <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
+                        AVG. ORDER VALUE (AOV)
+                      </span>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
+                        ${aov.toFixed(2)}
+                      </div>
+                      <div className="text-[11px] font-mono text-zinc-500">
+                        ≈ ₹{Math.round(aov * exchangeRate).toLocaleString("en-IN")} INR
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filter & Search Bar */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                    <div className="relative w-full sm:w-80">
+                      <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={orderSearchQuery}
+                        onChange={(e) => setOrderSearchQuery(e.target.value)}
+                        placeholder="Search order #, customer, email, variant..."
+                        className="w-full pl-9 pr-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="text-xs text-zinc-400 font-mono">
+                      Showing {filteredOrders.length} of {orders.length} order(s)
+                    </div>
+                  </div>
+
+                  {/* Orders Table */}
+                  {orders.length === 0 ? (
+                    <div className="text-center py-12 text-zinc-400 text-xs">
+                      No orders recorded yet. Place a test order via the checkout flow.
+                    </div>
+                  ) : filteredOrders.length === 0 ? (
+                    <div className="text-center py-8 text-zinc-400 text-xs">
+                      No orders match &quot;{orderSearchQuery}&quot;.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-zinc-100 text-zinc-400 font-mono">
+                            <th className="py-2.5 font-normal">ORDER #</th>
+                            <th className="py-2.5 font-normal">CUSTOMER</th>
+                            <th className="py-2.5 font-normal">BUYING DETAILS / ITEMS</th>
+                            <th className="py-2.5 font-normal">SHIPPING</th>
+                            <th className="py-2.5 font-normal">STATUS</th>
+                            <th className="py-2.5 font-normal">TOTAL</th>
+                            <th className="py-2.5 font-normal text-right">ACTION</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                          {filteredOrders.map((ord) => {
+                            const isExpanded = expandedOrderId === ord.id;
+                            const totalItemsInOrder = (ord.items || []).reduce(
+                              (sum, it) => sum + (Number(it.quantity) || 1),
+                              0
+                            );
+
+                            return (
+                              <React.Fragment key={ord.id}>
+                                <tr
+                                  className={`hover:bg-zinc-50/70 transition-colors ${
+                                    isExpanded ? "bg-blue-50/20" : ""
+                                  }`}
+                                >
+                                  <td className="py-3 font-mono font-bold text-zinc-900 align-top">
+                                    <div className="text-blue-600 font-bold">{ord.orderNumber}</div>
+                                    <div className="text-[10px] text-zinc-400 font-normal">
+                                      {ord.createdAt
+                                        ? new Date(ord.createdAt).toLocaleDateString("en-US", {
+                                            month: "short",
+                                            day: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })
+                                        : "Recent"}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 text-zinc-700 align-top">
+                                    <div className="font-semibold text-zinc-900">
+                                      {ord.customer?.fullName || "Guest Customer"}
+                                    </div>
+                                    <div className="text-[11px] text-zinc-500 font-mono">
+                                      {ord.customer?.email}
+                                    </div>
+                                    {ord.customer?.contact && (
+                                      <div className="text-[10px] text-zinc-400 font-mono">
+                                        {ord.customer.contact}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="py-3 text-zinc-600 align-top">
+                                    <div className="space-y-1">
+                                      {(ord.items || []).map((i, idx) => (
+                                        <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="font-medium text-zinc-900">{i.name}</span>
+                                          {i.variantName && (
+                                            <span className="px-1.5 py-0.5 rounded-md bg-zinc-100 text-zinc-700 text-[10px] font-mono">
+                                              {i.variantName}
+                                            </span>
+                                          )}
+                                          <span className="text-[10px] text-zinc-400 font-mono">
+                                            ×{i.quantity || 1}
+                                          </span>
+                                          <span className="text-[10px] font-mono text-zinc-600">
+                                            (${Number(i.price || 0).toFixed(2)})
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 font-mono text-zinc-700 align-top">
+                                    {ord.shipping === 0 ? (
+                                      <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-semibold">
+                                        FREE
+                                      </span>
+                                    ) : (
+                                      <span>${Number(ord.shipping || 0).toFixed(2)}</span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 align-top">
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                        (ord.paymentStatus || "").toLowerCase() === "paid"
+                                          ? "bg-emerald-50 text-emerald-700"
+                                          : "bg-amber-50 text-amber-700"
+                                      }`}
+                                    >
+                                      {(ord.paymentStatus || "PAID").toUpperCase()}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 font-mono font-bold text-zinc-900 align-top">
+                                    <div>${Number(ord.total || 0).toFixed(2)}</div>
+                                    <div className="text-[10px] text-zinc-400 font-normal">
+                                      ≈ ₹{Math.round(Number(ord.total || 0) * exchangeRate).toLocaleString("en-IN")}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 text-right align-top">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExpandedOrderId(isExpanded ? null : ord.id)
+                                      }
+                                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold px-2.5 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+                                    >
+                                      <span>{isExpanded ? "Hide" : "Details"}</span>
+                                      {isExpanded ? (
+                                        <ChevronDown className="w-3.5 h-3.5" />
+                                      ) : (
+                                        <ChevronRight className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                  </td>
+                                </tr>
+
+                                {/* Expanded Itemized Customer Buying Details Drawer */}
+                                {isExpanded && (
+                                  <tr className="bg-zinc-50/90 border-b border-zinc-200">
+                                    <td colSpan={7} className="p-4 sm:p-6 space-y-4">
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                                        {/* 1. Customer & Shipping Destination */}
+                                        <div className="p-4 rounded-xl bg-white border border-zinc-200 space-y-2">
+                                          <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold">
+                                            CUSTOMER & SHIPPING DESTINATION
+                                          </div>
+                                          <div className="font-semibold text-zinc-900">
+                                            {ord.customer?.fullName}
+                                          </div>
+                                          <div className="text-zinc-600 font-mono text-[11px]">
+                                            {ord.customer?.email}
+                                          </div>
+                                          {ord.customer?.contact && (
+                                            <div className="text-zinc-500 font-mono text-[11px]">
+                                              Phone: {ord.customer.contact}
+                                            </div>
+                                          )}
+                                          <div className="text-zinc-600 pt-1 text-[11px] leading-relaxed">
+                                            <div>{ord.customer?.address}</div>
+                                            <div>
+                                              {ord.customer?.city}, {ord.customer?.state}{" "}
+                                              {ord.customer?.zipCode}
+                                            </div>
+                                            <div className="font-semibold text-zinc-700">
+                                              {ord.customer?.country || "United States"}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* 2. Itemized Cart Breakdown */}
+                                        <div className="p-4 rounded-xl bg-white border border-zinc-200 space-y-2 md:col-span-2">
+                                          <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold">
+                                            PURCHASED ITEMS & VARIANT INVENTORY ALLOCATION
+                                          </div>
+                                          <div className="divide-y divide-zinc-100">
+                                            {(ord.items || []).map((it, itIdx) => (
+                                              <div
+                                                key={itIdx}
+                                                className="py-2.5 flex items-center justify-between gap-4"
+                                              >
+                                                <div className="flex items-center gap-3">
+                                                  {it.image && (
+                                                    <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-200 relative bg-zinc-100 shrink-0">
+                                                      <Image
+                                                        src={it.image}
+                                                        alt={it.name || "Product"}
+                                                        fill
+                                                        className="object-cover"
+                                                      />
+                                                    </div>
+                                                  )}
+                                                  <div>
+                                                    <div className="font-semibold text-zinc-900">
+                                                      {it.name}
+                                                    </div>
+                                                    <div className="text-[11px] text-zinc-500 flex items-center gap-2">
+                                                      <span>Variant: <strong>{it.variantName || it.variant || "Standard"}</strong></span>
+                                                      {it.componentSku && (
+                                                        <span className="font-mono text-[10px] text-zinc-400">
+                                                          SKU: {it.componentSku}
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                                <div className="text-right font-mono">
+                                                  <div className="font-bold text-zinc-900">
+                                                    ${(Number(it.price || 0) * (Number(it.quantity) || 1)).toFixed(2)}
+                                                  </div>
+                                                  <div className="text-[10px] text-zinc-400">
+                                                    {it.quantity || 1} × ${Number(it.price || 0).toFixed(2)}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+
+                                          {/* Financials & Gateway Verification */}
+                                          <div className="pt-3 border-t border-zinc-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                                            <div>
+                                              <span className="text-zinc-400">Subtotal:</span>{" "}
+                                              <strong className="font-mono text-zinc-800">
+                                                ${Number(ord.subtotal || 0).toFixed(2)}
+                                              </strong>
+                                            </div>
+                                            <div>
+                                              <span className="text-zinc-400">Shipping:</span>{" "}
+                                              <strong className="font-mono text-zinc-800">
+                                                {ord.shipping === 0 ? "Free" : `$${Number(ord.shipping || 0).toFixed(2)}`}
+                                              </strong>
+                                            </div>
+                                            <div>
+                                              <span className="text-zinc-400">Tax:</span>{" "}
+                                              <strong className="font-mono text-zinc-800">
+                                                ${Number(ord.tax || 0).toFixed(2)}
+                                              </strong>
+                                            </div>
+                                            <div>
+                                              <span className="text-zinc-400">Total Paid:</span>{" "}
+                                              <strong className="font-mono text-blue-600 font-bold">
+                                                ${Number(ord.total || 0).toFixed(2)}
+                                              </strong>
+                                            </div>
+                                          </div>
+
+                                          {/* Payment & Audit Footnote */}
+                                          <div className="pt-2 flex items-center justify-between flex-wrap gap-2 text-[10px] text-zinc-400 font-mono border-t border-zinc-100">
+                                            <span>
+                                              Gateway: <strong className="text-zinc-600">{ord.paymentMethod?.toUpperCase() || "RAZORPAY"}</strong>
+                                            </span>
+                                            {ord.razorpayPaymentId && (
+                                              <span>
+                                                Payment ID: <strong className="text-zinc-600">{ord.razorpayPaymentId}</strong>
+                                              </span>
+                                            )}
+                                            {ord.razorpayOrderId && (
+                                              <span>
+                                                Order ID: <strong className="text-zinc-600">{ord.razorpayOrderId}</strong>
+                                              </span>
+                                            )}
+                                            <span>
+                                              AWS EventBridge:{" "}
+                                              <strong className={ord.awsEventBridgeDispatched ? "text-emerald-600" : "text-amber-600"}>
+                                                {ord.awsEventBridgeDispatched ? "DISPATCHED" : "PENDING"}
+                                              </strong>
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-zinc-100 text-zinc-400 font-mono">
-                        <th className="py-2.5 font-normal">ORDER #</th>
-                        <th className="py-2.5 font-normal">CUSTOMER</th>
-                        <th className="py-2.5 font-normal">PRODUCT / SKU</th>
-                        <th className="py-2.5 font-normal">STATUS</th>
-                        <th className="py-2.5 font-normal">TOTAL</th>
-                        <th className="py-2.5 font-normal">EVENT LOG</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                      {orders.slice(0, 8).map((ord) => (
-                        <tr key={ord.id} className="hover:bg-zinc-50/50">
-                          <td className="py-3 font-mono font-bold text-zinc-900">{ord.orderNumber}</td>
-                          <td className="py-3 text-zinc-700">
-                            <div>{ord.customer.fullName}</div>
-                            <div className="text-[11px] text-zinc-400 font-mono">{ord.customer.email}</div>
-                          </td>
-                          <td className="py-3 text-zinc-600">
-                            {ord.items.map((i, idx) => (
-                              <div key={idx} className="truncate max-w-[200px]">
-                                {i.name} ({i.variantName})
-                              </div>
-                            ))}
-                          </td>
-                          <td className="py-3">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold">
-                              {ord.paymentStatus.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="py-3 font-mono font-bold text-zinc-900">${ord.total.toFixed(2)}</td>
-                          <td className="py-3 text-zinc-400 font-mono text-[10px]">
-                            {ord.awsEventBridgeDispatched ? "AWS Dispatched" : "Pending"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+              );
+            })()}
           </div>
         )}
 

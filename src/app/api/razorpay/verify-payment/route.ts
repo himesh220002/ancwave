@@ -7,6 +7,7 @@ import { Order } from "@/types";
 import { dispatchOrderPlacedEvent } from "@/lib/aws-services";
 import { revalidatePath } from "next/cache";
 import { generateRazorpayOrderEmail } from "@/lib/email-service";
+import { deductOrderStock } from "@/lib/inventory-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,9 +39,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Items array
+    const rawItems =
+      items && Array.isArray(items) && items.length > 0
+        ? items
+        : [
+            {
+              productId: "form-01",
+              name: "Form 01",
+              variant: "silver",
+              variantName: "Silver mist",
+              price: 348.0,
+              quantity: 1,
+              image: "/images/checkout-floating.jpg",
+              fit: "One size · adjustable",
+            },
+          ];
+
     // Check available stock
     const currentProduct = store.getProduct();
-    const totalQuantity = items?.reduce((sum: number, item: { quantity?: number }) => sum + (item.quantity || 1), 0) || 1;
+    const totalQuantity = rawItems.reduce(
+      (sum: number, item: { quantity?: number }) => sum + (item.quantity || 1),
+      0
+    );
 
     if (currentProduct.stock < totalQuantity) {
       return NextResponse.json(
@@ -53,12 +74,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Deduct stock in real-time
-    const { product: updatedProduct, previousStock } = store.reduceStock(totalQuantity);
+    // Deduct stock in real-time across both MongoDB Atlas and memory store
+    const stockDeductionResults = await deductOrderStock(rawItems);
+    const updatedProduct = store.getProduct();
+    const previousStock = currentProduct.stock;
 
-    const subtotal = 348.0;
-    const shipping = 12.0;
-    const tax = 0.0;
+    // Calculate dynamic subtotal, shipping, and total
+    const computedSubtotal = rawItems.reduce(
+      (sum: number, it: any) =>
+        sum + (Number(it.price) || 0) * (Number(it.quantity) || 1),
+      0
+    );
+    const subtotal = typeof body.subtotal === "number" ? body.subtotal : computedSubtotal;
+
+    const shippingFixtures = store.getShippingFixtures();
+    const shipping =
+      typeof body.shipping === "number"
+        ? body.shipping
+        : (shippingFixtures?.generalDeliveryPriceUsd ?? 0);
+
+    const tax = typeof body.tax === "number" ? body.tax : 0.0;
     const total = Number(amount) || subtotal + shipping + tax;
 
     const orderNumber = "ANC-" + Math.floor(100000 + Math.random() * 900000);
@@ -75,18 +110,7 @@ export async function POST(req: NextRequest) {
         state: "Oregon",
         zipCode: "97209",
       },
-      items: items || [
-        {
-          productId: "form-01",
-          name: "Form 01",
-          variant: "silver",
-          variantName: "Silver mist",
-          price: 348.0,
-          quantity: 1,
-          image: "/images/checkout-floating.jpg",
-          fit: "One size · adjustable",
-        },
-      ],
+      items: rawItems,
       subtotal,
       shipping,
       tax,
@@ -108,11 +132,6 @@ export async function POST(req: NextRequest) {
     if (db) {
       try {
         await OrderModel.create(order);
-        await ProductModel.findOneAndUpdate(
-          { model: "WIRELESS OVER-EAR" },
-          { stock: updatedProduct.stock },
-          { upsert: true }
-        );
       } catch (err) {
         console.warn("MongoDB order sync notice:", err);
       }

@@ -5,6 +5,7 @@ import { OrderModel, ProductModel } from "@/lib/models";
 import { Order } from "@/types";
 import { dispatchOrderPlacedEvent } from "@/lib/aws-services";
 import { revalidatePath } from "next/cache";
+import { deductOrderStock } from "@/lib/inventory-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,16 +41,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Deduct stock in real-time
-    const { product: updatedProduct, previousStock } = store.reduceStock(totalQuantity);
+    // Deduct stock in real-time across both MongoDB Atlas and memory store
+    const stockResults = await deductOrderStock(items);
+    const updatedProduct = store.getProduct();
+    const previousStock = currentProduct.stock;
 
     // Calculate totals
     const subtotal = items.reduce(
-      (sum, item) => sum + (item.price || 349) * (item.quantity || 1),
+      (sum, item) => sum + (Number(item.price) || 349) * (Number(item.quantity) || 1),
       0
     );
-    const shipping = 12.0; // Standard US shipping · $12.00 as shown in screenshot
-    const tax = 0.0; // Tax - Oregon $0.00
+    const shippingFixtures = store.getShippingFixtures();
+    const shipping =
+      typeof body.shipping === "number"
+        ? body.shipping
+        : (shippingFixtures?.generalDeliveryPriceUsd ?? 0);
+    const tax = typeof body.tax === "number" ? body.tax : 0.0;
     const total = subtotal + shipping + tax;
 
     const orderNumber = "ANC-" + Math.floor(100000 + Math.random() * 900000);
@@ -78,11 +85,6 @@ export async function POST(req: NextRequest) {
     if (db) {
       try {
         await OrderModel.create(order);
-        await ProductModel.findOneAndUpdate(
-          { model: "WIRELESS OVER-EAR" },
-          { stock: updatedProduct.stock },
-          { upsert: true }
-        );
       } catch (err) {
         console.warn("MongoDB order sync notice:", err);
       }
@@ -126,6 +128,48 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  const orders = store.getOrders();
+  let orders: Order[] = [];
+
+  // 1. Fetch from MongoDB Atlas
+  try {
+    const db = await connectDB();
+    if (db) {
+      const mongoOrders = await OrderModel.find({}).sort({ createdAt: -1 }).lean();
+      if (mongoOrders && mongoOrders.length > 0) {
+        orders = mongoOrders.map((o: any) => ({
+          id: o._id?.toString() || o.id,
+          orderNumber: o.orderNumber,
+          userId: o.userId,
+          customer: o.customer,
+          items: o.items,
+          subtotal: o.subtotal,
+          shipping: o.shipping,
+          tax: o.tax,
+          total: o.total,
+          paymentMethod: o.paymentMethod || "razorpay",
+          paymentStatus: o.paymentStatus || "paid",
+          razorpayPaymentId: o.razorpayPaymentId,
+          razorpayOrderId: o.razorpayOrderId,
+          createdAt: o.createdAt ? new Date(o.createdAt).toISOString() : new Date().toISOString(),
+          awsEventBridgeDispatched: o.awsEventBridgeDispatched ?? true,
+          cacheRevalidated: o.cacheRevalidated ?? true,
+        }));
+      }
+    }
+  } catch (err) {
+    console.warn("MongoDB orders fetch in /api/checkout notice:", err);
+  }
+
+  // 2. Fallback/merge with memory store orders
+  const storeOrders = store.getOrders();
+  const existingOrderNumbers = new Set(orders.map((o) => o.orderNumber?.toUpperCase()));
+
+  for (const so of storeOrders) {
+    if (so.orderNumber && !existingOrderNumbers.has(so.orderNumber.toUpperCase())) {
+      orders.push(so);
+      existingOrderNumbers.add(so.orderNumber.toUpperCase());
+    }
+  }
+
   return NextResponse.json({ success: true, count: orders.length, orders });
 }

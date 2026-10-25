@@ -183,7 +183,7 @@ export function CartDrawer() {
                     At your door in 3–5 business days.
                   </p>
                   <p className="text-zinc-500 text-[11px]">
-                    Standard US shipping · $12.00
+                    Standard US shipping · {shipping === 0 ? "Free" : `$${shipping.toFixed(2)}`}
                   </p>
                 </div>
               </div>
@@ -212,7 +212,9 @@ export function CartDrawer() {
                 </div>
                 <div className="flex justify-between">
                   <span>Standard shipping</span>
-                  <span className="text-[#111111] font-medium">${shipping.toFixed(2)}</span>
+                  <span className="text-[#111111] font-medium">
+                    {shipping === 0 ? "Free" : `$${shipping.toFixed(2)}`}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Tax - Oregon</span>
@@ -224,13 +226,13 @@ export function CartDrawer() {
                 </div>
               </div>
 
-              {/* Action Button: Proceed to checkout · $349.00 ↗ */}
+              {/* Action Button: Proceed to checkout */}
               <Link
                 href="/checkout"
                 onClick={() => setIsCartOpen(false)}
                 className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-medium text-xs sm:text-sm transition-all shadow-xs"
               >
-                <span>Proceed to checkout · ${subtotal.toFixed(2)}</span>
+                <span>Proceed to checkout · ${total.toFixed(2)}</span>
                 <ArrowUpRight className="w-4 h-4 stroke-[2.2]" />
               </Link>
 
