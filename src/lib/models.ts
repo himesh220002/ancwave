@@ -36,6 +36,7 @@ const VariantSchema = new Schema(
     color: { type: String, required: true },
     specOverride: { type: String, default: "" },
     price: { type: Number, default: 0 },
+    priceInr: { type: Number },
     discount: { type: Number, default: 0 },
     stock: { type: Number, required: true, default: 0 },
     images: { type: [String], default: [] },
@@ -64,6 +65,7 @@ const ProductSchema = new Schema(
     categorySlug: { type: String, default: "headphones" },
     tagline: { type: String, default: "Less noise. More you." },
     price: { type: Number, default: 349 },
+    priceInr: { type: Number },
     originalPrice: { type: Number, default: 399 },
     activeDiscount: { type: Number, default: 0 },
     stock: { type: Number, required: true, default: 4 },
@@ -234,3 +236,27 @@ export const UserModel =
 
 export const AWSEventLogModel =
   mongoose.models.AWSEventLog || mongoose.model<IAWSEventLogDoc>("AWSEventLog", AWSEventLogSchema);
+
+export interface IShippingSettingsDoc extends Document {
+  key: string;
+  generalDeliveryPriceUsd: number;
+  generalDeliveryPriceInr: number;
+  expressDeliveryPriceUsd: number;
+  expressDeliveryPriceInr: number;
+}
+
+const ShippingSettingsSchema = new Schema(
+  {
+    key: { type: String, default: "global_shipping_fixtures", unique: true },
+    generalDeliveryPriceUsd: { type: Number, default: 0 },
+    generalDeliveryPriceInr: { type: Number, default: 0 },
+    expressDeliveryPriceUsd: { type: Number, default: 15 },
+    expressDeliveryPriceInr: { type: Number, default: 1200 },
+  },
+  { timestamps: true }
+);
+
+export const ShippingSettingsModel =
+  mongoose.models.ShippingSettings ||
+  mongoose.model<IShippingSettingsDoc>("ShippingSettings", ShippingSettingsSchema);
+

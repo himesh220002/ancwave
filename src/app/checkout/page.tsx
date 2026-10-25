@@ -28,7 +28,7 @@ import {
 import confetti from "canvas-confetti";
 import { useCart, CustomerCheckoutDetails } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { Order } from "@/types";
+import { Order, ShippingSettings } from "@/types";
 import { toast } from "@/components/Toaster";
 import { downloadOrderInvoicePdf } from "@/lib/invoice-generator";
 
@@ -69,8 +69,26 @@ export default function CheckoutPage() {
   const [selectedBank, setSelectedBank] = useState<string>("HDFC Bank");
   const [upiIdInput, setUpiIdInput] = useState<string>("alex@okaxis");
   const [createdOrderId, setCreatedOrderId] = useState<string>("order_demo");
+  const [checkoutCurrency, setCheckoutCurrency] = useState<"INR" | "USD">("INR");
+  const [shippingSettings, setShippingSettings] = useState<ShippingSettings>({
+    generalDeliveryPriceUsd: 0,
+    generalDeliveryPriceInr: 0,
+    expressDeliveryPriceUsd: 15,
+    expressDeliveryPriceInr: 1200,
+  });
 
-  const isIndia = formData.country?.toLowerCase() === "india";
+  useEffect(() => {
+    fetch("/api/shipping")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.shipping) {
+          setShippingSettings(data.shipping);
+        }
+      })
+      .catch((err) => console.error("Could not fetch shipping settings:", err));
+  }, []);
+
+  const isIndia = formData.country?.toLowerCase() === "india" || checkoutCurrency === "INR";
 
   // Dismiss checkout user menu on outside click
   useEffect(() => {
@@ -147,16 +165,37 @@ export default function CheckoutPage() {
     };
     setFormData(updated);
     setCustomerDetails(updated);
+    if (isNowIndia) {
+      setCheckoutCurrency("INR");
+    }
   };
 
-  const effectiveShipping = shippingMethod === "express" ? shipping + 12.0 : shipping;
-  const finalTotal = subtotal + effectiveShipping + tax;
+  const activeShippingUsd = shippingMethod === "express"
+    ? shippingSettings.expressDeliveryPriceUsd
+    : shippingSettings.generalDeliveryPriceUsd;
 
-  const inrTotal = Math.round(finalTotal * 83);
+  const activeShippingInr = shippingMethod === "express"
+    ? shippingSettings.expressDeliveryPriceInr
+    : shippingSettings.generalDeliveryPriceInr;
+
+  const finalTotal = subtotal + activeShippingUsd + tax;
+
+  const inrSubtotal = items.reduce((sum, item) => {
+    const itemInr = typeof item.priceInr === "number" && item.priceInr > 0
+      ? item.priceInr
+      : Math.round(item.price * 83);
+    return sum + itemInr * item.quantity;
+  }, 0);
+  const inrShipping = activeShippingInr;
+  const inrTax = Math.round(tax * 83);
+  const inrTotal = Math.max(1, inrSubtotal + inrShipping + inrTax);
+
   const formattedTotal = isIndia ? `₹${inrTotal.toLocaleString("en-IN")}` : `$${finalTotal.toFixed(2)}`;
-  const formattedSubtotal = isIndia ? `₹${Math.round(subtotal * 83).toLocaleString("en-IN")}` : `$${subtotal.toFixed(2)}`;
-  const formattedShipping = isIndia ? `₹${Math.round(effectiveShipping * 83).toLocaleString("en-IN")}` : `$${effectiveShipping.toFixed(2)}`;
-  const formattedTax = isIndia ? `₹${Math.round(tax * 83).toLocaleString("en-IN")}` : `$${tax.toFixed(2)}`;
+  const formattedSubtotal = isIndia ? `₹${inrSubtotal.toLocaleString("en-IN")}` : `$${subtotal.toFixed(2)}`;
+  const formattedShipping = isIndia
+    ? (activeShippingInr === 0 ? "Free" : `₹${activeShippingInr.toLocaleString("en-IN")}`)
+    : (activeShippingUsd === 0 ? "Free" : `$${activeShippingUsd.toFixed(2)}`);
+  const formattedTax = isIndia ? `₹${inrTax.toLocaleString("en-IN")}` : `$${tax.toFixed(2)}`;
 
   // Amount & Currency passed to Razorpay
   const razorpayCurrency = isIndia ? "INR" : "USD";
@@ -776,7 +815,11 @@ export default function CheckoutPage() {
                     >
                       <div className="flex flex-col xs:flex-row xs:items-center justify-between text-xs font-bold text-zinc-900 gap-1">
                         <span>Standard Tracked Courier</span>
-                        <span className="text-blue-600">{isIndia ? "₹996" : "$12.00"}</span>
+                        <span className="text-blue-600">
+                          {isIndia
+                            ? (shippingSettings.generalDeliveryPriceInr === 0 ? "Free" : `₹${shippingSettings.generalDeliveryPriceInr.toLocaleString("en-IN")}`)
+                            : (shippingSettings.generalDeliveryPriceUsd === 0 ? "Free" : `$${shippingSettings.generalDeliveryPriceUsd.toFixed(2)}`)}
+                        </span>
                       </div>
                       <p className="text-[11px] text-zinc-500 mt-0.5">
                         3–5 business days insured delivery.
@@ -794,7 +837,11 @@ export default function CheckoutPage() {
                     >
                       <div className="flex flex-col xs:flex-row xs:items-center justify-between text-xs font-bold text-zinc-900 gap-1">
                         <span>Priority Express Dispatch</span>
-                        <span className="text-blue-600">{isIndia ? "₹1,992" : "$24.00"}</span>
+                        <span className="text-blue-600">
+                          {isIndia
+                            ? (shippingSettings.expressDeliveryPriceInr === 0 ? "Free" : `₹${shippingSettings.expressDeliveryPriceInr.toLocaleString("en-IN")}`)
+                            : (shippingSettings.expressDeliveryPriceUsd === 0 ? "Free" : `$${shippingSettings.expressDeliveryPriceUsd.toFixed(2)}`)}
+                        </span>
                       </div>
                       <p className="text-[11px] text-zinc-500 mt-0.5">
                         1–2 business days expedited air dispatch.
@@ -830,10 +877,38 @@ export default function CheckoutPage() {
             <div className="lg:col-span-5">
               <div className="sticky top-24 rounded-2xl bg-white p-5 sm:p-7 border border-[#EAEAE5] shadow-xs space-y-6">
                 <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-                  <h2 className="text-base font-bold text-zinc-900">Order Summary</h2>
-                  <span className="text-xs text-zinc-400">
-                    {items.length} {items.length === 1 ? "item" : "items"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-zinc-900">Order Summary</h2>
+                    <span className="text-xs text-zinc-400 font-mono">
+                      ({items.length} {items.length === 1 ? "item" : "items"})
+                    </span>
+                  </div>
+                  <div className="flex items-center bg-zinc-100 p-0.5 rounded-lg border border-zinc-200 text-xs font-mono">
+                    <button
+                      type="button"
+                      onClick={() => setCheckoutCurrency("INR")}
+                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                        checkoutCurrency === "INR"
+                          ? "bg-white text-zinc-950 shadow-2xs"
+                          : "text-zinc-500 hover:text-zinc-800"
+                      }`}
+                      title="Display price in Indian Rupees (₹)"
+                    >
+                      ₹ INR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCheckoutCurrency("USD")}
+                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                        checkoutCurrency === "USD"
+                          ? "bg-white text-zinc-950 shadow-2xs"
+                          : "text-zinc-500 hover:text-zinc-800"
+                      }`}
+                      title="Display price in US Dollars ($)"
+                    >
+                      $ USD
+                    </button>
+                  </div>
                 </div>
 
                 {/* Items List */}
@@ -859,7 +934,7 @@ export default function CheckoutPage() {
                             </h4>
                             <span className="font-semibold text-xs text-zinc-900 shrink-0">
                               {isIndia
-                                ? `₹${Math.round(item.price * item.quantity * 83).toLocaleString("en-IN")}`
+                                ? `₹${((item.priceInr ? item.priceInr : Math.round(item.price * 83)) * item.quantity).toLocaleString("en-IN")}`
                                 : `$${(item.price * item.quantity).toFixed(2)}`}
                             </span>
                           </div>

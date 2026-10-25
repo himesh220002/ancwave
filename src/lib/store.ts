@@ -8,6 +8,7 @@ import {
   IReview,
   IVariantGroup,
   IVariantColor,
+  ShippingSettings,
   childVariantsToVariantGroups,
   variantGroupsToChildVariants,
 } from "@/types";
@@ -1088,6 +1089,12 @@ class AncWaveStore {
   private eventLogs: AWSEventLog[] = [];
   private reviews: (Review & IReview)[] = [];
   private users: Map<string, InStoreUser> = new Map();
+  private shippingFixtures: ShippingSettings = {
+    generalDeliveryPriceUsd: 0,
+    generalDeliveryPriceInr: 0,
+    expressDeliveryPriceUsd: 15,
+    expressDeliveryPriceInr: 1200,
+  };
 
   constructor() {
     sampleCatalog.forEach((p) => {
@@ -1236,11 +1243,26 @@ class AncWaveStore {
     });
   }
 
-  updateStock(newStock: number, activeDiscount?: number, slug = "form-01"): ProductData {
+  updateStock(
+    newStock: number,
+    activeDiscount?: number,
+    slug = "form-01",
+    newPrice?: number,
+    newBasePrice?: number
+  ): ProductData {
     const p = this.products.get(slug) || { ...initialProductData };
     p.stock = Math.max(0, newStock);
     if (activeDiscount !== undefined) {
       p.activeDiscount = activeDiscount;
+    }
+    if (typeof newPrice === "number") {
+      p.price = newPrice;
+      p.basePrice = newPrice;
+      p.priceInr = Math.round(newPrice * 83);
+    } else if (typeof newBasePrice === "number") {
+      p.basePrice = newBasePrice;
+      p.price = newBasePrice;
+      p.priceInr = Math.round(newBasePrice * 83);
     }
     p.lastRevalidatedAt = new Date().toISOString();
     this.products.set(slug, p);
@@ -1271,9 +1293,16 @@ class AncWaveStore {
     const targetSlug = updated.slug || (updated.productId ? this.getProductById(updated.productId)?.slug : "form-01") || "form-01";
     const existing = this.products.get(targetSlug) || { ...initialProductData };
 
+    const effBasePrice = typeof updated.basePrice === "number" ? updated.basePrice : (typeof updated.price === "number" ? updated.price : existing.basePrice || existing.price);
+    const effPrice = typeof updated.price === "number" ? updated.price : effBasePrice;
+    const effPriceInr = typeof updated.priceInr === "number" ? updated.priceInr : (typeof effPrice === "number" ? Math.round(effPrice * 83) : existing.priceInr);
+
     const merged: ProductData = {
       ...existing,
       ...updated,
+      basePrice: effBasePrice,
+      price: effPrice,
+      priceInr: effPriceInr,
       lastRevalidatedAt: new Date().toISOString(),
     };
 
@@ -1303,6 +1332,9 @@ class AncWaveStore {
           image: primaryImage,
           images: cv.images && cv.images.length > 0 ? cv.images : [primaryImage],
           tag: String(idx + 1).padStart(2, "0"),
+          price: cv.price,
+          priceInr: cv.priceInr,
+          stock: cv.stock,
         };
       });
     }
@@ -1694,6 +1726,18 @@ class AncWaveStore {
       return { ...target };
     }
     return undefined;
+  }
+
+  getShippingFixtures(): ShippingSettings {
+    return { ...this.shippingFixtures };
+  }
+
+  updateShippingFixtures(fixtures: Partial<ShippingSettings>): ShippingSettings {
+    this.shippingFixtures = {
+      ...this.shippingFixtures,
+      ...fixtures,
+    };
+    return { ...this.shippingFixtures };
   }
 
   resetStore(): void {

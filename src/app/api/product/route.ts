@@ -52,6 +52,9 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const {
       stock,
+      price,
+      basePrice,
+      priceInr,
       activeDiscount,
       isFlashSale,
       slug,
@@ -67,7 +70,6 @@ export async function PATCH(req: NextRequest) {
       name,
       description,
       type,
-      basePrice,
       baseDiscount,
       globalSpecs,
     } = body;
@@ -93,13 +95,19 @@ export async function PATCH(req: NextRequest) {
     }
     // 5. Full hierarchical variantGroups list or metadata
     else if (variantGroups && Array.isArray(variantGroups)) {
+      const effBasePrice = typeof basePrice === "number" ? basePrice : (typeof price === "number" ? price : updatedProduct.basePrice);
+      const effPrice = typeof price === "number" ? price : effBasePrice;
+      const effPriceInr = typeof priceInr === "number" ? priceInr : (typeof effPrice === "number" ? Math.round(effPrice * 83) : updatedProduct.priceInr);
+
       updatedProduct = store.updateProductWithVariants({
         slug: targetSlug,
         productId: productId || updatedProduct.productId || "ANC-FORM-01",
         name: name || updatedProduct.name,
         description: description || updatedProduct.description,
         type: type || updatedProduct.type,
-        basePrice: typeof basePrice === "number" ? basePrice : updatedProduct.basePrice,
+        basePrice: effBasePrice,
+        price: effPrice,
+        priceInr: effPriceInr,
         baseDiscount: typeof baseDiscount === "number" ? baseDiscount : updatedProduct.baseDiscount,
         globalSpecs: globalSpecs || updatedProduct.globalSpecs,
         variantGroups: variantGroups as IVariantGroup[],
@@ -107,21 +115,34 @@ export async function PATCH(req: NextRequest) {
     }
     // 6. Full child variants list or metadata
     else if (childVariants && Array.isArray(childVariants)) {
+      const effBasePrice = typeof basePrice === "number" ? basePrice : (typeof price === "number" ? price : updatedProduct.basePrice);
+      const effPrice = typeof price === "number" ? price : effBasePrice;
+      const effPriceInr = typeof priceInr === "number" ? priceInr : (typeof effPrice === "number" ? Math.round(effPrice * 83) : updatedProduct.priceInr);
+
       updatedProduct = store.updateProductWithVariants({
         slug: targetSlug,
         productId: productId || updatedProduct.productId || "ANC-FORM-01",
         name: name || updatedProduct.name,
         description: description || updatedProduct.description,
         type: type || updatedProduct.type,
-        basePrice: typeof basePrice === "number" ? basePrice : updatedProduct.basePrice,
+        basePrice: effBasePrice,
+        price: effPrice,
+        priceInr: effPriceInr,
         baseDiscount: typeof baseDiscount === "number" ? baseDiscount : updatedProduct.baseDiscount,
         globalSpecs: globalSpecs || updatedProduct.globalSpecs,
         childVariants: childVariants as IVariant[],
       });
     }
-    // 7. Simple master stock adjustment
-    else if (typeof stock === "number") {
-      updatedProduct = store.updateStock(stock, activeDiscount, targetSlug);
+    // 7. Simple master stock / price adjustment
+    else if (typeof stock === "number" || typeof price === "number" || typeof basePrice === "number") {
+      const newPrice = typeof price === "number" ? price : (typeof basePrice === "number" ? basePrice : undefined);
+      updatedProduct = store.updateStock(
+        typeof stock === "number" ? stock : updatedProduct.stock,
+        activeDiscount,
+        targetSlug,
+        newPrice,
+        newPrice
+      );
     }
 
     if (typeof isFlashSale === "boolean") {
@@ -137,6 +158,9 @@ export async function PATCH(req: NextRequest) {
           {
             $set: {
               ...updatedProduct,
+              price: updatedProduct.price,
+              basePrice: updatedProduct.basePrice || updatedProduct.price,
+              priceInr: updatedProduct.priceInr,
               variants: updatedProduct.childVariants || [],
             },
           },
@@ -153,6 +177,8 @@ export async function PATCH(req: NextRequest) {
       revalidatePath("/products");
       revalidatePath(`/products/${targetSlug}`);
       revalidatePath("/api/product");
+      revalidatePath("/checkout");
+      revalidatePath("/orders");
     } catch {
       // ignore
     }

@@ -8,6 +8,8 @@ export interface ColorVariant {
   image: string;
   images?: string[]; // Multiple high-res images for this variant
   tag: string;
+  price?: number;
+  priceInr?: number;
 }
 
 export type ProductVariant = ColorVariant;
@@ -83,6 +85,7 @@ export interface IVariantColor {
   color: string;
   hex?: string;
   price?: number;
+  priceInr?: number;
   discount?: number;
   stock: number;
   images: string[];
@@ -94,6 +97,7 @@ export interface IVariantGroup {
   specOverride?: string;
   variantSpecs?: Record<string, string>; // Variant-specific spec overrides e.g. { "Display Size": "6.0 inch", "Battery": "5500mAh" }
   price?: number;
+  priceInr?: number;
   discount?: number;
   colors: IVariantColor[];
 }
@@ -104,6 +108,7 @@ export interface IVariant {
   specOverride: string;      // Specific variance details (e.g., "A1 (Large Display Edition)")
   variantSpecs?: Record<string, string>; // Specific specs overrides for this variant
   price: number;             // Override price if different from parent
+  priceInr?: number;         // Override price in INR for direct payment testing
   discount: number;          // Specific variant discount percentage
   stock: number;             // Real-time inventory count
   images: string[];          // S3 URLs / CloudFront Paths specific to this variant
@@ -113,12 +118,15 @@ export function variantGroupsToChildVariants(groups: IVariantGroup[], defaultPri
   const result: IVariant[] = [];
   (groups || []).forEach((g) => {
     (g.colors || []).forEach((c) => {
+      const effPrice = c.price ?? g.price ?? defaultPrice;
+      const effPriceInr = c.priceInr ?? g.priceInr ?? (typeof effPrice === "number" ? Math.round(effPrice * 83) : undefined);
       result.push({
         sku: c.sku,
         color: c.color,
         specOverride: g.name || g.specOverride || "Standard Edition",
         variantSpecs: g.variantSpecs,
-        price: c.price ?? g.price ?? defaultPrice,
+        price: effPrice,
+        priceInr: effPriceInr,
         discount: c.discount ?? g.discount ?? 0,
         stock: c.stock ?? 0,
         images: c.images && c.images.length > 0 ? c.images : ["/images/hero-silver.jpg"],
@@ -140,6 +148,7 @@ export function childVariantsToVariantGroups(childVariants: IVariant[], basePric
         specOverride: groupName,
         variantSpecs: cv.variantSpecs,
         price: cv.price ?? basePrice,
+        priceInr: cv.priceInr,
         discount: cv.discount ?? 0,
         colors: [],
       });
@@ -161,6 +170,7 @@ export function childVariantsToVariantGroups(childVariants: IVariant[], basePric
       color: cv.color,
       hex,
       price: cv.price,
+      priceInr: cv.priceInr,
       discount: cv.discount,
       stock: cv.stock,
       images: cv.images,
@@ -362,6 +372,7 @@ export interface ProductData {
   description: string;
   price: number;
   originalPrice: number;
+  priceInr?: number;
   basePrice?: number;
   baseDiscount?: number;
   type?: string;
@@ -439,6 +450,7 @@ export interface CartItem {
   component?: string;
   componentSku?: string;
   price: number;
+  priceInr?: number;
   quantity: number;
   image: string;
   fit: string;
@@ -497,3 +509,11 @@ export interface AWSEventLog {
     status: "SUCCESS" | "FAILED";
   };
 }
+
+export interface ShippingSettings {
+  generalDeliveryPriceUsd: number;
+  generalDeliveryPriceInr: number;
+  expressDeliveryPriceUsd: number;
+  expressDeliveryPriceInr: number;
+}
+

@@ -151,7 +151,10 @@ export function ProductDetailView({
   // Active pricing based on child variant / component selection
   const activePrice = currentTwsOption
     ? currentTwsOption.price
-    : (currentChildVariant?.price || product.price);
+    : (currentChildVariant?.price ?? product.price);
+  const activePriceInr = currentTwsOption
+    ? Math.round(currentTwsOption.price * 83)
+    : (currentChildVariant?.priceInr ?? (currentChildVariant?.price ? Math.round(currentChildVariant.price * 83) : (product.priceInr ?? Math.round(product.price * 83))));
   const activeOriginalPrice = currentTwsOption
     ? currentTwsOption.originalPrice
     : product.originalPrice;
@@ -270,6 +273,7 @@ export function ProductDetailView({
       component: componentLabel,
       componentSku: activeSku,
       price: activePrice,
+      priceInr: activePriceInr,
       image: coverImage,
       fit: product.categorySlug === "headphones" ? "Adjustable fit" : "Universal ergonomic fit",
     });
@@ -688,7 +692,7 @@ export function ProductDetailView({
                     </span>
                   </div>
                   <span className="text-[11px] text-zinc-400 font-mono">
-                    Direct Razorpay checkout · approx. ₹{Math.round(activePrice * 83).toLocaleString("en-IN")}
+                    Direct Razorpay checkout · ₹{activePriceInr.toLocaleString("en-IN")} (≈ ${activePrice.toFixed(2)})
                   </span>
                 </div>
 

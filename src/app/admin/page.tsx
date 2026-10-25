@@ -41,6 +41,7 @@ import {
   User as UserIcon,
   Upload,
   PackagePlus,
+  Truck,
   FolderPlus,
   X,
   ChevronRight,
@@ -141,10 +142,21 @@ export default function AdminPage() {
   const [masterType, setMasterType] = useState<string>("Over-Ear Headphones");
   const [masterBasePrice, setMasterBasePrice] = useState<number>(349);
   const [masterBaseDiscount, setMasterBaseDiscount] = useState<number>(0);
+  const [adminCurrencyMode, setAdminCurrencyMode] = useState<"USD" | "INR">("USD");
+  const [exchangeRate, setExchangeRate] = useState<number>(83.0);
+  const [autoCascadePrice, setAutoCascadePrice] = useState<boolean>(true);
+  const [quickPriceInput, setQuickPriceInput] = useState<number>(349);
   const [globalSpecsList, setGlobalSpecsList] = useState<{ key: string; value: string }[]>([]);
   const [childVariants, setChildVariants] = useState<IVariant[]>([]);
   const [variantGroups, setVariantGroups] = useState<IVariantGroup[]>([]);
   const [isSavingVariants, setIsSavingVariants] = useState<boolean>(false);
+
+  // Global Shipping Method Pricing Fixtures
+  const [generalDeliveryPriceUsd, setGeneralDeliveryPriceUsd] = useState<number>(0);
+  const [generalDeliveryPriceInr, setGeneralDeliveryPriceInr] = useState<number>(0);
+  const [expressDeliveryPriceUsd, setExpressDeliveryPriceUsd] = useState<number>(15);
+  const [expressDeliveryPriceInr, setExpressDeliveryPriceInr] = useState<number>(1200);
+  const [isSavingShipping, setIsSavingShipping] = useState<boolean>(false);
 
   // Dedicated Variant Restock Modal State
   const [isRestockModalOpen, setIsRestockModalOpen] = useState<boolean>(false);
@@ -221,7 +233,9 @@ export default function AdminPage() {
         setMasterName(p.name);
         setMasterDescription(p.description);
         setMasterType(p.type || "Over-Ear Headphones");
-        setMasterBasePrice(p.basePrice || p.price);
+        const effProductPrice = p.basePrice || p.price;
+        setMasterBasePrice(effProductPrice);
+        setQuickPriceInput(effProductPrice);
         setMasterBaseDiscount(p.baseDiscount || 0);
 
         if (p.globalSpecs) {
@@ -241,11 +255,11 @@ export default function AdminPage() {
           setChildVariants(
             p.childVariants && p.childVariants.length > 0
               ? p.childVariants
-              : variantGroupsToChildVariants(p.variantGroups, p.basePrice || p.price)
+              : variantGroupsToChildVariants(p.variantGroups, effProductPrice)
           );
         } else if (p.childVariants && p.childVariants.length > 0) {
           setChildVariants(p.childVariants);
-          setVariantGroups(childVariantsToVariantGroups(p.childVariants, p.basePrice || p.price));
+          setVariantGroups(childVariantsToVariantGroups(p.childVariants, effProductPrice));
         } else {
           // Initialize fallback variant groups from color variants
           const fallbackGroups: IVariantGroup[] = [
@@ -253,14 +267,16 @@ export default function AdminPage() {
               id: "A1",
               name: "A1 (Standard Cut)",
               specOverride: "A1 (Standard Cut)",
-              price: p.price,
+              price: effProductPrice,
+              priceInr: p.priceInr || Math.round(effProductPrice * exchangeRate),
               discount: 0,
               colors: (p.variants || []).map((v, i) => ({
                 id: `A1-VAR-${i + 1}`,
                 sku: `${p.productId || "ANC"}-A1-${v.name.toUpperCase().replace(/\s+/g, "")}`,
                 color: v.name,
                 hex: v.hex || "#22252A",
-                price: p.price,
+                price: v.price ?? effProductPrice,
+                priceInr: v.priceInr ?? Math.round((v.price ?? effProductPrice) * exchangeRate),
                 discount: 0,
                 stock: Math.max(1, Math.floor(p.stock / Math.max(1, p.variants.length))),
                 images: [v.image],
@@ -268,7 +284,7 @@ export default function AdminPage() {
             },
           ];
           setVariantGroups(fallbackGroups);
-          setChildVariants(variantGroupsToChildVariants(fallbackGroups, p.price));
+          setChildVariants(variantGroupsToChildVariants(fallbackGroups, effProductPrice));
         }
       }
 
@@ -285,6 +301,18 @@ export default function AdminPage() {
         const revData = await revRes.json();
         setReviews(revData.reviews || []);
       }
+
+      // 5. Fetch global shipping method pricing fixtures
+      const shipRes = await fetch("/api/shipping");
+      if (shipRes.ok) {
+        const shipData = await shipRes.json();
+        if (shipData.success && shipData.shipping) {
+          setGeneralDeliveryPriceUsd(shipData.shipping.generalDeliveryPriceUsd ?? 0);
+          setGeneralDeliveryPriceInr(shipData.shipping.generalDeliveryPriceInr ?? 0);
+          setExpressDeliveryPriceUsd(shipData.shipping.expressDeliveryPriceUsd ?? 15);
+          setExpressDeliveryPriceInr(shipData.shipping.expressDeliveryPriceInr ?? 1200);
+        }
+      }
     } catch (err) {
       console.error("Admin data fetch error:", err);
     }
@@ -299,24 +327,52 @@ export default function AdminPage() {
     e.preventDefault();
     setIsUpdating(true);
     try {
+      const newPriceNum = Number(quickPriceInput);
+      const newPriceInr = Math.round(newPriceNum * exchangeRate);
+
+      // If auto-cascading is enabled, cascade quick price to variant groups
+      let payloadVariants = variantGroups;
+      if (autoCascadePrice && variantGroups.length > 0) {
+        payloadVariants = variantGroups.map((g) => ({
+          ...g,
+          price: newPriceNum,
+          priceInr: newPriceInr,
+          colors: g.colors.map((c) => ({
+            ...c,
+            price: newPriceNum,
+            priceInr: newPriceInr,
+          })),
+        }));
+        setVariantGroups(payloadVariants);
+      }
+
       const res = await fetch("/api/product", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           slug: selectedSlug,
           stock: Number(stockInput),
+          price: newPriceNum,
+          basePrice: newPriceNum,
+          priceInr: newPriceInr,
           activeDiscount: Number(discountInput),
           isFlashSale,
+          variantGroups: payloadVariants,
+          childVariants: variantGroupsToChildVariants(payloadVariants, newPriceNum),
         }),
       });
 
       const data = await res.json();
       if (data.success) {
         setProduct(data.product);
+        setMasterBasePrice(newPriceNum);
+        if (data.product.childVariants) {
+          setChildVariants(data.product.childVariants);
+        }
         toast({
           type: "success",
-          title: "Real-Time Inventory Synced",
-          description: `Stock adjusted to ${data.product.stock} units. ISR cache wiped via REVALIDATE_SECRET.`,
+          title: "Pricing & Inventory Synced",
+          description: `Price set to $${newPriceNum.toFixed(2)} (₹${newPriceInr.toLocaleString("en-IN")}) across ${data.product.stock} units. Edge cache purged.`,
         });
       }
     } catch {
@@ -482,12 +538,166 @@ export default function AdminPage() {
     setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
   };
 
-  const handleUpdateArchitecturePrice = (groupId: string, price: number) => {
-    const updated = variantGroups.map((g) =>
-      g.id === groupId ? { ...g, price: Math.max(0, price) } : g
-    );
+  const handleCascadePriceToAllVariants = (priceUsd: number, priceInr?: number) => {
+    const inrVal = priceInr ?? Math.round(priceUsd * exchangeRate);
+    const updated = variantGroups.map((g) => ({
+      ...g,
+      price: priceUsd,
+      priceInr: inrVal,
+      colors: g.colors.map((c) => ({
+        ...c,
+        price: priceUsd,
+        priceInr: inrVal,
+      })),
+    }));
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, priceUsd));
+    toast({
+      type: "success",
+      title: "Price Cascaded to All Variants",
+      description: `All ${updated.length} architectures & colorways updated to $${priceUsd.toFixed(2)} (₹${inrVal.toLocaleString("en-IN")}). Click Save to persist live.`,
+    });
+  };
+
+  const handleBasePriceChangeUSD = (newUsd: number) => {
+    setMasterBasePrice(newUsd);
+    setQuickPriceInput(newUsd);
+    if (autoCascadePrice) {
+      const inrVal = Math.round(newUsd * exchangeRate);
+      const updated = variantGroups.map((g) => ({
+        ...g,
+        price: newUsd,
+        priceInr: inrVal,
+        colors: g.colors.map((c) => ({
+          ...c,
+          price: newUsd,
+          priceInr: inrVal,
+        })),
+      }));
+      setVariantGroups(updated);
+      setChildVariants(variantGroupsToChildVariants(updated, newUsd));
+    } else {
+      setChildVariants(variantGroupsToChildVariants(variantGroups, newUsd));
+    }
+  };
+
+  const handleBasePriceChangeINR = (newInr: number) => {
+    const newUsd = Number((newInr / exchangeRate).toFixed(4));
+    setMasterBasePrice(newUsd);
+    setQuickPriceInput(newUsd);
+    if (autoCascadePrice) {
+      const updated = variantGroups.map((g) => ({
+        ...g,
+        price: newUsd,
+        priceInr: newInr,
+        colors: g.colors.map((c) => ({
+          ...c,
+          price: newUsd,
+          priceInr: newInr,
+        })),
+      }));
+      setVariantGroups(updated);
+      setChildVariants(variantGroupsToChildVariants(updated, newUsd));
+    } else {
+      setChildVariants(variantGroupsToChildVariants(variantGroups, newUsd));
+    }
+  };
+
+  const handleQuickRazorpayTestPreset = (inrAmount: number) => {
+    const usd = Number((inrAmount / exchangeRate).toFixed(4));
+    setMasterBasePrice(usd);
+    setQuickPriceInput(usd);
+    const updated = variantGroups.map((g) => ({
+      ...g,
+      price: usd,
+      priceInr: inrAmount,
+      colors: g.colors.map((c) => ({
+        ...c,
+        price: usd,
+        priceInr: inrAmount,
+      })),
+    }));
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, usd));
+    toast({
+      type: "info",
+      title: `⚡ Razorpay Test Price Applied: ₹${inrAmount}`,
+      description: `Base price and all variants updated to ₹${inrAmount} (~$${usd}). Click "Save Master & Child Variants" to persist live.`,
+    });
+  };
+
+  const handleUpdateArchitecturePrice = (groupId: string, price: number, priceInr?: number) => {
+    const inrVal = priceInr ?? Math.round(price * exchangeRate);
+    const updated = variantGroups.map((g) => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        price: Math.max(0, price),
+        priceInr: Math.max(0, inrVal),
+        colors: g.colors.map((c) => ({
+          ...c,
+          price: Math.max(0, price),
+          priceInr: Math.max(0, inrVal),
+        })),
+      };
+    });
     setVariantGroups(updated);
     setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+  };
+
+  // Shipping Method Pricing Fixtures Handlers
+  const handleGeneralPriceChangeUSD = (val: number) => {
+    setGeneralDeliveryPriceUsd(val);
+    setGeneralDeliveryPriceInr(Math.round(val * exchangeRate));
+  };
+
+  const handleGeneralPriceChangeINR = (val: number) => {
+    setGeneralDeliveryPriceInr(val);
+    setGeneralDeliveryPriceUsd(Number((val / exchangeRate).toFixed(2)));
+  };
+
+  const handleExpressPriceChangeUSD = (val: number) => {
+    setExpressDeliveryPriceUsd(val);
+    setExpressDeliveryPriceInr(Math.round(val * exchangeRate));
+  };
+
+  const handleExpressPriceChangeINR = (val: number) => {
+    setExpressDeliveryPriceInr(val);
+    setExpressDeliveryPriceUsd(Number((val / exchangeRate).toFixed(2)));
+  };
+
+  const handleSaveShippingFixtures = async () => {
+    setIsSavingShipping(true);
+    try {
+      const res = await fetch("/api/shipping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          generalDeliveryPriceUsd,
+          generalDeliveryPriceInr,
+          expressDeliveryPriceUsd,
+          expressDeliveryPriceInr,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          type: "success",
+          title: "Shipping Pricing Fixtures Saved",
+          description: `General Delivery: $${generalDeliveryPriceUsd} (₹${generalDeliveryPriceInr}) · Express: $${expressDeliveryPriceUsd} (₹${expressDeliveryPriceInr})`,
+        });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Failed to Save Shipping Pricing",
+        description: err.message || "Could not update shipping fixtures",
+      });
+    } finally {
+      setIsSavingShipping(false);
+    }
   };
 
   // 4. Add a Colorway to a specific Architecture
@@ -513,6 +723,7 @@ export default function AdminPage() {
         color: cleanName,
         hex,
         price: g.price || masterBasePrice,
+        priceInr: g.priceInr || Math.round((g.price || masterBasePrice) * exchangeRate),
         discount: g.discount || 0,
         stock: Math.max(0, initialStock),
         images: ["/images/hero-silver.jpg"],
@@ -564,7 +775,21 @@ export default function AdminPage() {
     const updated = variantGroups.map((g) => {
       if (g.id !== groupId) return g;
       const newColors = [...g.colors];
-      newColors[colorIndex] = { ...newColors[colorIndex], [field]: val };
+      if (field === "price") {
+        newColors[colorIndex] = {
+          ...newColors[colorIndex],
+          price: val,
+          priceInr: Math.round(val * exchangeRate),
+        };
+      } else if (field === "priceInr") {
+        newColors[colorIndex] = {
+          ...newColors[colorIndex],
+          priceInr: val,
+          price: Number((val / exchangeRate).toFixed(4)),
+        };
+      } else {
+        newColors[colorIndex] = { ...newColors[colorIndex], [field]: val };
+      }
       return { ...g, colors: newColors };
     });
     setVariantGroups(updated);
@@ -712,7 +937,9 @@ export default function AdminPage() {
         return acc;
       }, {} as Record<string, string>);
 
-      const syncedChildVariants = variantGroupsToChildVariants(variantGroups, Number(masterBasePrice));
+      const basePriceNum = Number(masterBasePrice);
+      const basePriceInr = Math.round(basePriceNum * exchangeRate);
+      const syncedChildVariants = variantGroupsToChildVariants(variantGroups, basePriceNum);
 
       const res = await fetch("/api/product", {
         method: "PATCH",
@@ -723,7 +950,9 @@ export default function AdminPage() {
           name: masterName,
           description: masterDescription,
           type: masterType,
-          basePrice: Number(masterBasePrice),
+          basePrice: basePriceNum,
+          price: basePriceNum,
+          priceInr: basePriceInr,
           baseDiscount: Number(masterBaseDiscount),
           globalSpecs: globalSpecsRecord,
           variantGroups,
@@ -1303,6 +1532,7 @@ export default function AdminPage() {
         description: newProdDescription.trim() || "Authentic high-grade product designed for exceptional daily utility.",
         price: Number(newProdPrice) || 99,
         basePrice: Number(newProdPrice) || 99,
+        priceInr: Math.round((Number(newProdPrice) || 99) * exchangeRate),
         originalPrice: Number(newProdOriginalPrice) || (Number(newProdPrice) || 99) * 1.25,
         type: selectedCategoryDef?.name || "Standard Goods",
         globalSpecs: globalSpecsRecord,
@@ -2179,6 +2409,143 @@ export default function AdminPage() {
 
                 {/* Flash Sale, Discount & ISR Edge Settings */}
                 <form onSubmit={handleUpdateInventory} className="space-y-4 pt-3 border-t border-zinc-100">
+                  {/* Real-Time Price & USD ⇄ INR Currency Converter */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50/60 via-zinc-50 to-zinc-50 border border-blue-100/90 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold font-mono">
+                          ₹/$
+                        </div>
+                        <span className="text-xs font-bold text-zinc-950 font-sans">
+                          Live Price & Currency Converter
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono font-semibold text-zinc-500 bg-white px-2 py-0.5 rounded-full border border-zinc-200">
+                        1 USD ≈ ₹{exchangeRate}
+                      </span>
+                    </div>
+
+                    {/* Dual Currency Inputs */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-zinc-700 flex items-center gap-1">
+                          <span>Price (USD $)</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">$</span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={quickPriceInput}
+                            onChange={(e) => {
+                              const usd = Number(e.target.value);
+                              setQuickPriceInput(usd);
+                              setMasterBasePrice(usd);
+                              if (autoCascadePrice) {
+                                const inr = Math.round(usd * exchangeRate);
+                                setVariantGroups((prev) =>
+                                  prev.map((g) => ({
+                                    ...g,
+                                    price: usd,
+                                    priceInr: inr,
+                                    colors: g.colors.map((c) => ({ ...c, price: usd, priceInr: inr })),
+                                  }))
+                                );
+                              }
+                            }}
+                            className="w-full pl-7 pr-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-zinc-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-zinc-700 flex items-center gap-1">
+                          <span>Price (INR ₹)</span>
+                          <span className="text-[9px] text-blue-600 font-mono">(Razorpay)</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">₹</span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={
+                              quickPriceInput === 0
+                                ? 0
+                                : quickPriceInput < 1
+                                ? Number((quickPriceInput * exchangeRate).toFixed(2))
+                                : Math.round(quickPriceInput * exchangeRate)
+                            }
+                            onChange={(e) => {
+                              const inr = Number(e.target.value);
+                              const usd = Number((inr / exchangeRate).toFixed(4));
+                              setQuickPriceInput(usd);
+                              setMasterBasePrice(usd);
+                              if (autoCascadePrice) {
+                                setVariantGroups((prev) =>
+                                  prev.map((g) => ({
+                                    ...g,
+                                    price: usd,
+                                    priceInr: inr,
+                                    colors: g.colors.map((c) => ({ ...c, price: usd, priceInr: inr })),
+                                  }))
+                                );
+                              }
+                            }}
+                            className="w-full pl-7 pr-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-blue-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Razorpay Testing Presets */}
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold">
+                        ⚡ Quick Test Presets (Razorpay):
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[1, 5, 10, 50].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() => handleQuickRazorpayTestPreset(amt)}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-mono font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                            title={`Set price to ₹${amt} for Razorpay live checkout testing`}
+                          >
+                            ₹{amt} Test
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuickPriceInput(349);
+                            setMasterBasePrice(349);
+                            handleCascadePriceToAllVariants(349, Math.round(349 * exchangeRate));
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-mono font-bold transition-all shadow-2xs cursor-pointer"
+                          title="Reset to default $349"
+                        >
+                          Reset ($349)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Auto-cascade Toggle */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        id="autoCascadeQuick"
+                        checked={autoCascadePrice}
+                        onChange={(e) => setAutoCascadePrice(e.target.checked)}
+                        className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer"
+                      />
+                      <label htmlFor="autoCascadeQuick" className="text-[11px] text-zinc-600 cursor-pointer">
+                        Cascade price change to all variant colors automatically
+                      </label>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-zinc-700">
@@ -2382,6 +2749,161 @@ export default function AdminPage() {
               </div>
             </div>
 
+            {/* Shipping Method Pricing Fixtures */}
+            <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
+                      <span>Shipping Method Pricing Fixtures</span>
+                      <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                        Global Checkout Rates
+                      </span>
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Direct option of pricing from 0 (Free Delivery) to any amount. Dynamic rates will be calculated later; currently provides direct fixtures in USD and INR.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGeneralDeliveryPriceUsd(0);
+                      setGeneralDeliveryPriceInr(0);
+                    }}
+                    className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold font-mono transition-colors cursor-pointer"
+                    title="Set general delivery to ₹0 / $0 for live testing"
+                  >
+                    ⚡ Set General Delivery to Free (₹0)
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isSavingShipping}
+                    onClick={handleSaveShippingFixtures}
+                    className="flex items-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSavingShipping ? "Saving..." : "Save Shipping Pricing"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Two Pricing Cards: General Delivery & Express Delivery */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Method 1: General Delivery */}
+                <div className="p-5 rounded-2xl bg-zinc-50/80 border border-zinc-200 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                        Standard Shipping
+                      </span>
+                      <h4 className="text-sm font-bold text-zinc-900 mt-0.5">
+                        General Delivery (Tracked Courier)
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-zinc-200/70 text-zinc-700">
+                      3–5 Days
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-500">
+                    Applied when customer selects Standard Delivery. Set to 0 for Free Delivery during tests or promotions.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-zinc-700">Price (USD $)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">$</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={generalDeliveryPriceUsd}
+                          onChange={(e) => handleGeneralPriceChangeUSD(Number(e.target.value))}
+                          className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:outline-none focus:border-blue-500 shadow-2xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-zinc-700">Price (INR ₹)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">₹</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={generalDeliveryPriceInr}
+                          onChange={(e) => handleGeneralPriceChangeINR(Number(e.target.value))}
+                          className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-blue-200 rounded-xl text-blue-900 focus:outline-none focus:border-blue-500 shadow-2xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Method 2: Express Delivery */}
+                <div className="p-5 rounded-2xl bg-zinc-50/80 border border-zinc-200 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                        Expedited Shipping
+                      </span>
+                      <h4 className="text-sm font-bold text-zinc-900 mt-0.5">
+                        Priority Express Dispatch
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                      1–2 Days
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-500">
+                    Applied when customer selects Priority Express Dispatch. Can be set to 0 or any custom surcharge.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-zinc-700">Price (USD $)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">$</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={expressDeliveryPriceUsd}
+                          onChange={(e) => handleExpressPriceChangeUSD(Number(e.target.value))}
+                          className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:outline-none focus:border-blue-500 shadow-2xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-zinc-700">Price (INR ₹)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">₹</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={expressDeliveryPriceInr}
+                          onChange={(e) => handleExpressPriceChangeINR(Number(e.target.value))}
+                          className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-blue-200 rounded-xl text-blue-900 focus:outline-none focus:border-blue-500 shadow-2xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Multi-Category Inventory & Product Catalog Hub */}
             <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-100">
@@ -2456,8 +2978,9 @@ export default function AdminPage() {
                             </span>
                           </td>
 
-                          <td className="py-3 px-3 font-mono font-semibold text-zinc-900">
-                            ${p.price}
+                          <td className="py-3 px-3 font-mono text-xs">
+                            <div className="font-bold text-zinc-900">${p.price}</div>
+                            <div className="text-[10px] text-zinc-400">₹{p.priceInr || Math.round(p.price * exchangeRate)}</div>
                           </td>
 
                           <td className="py-3 px-3">
@@ -2716,26 +3239,180 @@ export default function AdminPage() {
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-700">Base Master Price ($)</label>
-                  <input
-                    type="number"
-                    value={masterBasePrice}
-                    onChange={(e) => setMasterBasePrice(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50"
-                  />
-                </div>
+                {/* Master Pricing & Dual-Currency Studio */}
+                <div className="sm:col-span-3 p-5 rounded-2xl bg-gradient-to-br from-blue-50/70 via-zinc-50 to-zinc-50 border border-blue-200/80 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-blue-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center text-sm font-bold font-mono shadow-xs">
+                        ₹/$
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-zinc-950 font-sans flex items-center gap-2">
+                          <span>Master Pricing & Currency Converter Studio</span>
+                          <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                            Live Dual-Sync
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-zinc-500">
+                          Change in USD or INR automatically syncs the other. Test micro-transactions on Razorpay by entering ₹1 or ₹5.
+                        </p>
+                      </div>
+                    </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-700">Base Master Discount (%)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="90"
-                    value={masterBaseDiscount}
-                    onChange={(e) => setMasterBaseDiscount(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50"
-                  />
+                    <div className="flex items-center gap-3 self-start sm:self-auto">
+                      <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-zinc-200 shadow-2xs">
+                        <span className="text-[11px] font-semibold text-zinc-500">Rate:</span>
+                        <span className="text-xs font-mono font-bold text-zinc-800">1 USD = ₹</span>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={exchangeRate}
+                          onChange={(e) => setExchangeRate(Number(e.target.value) || 83.0)}
+                          className="w-14 text-xs font-mono font-bold text-blue-700 bg-transparent focus:outline-none"
+                          title="Exchange rate"
+                        />
+                      </div>
+
+                      {/* Currency Mode Switcher */}
+                      <div className="flex items-center p-0.5 rounded-xl bg-zinc-200/70 border border-zinc-200">
+                        <button
+                          type="button"
+                          onClick={() => setAdminCurrencyMode("USD")}
+                          className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
+                            adminCurrencyMode === "USD"
+                              ? "bg-white text-zinc-900 shadow-xs"
+                              : "text-zinc-600 hover:text-zinc-900"
+                          }`}
+                        >
+                          $ USD
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAdminCurrencyMode("INR")}
+                          className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
+                            adminCurrencyMode === "INR"
+                              ? "bg-blue-600 text-white shadow-xs"
+                              : "text-zinc-600 hover:text-zinc-900"
+                          }`}
+                        >
+                          ₹ INR
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dual Inputs Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* USD Price */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700 flex items-center justify-between">
+                        <span>Base Price (USD $)</span>
+                        <span className="text-[10px] font-mono text-zinc-400">Global Storefront</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">$</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={masterBasePrice}
+                          onChange={(e) => handleBasePriceChangeUSD(Number(e.target.value))}
+                          className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono font-bold text-zinc-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                        />
+                      </div>
+                    </div>
+
+                    {/* INR Price */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700 flex items-center justify-between">
+                        <span>Base Price (INR ₹)</span>
+                        <span className="text-[10px] font-mono text-blue-600 font-bold">Razorpay Test</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">₹</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={
+                            masterBasePrice === 0
+                              ? 0
+                              : masterBasePrice < 1
+                              ? Number((masterBasePrice * exchangeRate).toFixed(2))
+                              : Math.round(masterBasePrice * exchangeRate)
+                          }
+                          onChange={(e) => handleBasePriceChangeINR(Number(e.target.value))}
+                          className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-blue-200 text-sm font-mono font-bold text-blue-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Discount */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700">Base Master Discount (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="90"
+                        value={masterBaseDiscount}
+                        onChange={(e) => setMasterBaseDiscount(Number(e.target.value))}
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono text-zinc-900 bg-white shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Razorpay Testing Presets & Cascade Controls */}
+                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-blue-100/70">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold mr-1">
+                        ⚡ Quick Test Presets:
+                      </span>
+                      {[1, 5, 10, 50].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => handleQuickRazorpayTestPreset(amt)}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-mono font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                          title={`Set price to ₹${amt} and cascade across all variants`}
+                        >
+                          ₹{amt} Test
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMasterBasePrice(349);
+                          setQuickPriceInput(349);
+                          handleCascadePriceToAllVariants(349, Math.round(349 * exchangeRate));
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-mono font-bold transition-all shadow-2xs cursor-pointer"
+                        title="Reset to default $349"
+                      >
+                        Reset ($349)
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-1.5 text-xs text-zinc-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={autoCascadePrice}
+                          onChange={(e) => setAutoCascadePrice(e.target.checked)}
+                          className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer"
+                        />
+                        <span>Auto-cascade to all variants</span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCascadePriceToAllVariants(masterBasePrice)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                        title="Force cascade this price across all architecture and colorway variants"
+                      >
+                        <span>⚡ Cascade to All Variants</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -2845,14 +3522,37 @@ export default function AdminPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 self-end sm:self-auto">
-                          <div className="flex items-center gap-1.5">
-                            <label className="text-[11px] font-semibold text-zinc-500 font-mono">Base Price ($):</label>
+                        <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+                          <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded-lg px-2 py-1 shadow-2xs">
+                            <span className="text-[10px] font-bold text-zinc-400 font-mono">$</span>
                             <input
                               type="number"
+                              step="any"
                               value={group.price ?? masterBasePrice}
                               onChange={(e) => handleUpdateArchitecturePrice(group.id, Number(e.target.value))}
-                              className="w-20 px-2 py-1 text-xs font-mono font-bold bg-white border border-zinc-200 rounded-lg text-zinc-900 focus:outline-none"
+                              className="w-16 text-xs font-mono font-bold text-zinc-900 bg-transparent focus:outline-none"
+                              title="Architecture Price in USD"
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-1 bg-white border border-blue-200 rounded-lg px-2 py-1 shadow-2xs">
+                            <span className="text-[10px] font-bold text-blue-600 font-mono">₹</span>
+                            <input
+                              type="number"
+                              step="any"
+                              value={
+                                group.priceInr ??
+                                (group.price
+                                  ? (group.price < 1 ? Number((group.price * exchangeRate).toFixed(2)) : Math.round(group.price * exchangeRate))
+                                  : (masterBasePrice < 1 ? Number((masterBasePrice * exchangeRate).toFixed(2)) : Math.round(masterBasePrice * exchangeRate)))
+                              }
+                              onChange={(e) => {
+                                const inr = Number(e.target.value);
+                                const usd = Number((inr / exchangeRate).toFixed(4));
+                                handleUpdateArchitecturePrice(group.id, usd, inr);
+                              }}
+                              className="w-20 text-xs font-mono font-bold text-blue-900 bg-transparent focus:outline-none"
+                              title="Architecture Price in INR"
                             />
                           </div>
 
@@ -2944,15 +3644,41 @@ export default function AdminPage() {
                                 />
                               </div>
 
-                              {/* Price Override */}
+                              {/* Price Override (USD & INR) */}
                               <div className="space-y-1">
-                                <label className="text-[11px] font-semibold text-zinc-600">Color Price ($)</label>
-                                <input
-                                  type="number"
-                                  value={colorItem.price ?? group.price ?? masterBasePrice}
-                                  onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "price", Number(e.target.value))}
-                                  className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-900 focus:bg-white"
-                                />
+                                <label className="text-[11px] font-semibold text-zinc-600 flex items-center justify-between">
+                                  <span>Color Price</span>
+                                  <span className="text-[9px] font-mono text-zinc-400">$ / ₹</span>
+                                </label>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <div className="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1 focus-within:bg-white focus-within:border-blue-400">
+                                    <span className="text-[10px] font-bold text-zinc-400 font-mono">$</span>
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={colorItem.price ?? group.price ?? masterBasePrice}
+                                      onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "price", Number(e.target.value))}
+                                      className="w-full text-xs font-mono font-bold text-zinc-900 bg-transparent focus:outline-none"
+                                      title="Color price in USD"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1 bg-zinc-50 border border-blue-200 rounded-lg px-2 py-1 focus-within:bg-white focus-within:border-blue-400">
+                                    <span className="text-[10px] font-bold text-blue-600 font-mono">₹</span>
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={
+                                        colorItem.priceInr ??
+                                        (colorItem.price
+                                          ? (colorItem.price < 1 ? Number((colorItem.price * exchangeRate).toFixed(2)) : Math.round(colorItem.price * exchangeRate))
+                                          : (group.priceInr ?? (masterBasePrice < 1 ? Number((masterBasePrice * exchangeRate).toFixed(2)) : Math.round(masterBasePrice * exchangeRate))))
+                                      }
+                                      onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "priceInr", Number(e.target.value))}
+                                      className="w-full text-xs font-mono font-bold text-blue-900 bg-transparent focus:outline-none"
+                                      title="Color price in INR"
+                                    />
+                                  </div>
+                                </div>
                               </div>
 
                               {/* Real-time Inventory */}
