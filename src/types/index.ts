@@ -757,6 +757,17 @@ export interface OrderCancellation {
   adminNotes?: string;
 }
 
+export type TransportMode = "bike" | "van" | "truck" | "train" | "plane";
+
+export interface GateOtpSession {
+  active: boolean;
+  otp?: string;
+  triggeredAt?: string;
+  expiresAt?: string;
+  remainingSeconds?: number;
+  verified?: boolean;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -786,6 +797,10 @@ export interface Order {
   deliveryStatus?: "processing" | "dispatched" | "in_transit" | "out_for_delivery" | "delivered" | "cancelled";
   currentHub?: string;
   trackingNumber?: string;
+  transitMode?: TransportMode;
+  vehicleNo?: string;
+  manifestVerified?: boolean;
+  gateOtpSession?: GateOtpSession;
   cancellation?: OrderCancellation;
   events?: OrderEvent[];
   createdAt: string;

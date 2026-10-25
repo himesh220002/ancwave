@@ -26,6 +26,12 @@ import {
   RefreshCw,
   Sparkles,
   RotateCcw,
+  Bike as Bicycle,
+  Van,
+  Train,
+  Plane,
+  MapPin,
+  Key,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -450,12 +456,32 @@ function MyOrdersContent() {
                         </span>
                       ) : order.deliveryStatus === "out_for_delivery" ? (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                          <Truck className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
-                          <span>Out For Delivery</span>
+                          {order.transitMode === "bike" ? (
+                            <Bicycle className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                          ) : order.transitMode === "van" ? (
+                            <Van className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                          ) : order.transitMode === "train" ? (
+                            <Train className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                          ) : order.transitMode === "plane" ? (
+                            <Plane className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                          ) : (
+                            <Truck className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                          )}
+                          <span>Out For Delivery {order.vehicleNo ? `(${order.vehicleNo})` : ""}</span>
                         </span>
                       ) : order.deliveryStatus === "in_transit" ? (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                          <Truck className="w-3.5 h-3.5 text-blue-600" />
+                          {order.transitMode === "plane" ? (
+                            <Plane className="w-3.5 h-3.5 text-blue-600" />
+                          ) : order.transitMode === "train" ? (
+                            <Train className="w-3.5 h-3.5 text-blue-600" />
+                          ) : order.transitMode === "van" ? (
+                            <Van className="w-3.5 h-3.5 text-blue-600" />
+                          ) : order.transitMode === "bike" ? (
+                            <Bicycle className="w-3.5 h-3.5 text-blue-600" />
+                          ) : (
+                            <Truck className="w-3.5 h-3.5 text-blue-600" />
+                          )}
                           <span>In Transit ({order.currentHub || "Main Hub"})</span>
                         </span>
                       ) : (
@@ -469,6 +495,43 @@ function MyOrdersContent() {
 
                   {/* Card Body: Purchased Items */}
                   <div className="p-5 sm:p-8 space-y-6">
+                    {/* Live 5-Minute Alive Gate Delivery Telemetry Banner */}
+                    {order.gateOtpSession?.active && (
+                      <div className="p-4 sm:p-5 rounded-2xl bg-zinc-950 border border-blue-800/80 shadow-2xl text-zinc-100 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-xs font-bold tracking-wide uppercase text-zinc-200 flex items-center gap-1.5">
+                              <Key className="w-3.5 h-3.5 text-blue-400" />
+                              <span>Courier Reached Customer Gate · 5-Min Alive Window Active</span>
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                            GPS Proximity Match
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1 font-mono text-[11px] text-zinc-400">
+                            <div>[Telemetry]: OAC Edge Handshake... OK</div>
+                            <div>[Webhook]: Revalidation Token generated (exp: 5m)</div>
+                            <div>[Active Mode]: <strong className="text-purple-400 uppercase">{order.transitMode || "VAN"}</strong> · Plate: <strong className="text-zinc-200">{order.vehicleNo || "OR-EXP-8891"}</strong></div>
+                          </div>
+
+                          <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/60 flex flex-col justify-between space-y-1">
+                            <div className="text-[11px] font-semibold text-blue-300">
+                              Gate Handover Authorization OTP:
+                            </div>
+                            <div className="text-2xl font-mono font-bold tracking-widest text-emerald-400">
+                              {order.gateOtpSession.otp || "849201"}
+                            </div>
+                            <div className="text-[10px] text-zinc-400">
+                              Provide this code to your courier upon arrival at your gate to verify release.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {/* Active Refund Notification Banner */}
                     {order.paymentStatus === "refund_initiated" && (
                       <div className="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200 flex items-start gap-3.5">
@@ -1008,16 +1071,31 @@ function MyOrdersContent() {
               <X className="w-4 h-4" />
             </button>
 
-            <div className="space-y-1">
-              <span className="text-[10px] font-mono tracking-wider text-blue-600 uppercase font-semibold">
-                LIVE SHIPMENT & AUDIT TIMELINE
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-mono tracking-wider text-purple-600 uppercase font-bold flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>LIVE TRANSIT LOGGING & AUDIT TIMELINE</span>
               </span>
-              <h3 className="text-xl font-bold text-zinc-900">
-                Order #{selectedOrderForTracking.orderNumber}
+              <h3 className="text-xl font-bold text-zinc-900 flex items-center justify-between">
+                <span>Order #{selectedOrderForTracking.orderNumber}</span>
+                <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 uppercase">
+                  {selectedOrderForTracking.transitMode || "van"}
+                </span>
               </h3>
               <p className="text-xs text-zinc-500 font-mono">
-                Hub: {selectedOrderForTracking.currentHub || "Portland Primary Logistics Center"} · Tracking #{selectedOrderForTracking.trackingNumber || `TRK-${selectedOrderForTracking.orderNumber}`}
+                Hub: <strong>{selectedOrderForTracking.currentHub || "Frankfurt Logistics Hub"}</strong> · Plate: <strong>{selectedOrderForTracking.vehicleNo || "OR-EXP-8891"}</strong>
               </p>
+              {selectedOrderForTracking.gateOtpSession?.active && (
+                <div className="p-3 rounded-xl bg-zinc-950 border border-blue-800 text-white space-y-1 text-xs">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-emerald-400 font-semibold">
+                    <span>GPS Proximity Gate Match</span>
+                    <span>5-Min Alive Loop Active</span>
+                  </div>
+                  <div className="font-mono text-[11px] text-zinc-300">
+                    Doorstep OTP: <strong className="text-emerald-400 text-sm">{selectedOrderForTracking.gateOtpSession.otp || "849201"}</strong> (Provide to courier)
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Dynamic Events Timeline */}

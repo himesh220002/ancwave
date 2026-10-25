@@ -57,10 +57,18 @@ import {
   TrendingUp,
   MapPin,
   Command,
+  Bike,
+  Bike as Bicycle,
+  Van,
+  Train,
+  Plane,
+  ArrowDownLeft,
+  ArrowUpRight,
 } from "lucide-react";
 import {
   ProductData,
   Order,
+  TransportMode,
   IVariant,
   IVariantGroup,
   IVariantColor,
@@ -136,6 +144,8 @@ export default function AdminPage() {
       deliveryStatus?: string;
       currentHub?: string;
       trackingNumber?: string;
+      transitMode?: TransportMode;
+      vehicleNo?: string;
       note?: string;
       isSaving?: boolean;
     };
@@ -150,15 +160,28 @@ export default function AdminPage() {
 
   // Delivery Hub & Doorstep Gate Verification State
   const [deliverySelectedOrderId, setDeliverySelectedOrderId] = useState<string>("ANC-763954");
-  const [deliveryHubName, setDeliveryHubName] = useState<string>("Frankfurt Central Air Logistics Hub");
-  const [deliveryCity, setDeliveryCity] = useState<string>("Frankfurt");
-  const [deliveryInboundType, setDeliveryInboundType] = useState<string>("Air Freight Cargo A330-F");
-  const [deliveryOutboundType, setDeliveryOutboundType] = useState<string>("Road Courier Electric Van #44");
+  const [transitMode, setTransitMode] = useState<TransportMode>("van");
+  const [vehicleNo, setVehicleNo] = useState<string>("OR-EXP-8891");
+  const [hubName, setHubName] = useState<string>("Frankfurt Central Air Logistics Hub");
+  const [hubRegion, setHubRegion] = useState<string>("Frankfurt");
+  const [manifestVerified, setManifestVerified] = useState<boolean>(true);
+  const [isTransitLogging, setIsTransitLogging] = useState<boolean>(false);
+  const [otpTriggered, setOtpTriggered] = useState<boolean>(false);
+
   const [deliveryGateStatus, setDeliveryGateStatus] = useState<"in_transit" | "gate_reached" | "otp_sent" | "delivered">("in_transit");
   const [deliveryOtpValue, setDeliveryOtpValue] = useState<string>("");
   const [generatedOtp, setGeneratedOtp] = useState<string>("849201");
   const [deliveryOtpRemainingSeconds, setDeliveryOtpRemainingSeconds] = useState<number>(300);
   const [deliveryPhotoProof, setDeliveryPhotoProof] = useState<string | null>(null);
+
+  // Quick select items for compact button-driven control unit
+  const vehicleModes = [
+    { id: "bike" as const, label: "Bike", icon: Bicycle },
+    { id: "van" as const, label: "Van", icon: Van },
+    { id: "truck" as const, label: "Truck", icon: Truck },
+    { id: "train" as const, label: "Train", icon: Train },
+    { id: "plane" as const, label: "Plane", icon: Plane },
+  ];
 
   // Daily Passcode Gate State
   const [passcodeInput, setPasscodeInput] = useState<string>("ancwave-ops-secure-2026");
@@ -2019,6 +2042,170 @@ export default function AdminPage() {
         ...prev,
         [orderNumber]: { ...prev[orderNumber], isAdding: false },
       }));
+    }
+  };
+
+  // Sync selected order attributes to transit controller
+  useEffect(() => {
+    const selOrder = orders.find(
+      (o) => o.orderNumber === deliverySelectedOrderId || o.id === deliverySelectedOrderId
+    );
+    if (selOrder) {
+      if (selOrder.currentHub) setHubName(selOrder.currentHub);
+      if (selOrder.transitMode) setTransitMode(selOrder.transitMode as TransportMode);
+      if (selOrder.vehicleNo) setVehicleNo(selOrder.vehicleNo);
+      if (selOrder.manifestVerified !== undefined) setManifestVerified(selOrder.manifestVerified);
+      if (selOrder.deliveryStatus === "delivered") {
+        setDeliveryGateStatus("delivered");
+      } else if (selOrder.gateOtpSession?.active) {
+        setDeliveryGateStatus("otp_sent");
+        if (selOrder.gateOtpSession.otp) setGeneratedOtp(selOrder.gateOtpSession.otp);
+      } else if (selOrder.deliveryStatus === "out_for_delivery") {
+        setDeliveryGateStatus("gate_reached");
+      } else {
+        setDeliveryGateStatus("in_transit");
+      }
+    }
+  }, [deliverySelectedOrderId, orders]);
+
+  // 5-Minute Alive OTP Countdown Timer
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (deliveryGateStatus === "otp_sent" && deliveryOtpRemainingSeconds > 0) {
+      timer = setInterval(() => {
+        setDeliveryOtpRemainingSeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [deliveryGateStatus, deliveryOtpRemainingSeconds]);
+
+  // Transit Hub Inbound & Outbound Split Action Handler
+  const handleLogAction = async (type: "arrival" | "dispatch") => {
+    setIsTransitLogging(true);
+    const actionLabel = type === "arrival" ? "Inbound Arrival" : "Outbound Dispatch";
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "log-transit-action",
+          orderNumber: deliverySelectedOrderId,
+          type,
+          transitMode,
+          vehicleNo,
+          hubName,
+          hubRegion,
+          manifestVerified,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        toast({
+          type: "success",
+          title: `${actionLabel} Logged`,
+          description: `Consignment ${deliverySelectedOrderId} · ${hubName} (${hubRegion}) via ${transitMode.toUpperCase()} [${vehicleNo || "STANDARD"}]. Security: ${manifestVerified ? "Manifest Verified" : "Unverified Hold"}.`,
+        });
+      } else {
+        toast({
+          type: "info",
+          title: `${actionLabel} Recorded`,
+          description: `Consignment ${deliverySelectedOrderId} route updated via ${transitMode.toUpperCase()} [${vehicleNo || "STANDARD"}].`,
+        });
+      }
+    } catch {
+      toast({
+        type: "info",
+        title: `${actionLabel} Logged (Local)`,
+        description: `Consignment ${deliverySelectedOrderId} transit action recorded.`,
+      });
+    } finally {
+      setTimeout(() => setIsTransitLogging(false), 600);
+    }
+  };
+
+  // Doorstep Gate Arrival & 5-Min Alive OTP Trigger
+  const handleTriggerGateOtp = async () => {
+    setOtpTriggered(true);
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedOtp(newOtp);
+    setDeliveryGateStatus("otp_sent");
+    setDeliveryOtpRemainingSeconds(300);
+
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "trigger-gate-otp",
+          orderNumber: deliverySelectedOrderId,
+          otp: newOtp,
+          hubName,
+          hubRegion,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+      }
+    } catch (err) {
+      console.warn("Gate OTP sync notice:", err);
+    }
+
+    toast({
+      type: "info",
+      title: "5-Min Alive OTP Dispatched",
+      description: `[AWS SES Simulator] Revalidation code ${newOtp} dispatched to customer email. Dynamic 5-minute alive loop active.`,
+    });
+
+    setTimeout(() => setOtpTriggered(false), 4000);
+  };
+
+  // Doorstep Gate OTP Verification
+  const handleVerifyGateOtp = async () => {
+    if (deliveryOtpValue === generatedOtp || deliveryOtpValue === "123456" || deliveryOtpValue === "849201") {
+      setDeliveryGateStatus("delivered");
+      try {
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "verify-gate-otp",
+            orderNumber: deliverySelectedOrderId,
+            otp: deliveryOtpValue,
+          }),
+        });
+        const data = await res.json();
+        if (data.success && data.order) {
+          setOrders((prev) =>
+            prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+          );
+        }
+      } catch (err) {
+        console.warn("Verify OTP sync notice:", err);
+      }
+      toast({
+        type: "success",
+        title: "OTP Verified ✓",
+        description: `Customer verified parcel release at gate for ${deliverySelectedOrderId}. Proof of Delivery (PoD) unlocked.`,
+      });
+    } else {
+      toast({
+        type: "error",
+        title: "Invalid OTP",
+        description: "The entered code does not match customer OTP.",
+      });
     }
   };
 
@@ -4051,154 +4238,188 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* 2-Column Operational Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Card 1: Hub Inbound & Outbound Logging */}
-                <div className="p-6 rounded-3xl bg-white border border-zinc-200/80 shadow-xs space-y-5">
-                  <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-blue-600" />
-                      <h3 className="text-sm font-bold text-zinc-950 font-sans">
-                        1. Transit Hub In/Out Dispatch Logging
-                      </h3>
+              {/* Ready-to-implement Responsive Transit Control Center Layout */}
+              <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-zinc-950 text-zinc-100 font-sans rounded-3xl border border-zinc-800 shadow-2xl">
+                {/* SECTION 1: CORE TRANSIT LOGGING HUB */}
+                <div className="border border-zinc-800 bg-zinc-900/50 rounded-xl p-5 shadow-2xl flex flex-col justify-between">
+                  <div>
+                    {/* Header */}
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-3 mb-4">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="text-purple-500 w-5 h-5" />
+                        <h2 className="text-sm font-semibold tracking-wide uppercase text-zinc-300">1. Transit Hub Control</h2>
+                      </div>
+                      <span className="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded">
+                        Step 1: Active Routing
+                      </span>
                     </div>
-                    <span className="text-[10px] font-mono bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded font-semibold">
-                      Step 1: In-Flight
-                    </span>
+
+                    {/* Quick Toggle Fleet Selector */}
+                    <div className="mb-4">
+                      <label className="text-xs font-medium text-zinc-400 block mb-2">Select Active Transport Mode</label>
+                      <div className="grid grid-cols-5 gap-2">
+                        {vehicleModes.map((mode) => {
+                          const Icon = mode.icon;
+                          const isSelected = transitMode === mode.id;
+                          return (
+                            <button
+                              key={mode.id}
+                              type="button"
+                              onClick={() => setTransitMode(mode.id as TransportMode)}
+                              className={`flex flex-col items-center justify-center py-2.5 rounded-lg border text-xs font-medium transition-all ${
+                                isSelected
+                                  ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/20'
+                                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                              }`}
+                            >
+                              <Icon className="w-4 h-4 mb-1" />
+                              {mode.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Vehicle Number & Hub Details Row */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <label className="text-xs font-medium text-zinc-400 block mb-1">Selected Vehicle ID / Plate</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. MH-12-JW-4412"
+                          value={vehicleNo}
+                          onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
+                          className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-zinc-800 bg-zinc-900 text-white uppercase placeholder-zinc-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-zinc-400 block mb-1">Hub Security Verification</label>
+                        <button
+                          type="button"
+                          onClick={() => setManifestVerified(!manifestVerified)}
+                          className={`w-full flex items-center justify-center gap-2 px-3 py-2 text-xs rounded-lg border font-medium transition-colors ${
+                            manifestVerified
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                              : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                          }`}
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          {manifestVerified ? 'Manifest Verified' : 'Unverified Hold'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Metadata Fallbacks (Collapsible or compact inputs) */}
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                      <div>
+                        <label className="text-xs font-medium text-zinc-500 block mb-1">Current Facility</label>
+                        <input 
+                          type="text" 
+                          value={hubName} 
+                          onChange={(e) => setHubName(e.target.value)}
+                          className="w-full bg-zinc-900/50 border border-zinc-800 px-3 py-1.5 text-xs rounded text-zinc-400 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-zinc-500 block mb-1">Region / Code</label>
+                        <input 
+                          type="text" 
+                          value={hubRegion} 
+                          onChange={(e) => setHubRegion(e.target.value)}
+                          className="w-full bg-zinc-900/50 border border-zinc-800 px-3 py-1.5 text-xs rounded text-zinc-400 focus:outline-none"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-4 text-xs">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-zinc-700">Current Hub Facility Name</label>
-                      <input
-                        type="text"
-                        value={deliveryHubName}
-                        onChange={(e) => setDeliveryHubName(e.target.value)}
-                        placeholder="e.g. Frankfurt Central Air Cargo Hub"
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-semibold text-zinc-700">Hub City / Region</label>
-                        <input
-                          type="text"
-                          value={deliveryCity}
-                          onChange={(e) => setDeliveryCity(e.target.value)}
-                          placeholder="e.g. Frankfurt / Hesse"
-                          className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-semibold text-zinc-700">Hub Security Status</label>
-                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold w-full">
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Manifest Verified</span>
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-semibold text-zinc-700">Inbound Transport Mode</label>
-                        <input
-                          type="text"
-                          value={deliveryInboundType}
-                          onChange={(e) => setDeliveryInboundType(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-semibold text-zinc-700">Outbound Dispatch Mode</label>
-                        <input
-                          type="text"
-                          value={deliveryOutboundType}
-                          onChange={(e) => setDeliveryOutboundType(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-
+                  {/* Separated Dispatch and Arrival Updates Action Buttons */}
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-800/60">
                     <button
                       type="button"
-                      onClick={() => {
-                        toast({
-                          type: "success",
-                          title: "Route Updated",
-                          description: `Consignment ${deliverySelectedOrderId} route updated: ${deliveryHubName} (${deliveryCity}). Inbound: ${deliveryInboundType} → Outbound: ${deliveryOutboundType}`,
-                        });
-                      }}
-                      className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                      disabled={isTransitLogging}
+                      onClick={() => handleLogAction('arrival')}
+                      className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
                     >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Record Hub Transition & Broadcast Telemetry</span>
+                      {isTransitLogging ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownLeft className="w-4 h-4 text-emerald-400" />}
+                      Log Inbound Arrival
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isTransitLogging}
+                      onClick={() => handleLogAction('dispatch')}
+                      className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-md active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {isTransitLogging ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpRight className="w-4 h-4 text-purple-200" />}
+                      Log Outbound Dispatch
                     </button>
                   </div>
                 </div>
 
-                {/* Card 2: Doorstep Gate Arrival & 5-Min Alive OTP Verification */}
-                <div className="p-6 rounded-3xl bg-white border border-zinc-200/80 shadow-xs space-y-5">
-                  <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-                    <div className="flex items-center gap-2">
-                      <QrCode className="w-4 h-4 text-emerald-600" />
-                      <h3 className="text-sm font-bold text-zinc-950 font-sans">
-                        2. Doorstep Gate Arrival & 5-Min Alive OTP
-                      </h3>
+                {/* SECTION 2: ENHANCED USER END / GATE DELIVERY */}
+                <div className="border border-zinc-800 bg-zinc-900/50 rounded-xl p-5 shadow-2xl flex flex-col justify-between">
+                  <div>
+                    {/* Header */}
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-3 mb-4">
+                      <div className="flex items-center gap-2">
+                        <Key className="text-blue-500 w-5 h-5" />
+                        <h2 className="text-sm font-semibold tracking-wide uppercase text-zinc-300">2. Doorstep Gate Arrival</h2>
+                      </div>
+                      <span className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-mono">
+                        {deliveryGateStatus.toUpperCase().replace('_', ' ')}
+                      </span>
                     </div>
-                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${deliveryGateStatus === "delivered"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : deliveryGateStatus === "otp_sent"
-                        ? "bg-amber-100 text-amber-800 animate-pulse"
-                        : "bg-blue-100 text-blue-800"
-                      }`}>
-                      {deliveryGateStatus.replace("_", " ")}
-                    </span>
+
+                    <div className="mb-4">
+                      <h3 className="text-xs font-semibold text-zinc-300 mb-1">Step A: Courier At Customer Gate</h3>
+                      <p className="text-xs text-zinc-500 leading-relaxed">
+                        When the delivery courier scans the package barcode at the customer entrance, tap below to dispatch an automated OTP email via AWS SES. This opens a dynamic 5-minute alive loop for direct edge verification.
+                      </p>
+                    </div>
+
+                    {/* User End Side Enhancement Layout */}
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3.5 space-y-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-zinc-500">Live Client Channel Status:</span>
+                        <span className="flex items-center gap-1.5 font-medium text-emerald-400">
+                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                          GPS Proximity Match
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded bg-zinc-950 border border-zinc-800/80 font-mono text-[11px] text-zinc-400 space-y-1">
+                        <div>[Telemetry]: OAC Edge Handshake... OK</div>
+                        <div>[Webhook]: Revalidation Token generated (exp: 5m)</div>
+                        {deliveryGateStatus === "otp_sent" && (
+                          <div className="text-amber-400 pt-1 font-mono">
+                            [Session Active]: 6-Digit OTP: <strong>{generatedOtp}</strong> · Remaining: {Math.floor(deliveryOtpRemainingSeconds / 60)}:{(deliveryOtpRemainingSeconds % 60).toString().padStart(2, '0')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-4 text-xs">
-                    {/* Step A: Gate Arrival */}
-                    <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200/70 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-zinc-900">Step A: Courier at Customer Gate</span>
-                        <span className="text-[10px] font-mono text-zinc-500">GPS Verified</span>
-                      </div>
-                      <p className="text-[11px] text-zinc-600">
-                        When the delivery courier scans the package barcode at the customer entrance, tap below to dispatch an automated OTP email via AWS SES.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-                          setGeneratedOtp(newOtp);
-                          setDeliveryGateStatus("otp_sent");
-                          setDeliveryOtpRemainingSeconds(300);
-                          toast({
-                            type: "info",
-                            title: "Gate OTP Dispatched",
-                            description: `[AWS SES Simulator] 5-minute alive OTP dispatched to customer: ${newOtp}`,
-                          });
-                        }}
-                        className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
-                      >
-                        <Radio className="w-3.5 h-3.5 animate-pulse" />
-                        <span>Reached Location → Trigger 5-Min Alive OTP Email</span>
-                      </button>
-                    </div>
+                  {/* 5-Min Alive Action Trigger + Verification */}
+                  <div className="space-y-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={handleTriggerGateOtp}
+                      className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg text-xs font-bold tracking-wide uppercase transition-all active:scale-95 cursor-pointer ${
+                        otpTriggered || deliveryGateStatus === 'otp_sent'
+                          ? 'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-600/20'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20'
+                      }`}
+                    >
+                      {otpTriggered || deliveryGateStatus === 'otp_sent' ? 'OTP Dispatched & Tracking Active ✓' : 'Reached Location ... Trigger 5-Min Alive OTP Email'}
+                    </button>
 
-                    {/* Step B: 5-Minute Alive OTP Verification */}
-                    {deliveryGateStatus !== "in_transit" && (
-                      <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-blue-950">Step B: Customer Handover Verification</span>
-                          <span className="text-[10px] font-mono font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                            Alive: 5m 00s (Demo OTP: {generatedOtp})
+                    {/* Step B: Doorstep verification when OTP is sent */}
+                    {deliveryGateStatus === "otp_sent" && (
+                      <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-zinc-400 font-medium">Customer Doorstep Verification:</span>
+                          <span className="text-amber-400 font-mono text-[11px]">
+                            Alive: {Math.floor(deliveryOtpRemainingSeconds / 60)}:{(deliveryOtpRemainingSeconds % 60).toString().padStart(2, '0')}
                           </span>
                         </div>
-                        <p className="text-[11px] text-blue-900/80">
-                          Ask the customer for the 6-digit OTP received in their email to authorize parcel release.
-                        </p>
-
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
@@ -4206,27 +4427,12 @@ export default function AdminPage() {
                             value={deliveryOtpValue}
                             onChange={(e) => setDeliveryOtpValue(e.target.value)}
                             placeholder="Enter 6-digit OTP"
-                            className="flex-1 px-3 py-2 text-center text-sm font-mono font-bold tracking-widest bg-white border border-blue-200 rounded-xl text-zinc-900 focus:outline-none"
+                            className="flex-1 px-3 py-2 text-center text-xs font-mono font-bold tracking-widest bg-zinc-950 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
                           />
                           <button
                             type="button"
-                            onClick={() => {
-                              if (deliveryOtpValue === generatedOtp || deliveryOtpValue === "123456" || deliveryOtpValue === "849201") {
-                                setDeliveryGateStatus("delivered");
-                                toast({
-                                  type: "success",
-                                  title: "OTP Verified",
-                                  description: "OTP matched! Doorstep box camera snap unlocked.",
-                                });
-                              } else {
-                                toast({
-                                  type: "error",
-                                  title: "Invalid OTP",
-                                  description: "The entered code does not match the customer OTP.",
-                                });
-                              }
-                            }}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                            onClick={handleVerifyGateOtp}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
                           >
                             Verify OTP
                           </button>
@@ -4236,14 +4442,14 @@ export default function AdminPage() {
 
                     {/* Step C: Box Camera Photo Proof & Final Confirmation */}
                     {deliveryGateStatus === "delivered" && (
-                      <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-emerald-950 flex items-center gap-1.5">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            <span>Step C: Doorstep Camera Proof of Delivery (PoD)</span>
+                      <div className="p-3.5 rounded-lg bg-emerald-950/60 border border-emerald-800 space-y-3">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <span>Parcel Handed Over & PoD Secured</span>
                           </span>
-                          <span className="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded">
-                            OTP MATCHED
+                          <span className="text-[10px] font-mono bg-emerald-900/80 px-2 py-0.5 rounded text-emerald-200">
+                            DELIVERED
                           </span>
                         </div>
 
@@ -4255,36 +4461,20 @@ export default function AdminPage() {
                               toast({
                                 type: "success",
                                 title: "Photo Proof Captured",
-                                description: "Doorstep box delivery photo uploaded to S3 proof vault.",
+                                description: "Doorstep delivery photo uploaded to S3 proof vault.",
                               });
                             }}
-                            className="flex-1 py-2 px-3 rounded-xl border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-900 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            className="flex-1 py-2 px-3 rounded-lg border border-emerald-700 bg-zinc-900 hover:bg-zinc-800 text-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                           >
-                            <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Snap Box Photo Proof (S3 Upload)</span>
+                            <Camera className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>{deliveryPhotoProof ? "Retake Photo Proof" : "Snap Box Photo Proof (S3)"}</span>
                           </button>
-
                           {deliveryPhotoProof && (
-                            <span className="text-[11px] font-mono text-emerald-700 font-bold">
-                              ✓ Photo Verified
+                            <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                              ✓ S3 Uploaded
                             </span>
                           )}
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            toast({
-                              type: "success",
-                              title: "Delivery Confirmed",
-                              description: `Consignment ${deliverySelectedOrderId} permanently marked as DELIVERED with customer OTP signature.`,
-                            });
-                          }}
-                          className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-                        >
-                          <Check className="w-4 h-4" />
-                          <span>Confirm Order as Successfully Delivered</span>
-                        </button>
                       </div>
                     )}
                   </div>
@@ -4828,10 +5018,57 @@ export default function AdminPage() {
                                       <div className="lg:col-span-4 space-y-4">
                                         <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-3">
                                           <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-mono tracking-wider text-blue-600 uppercase font-bold flex items-center gap-1.5">
+                                            <span className="text-[10px] font-mono tracking-wider text-purple-600 uppercase font-bold flex items-center gap-1.5">
                                               <Truck className="w-3.5 h-3.5" />
-                                              <span>DELIVERY & LOGISTICS CONTROL</span>
+                                              <span>DELIVERY & TRANSIT CONTROL</span>
                                             </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setDeliverySelectedOrderId(ord.orderNumber);
+                                                setActiveTab("delivery");
+                                              }}
+                                              className="text-[10px] font-mono text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
+                                            >
+                                              Open Full Hub Console →
+                                            </button>
+                                          </div>
+
+                                          {/* Button-Driven Transport Mode Selector */}
+                                          <div>
+                                            <label className="block text-zinc-500 font-medium mb-1.5 font-mono text-[10px] uppercase">
+                                              Active Fleet Transport Mode
+                                            </label>
+                                            <div className="grid grid-cols-5 gap-1.5">
+                                              {vehicleModes.map((mode) => {
+                                                const Icon = mode.icon;
+                                                const currentMode = edits.transitMode || ord.transitMode || "van";
+                                                const isSelected = currentMode === mode.id;
+                                                return (
+                                                  <button
+                                                    key={mode.id}
+                                                    type="button"
+                                                    onClick={() =>
+                                                      setOrderDeliveryEdits((prev) => ({
+                                                        ...prev,
+                                                        [ord.orderNumber]: {
+                                                          ...prev[ord.orderNumber],
+                                                          transitMode: mode.id,
+                                                        },
+                                                      }))
+                                                    }
+                                                    className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg border text-[10px] font-medium transition cursor-pointer ${
+                                                      isSelected
+                                                        ? "bg-purple-600 border-purple-500 text-white shadow-xs font-bold"
+                                                        : "bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100"
+                                                    }`}
+                                                  >
+                                                    <Icon className="w-3 h-3 mb-0.5" />
+                                                    <span>{mode.label}</span>
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
                                           </div>
 
                                           {/* Delivery Status Select */}
@@ -4925,6 +5162,113 @@ export default function AdminPage() {
                                               placeholder="e.g. Scanned at outbound ramp"
                                               className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 focus:outline-none focus:border-blue-500"
                                             />
+                                          </div>
+
+                                          {/* Split Inbound & Outbound Quick Action Triggers */}
+                                          <div className="grid grid-cols-2 gap-2 pt-1">
+                                            <button
+                                              type="button"
+                                              disabled={edits.isSaving}
+                                              onClick={async () => {
+                                                setOrderDeliveryEdits((prev) => ({
+                                                  ...prev,
+                                                  [ord.orderNumber]: { ...prev[ord.orderNumber], isSaving: true },
+                                                }));
+                                                try {
+                                                  const hub = edits.currentHub !== undefined ? edits.currentHub : (ord.currentHub || "Frankfurt Central Air Logistics Hub");
+                                                  const mode = edits.transitMode || ord.transitMode || "van";
+                                                  const vPlate = edits.vehicleNo || ord.vehicleNo || "OR-EXP-8891";
+                                                  const res = await fetch("/api/orders", {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({
+                                                      action: "log-transit-action",
+                                                      orderNumber: ord.orderNumber,
+                                                      type: "arrival",
+                                                      transitMode: mode,
+                                                      vehicleNo: vPlate,
+                                                      hubName: hub,
+                                                      hubRegion: "Main Logistics Hub",
+                                                      manifestVerified: true,
+                                                    }),
+                                                  });
+                                                  const data = await res.json();
+                                                  if (data.order) {
+                                                    setOrders((prev) =>
+                                                      prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+                                                    );
+                                                  }
+                                                  toast({
+                                                    type: "success",
+                                                    title: "Inbound Arrival Logged",
+                                                    description: `Consignment #${ord.orderNumber} arrived at ${hub} via ${mode.toUpperCase()} [${vPlate}].`,
+                                                  });
+                                                } catch {
+                                                  toast({ type: "error", title: "Action Failed", description: "Could not log inbound arrival." });
+                                                } finally {
+                                                  setOrderDeliveryEdits((prev) => ({
+                                                    ...prev,
+                                                    [ord.orderNumber]: { ...prev[ord.orderNumber], isSaving: false },
+                                                  }));
+                                                }
+                                              }}
+                                              className="py-2 px-2.5 rounded-lg text-[11px] font-semibold bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                                            >
+                                              <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600" />
+                                              <span>Inbound Arrival</span>
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              disabled={edits.isSaving}
+                                              onClick={async () => {
+                                                setOrderDeliveryEdits((prev) => ({
+                                                  ...prev,
+                                                  [ord.orderNumber]: { ...prev[ord.orderNumber], isSaving: true },
+                                                }));
+                                                try {
+                                                  const hub = edits.currentHub !== undefined ? edits.currentHub : (ord.currentHub || "Frankfurt Central Air Logistics Hub");
+                                                  const mode = edits.transitMode || ord.transitMode || "van";
+                                                  const vPlate = edits.vehicleNo || ord.vehicleNo || "OR-EXP-8891";
+                                                  const res = await fetch("/api/orders", {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({
+                                                      action: "log-transit-action",
+                                                      orderNumber: ord.orderNumber,
+                                                      type: "dispatch",
+                                                      transitMode: mode,
+                                                      vehicleNo: vPlate,
+                                                      hubName: hub,
+                                                      hubRegion: "Main Logistics Hub",
+                                                      manifestVerified: true,
+                                                    }),
+                                                  });
+                                                  const data = await res.json();
+                                                  if (data.order) {
+                                                    setOrders((prev) =>
+                                                      prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+                                                    );
+                                                  }
+                                                  toast({
+                                                    type: "success",
+                                                    title: "Outbound Dispatch Logged",
+                                                    description: `Consignment #${ord.orderNumber} dispatched from ${hub} via ${mode.toUpperCase()} [${vPlate}].`,
+                                                  });
+                                                } catch {
+                                                  toast({ type: "error", title: "Action Failed", description: "Could not log outbound dispatch." });
+                                                } finally {
+                                                  setOrderDeliveryEdits((prev) => ({
+                                                    ...prev,
+                                                    [ord.orderNumber]: { ...prev[ord.orderNumber], isSaving: false },
+                                                  }));
+                                                }
+                                              }}
+                                              className="py-2 px-2.5 rounded-lg text-[11px] font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                                            >
+                                              <ArrowUpRight className="w-3.5 h-3.5 text-purple-200" />
+                                              <span>Outbound Dispatch</span>
+                                            </button>
                                           </div>
 
                                           {/* Save Delivery Update Button */}
