@@ -2149,18 +2149,21 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-zinc-950 font-sans flex flex-col">
-      {/* 1. TOP TASKPMS STYLE NAVBAR */}
+      {/* 1. TOP MINIMALIST COMMERCE OS NAVBAR */}
       <header className="h-14 border-b border-zinc-200/80 bg-white sticky top-0 z-40 px-4 flex items-center justify-between gap-4 shrink-0">
-        {/* Left: TaskPMS Brand & App Logo */}
+        {/* Left: ancwave Brand & Logo */}
         <div className="flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-xs group-hover:bg-blue-700 transition-colors">
-              <Cpu className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-lg bg-zinc-950 flex items-center justify-center text-white font-bold text-xs shadow-xs group-hover:bg-zinc-800 transition-colors">
+              <Radio className="w-4 h-4 text-emerald-400" />
             </div>
-            <span className="font-bold text-sm tracking-tight text-zinc-950 font-sans">TaskPMS</span>
+            <div className="flex flex-col">
+              <span className="font-bold text-sm tracking-tight text-zinc-950 font-sans leading-none">ancwave</span>
+              <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider font-semibold">Admin Controller</span>
+            </div>
           </Link>
           <span className="text-zinc-200 hidden sm:inline">|</span>
-          <span className="text-xs font-mono text-zinc-500 hidden sm:inline">ancwave ops</span>
+          <span className="text-xs font-medium text-zinc-500 hidden sm:inline">E-Commerce OS</span>
         </div>
 
         {/* Center: Global Search Bar [ ⌘ K ] */}
@@ -2170,7 +2173,7 @@ export default function AdminPage() {
             type="text"
             value={globalSearchInput}
             onChange={(e) => setGlobalSearchInput(e.target.value)}
-            placeholder="Search or jump to... [ ⌘ K ]"
+            placeholder="Search products, orders, SKUs... [ ⌘ K ]"
             className="w-full pl-9 pr-12 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50/70 text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
           />
           <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[9px] font-mono text-zinc-400 bg-white border border-zinc-200 rounded">
@@ -2178,15 +2181,15 @@ export default function AdminPage() {
           </kbd>
         </div>
 
-        {/* Right Controls: User Profile Pill, Workspace, Purge, Lock */}
+        {/* Right Controls: User Profile Pill, Storefront Scope, Wipe ISR, Lock, Store Link */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* User Profile Pill matching Screenshot 1 */}
+          {/* User Profile Pill */}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-100/80 border border-zinc-200/80 text-xs">
             <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">
-              {user?.name?.[0] || "S"}
+              {user?.name?.[0] || "A"}
             </div>
             <span className="font-semibold text-zinc-800 text-xs hidden sm:inline">
-              {user?.name || "Satyam Himesh"}
+              {user?.name || "Admin"}
             </span>
             <span className="text-[9px] font-bold px-1.5 py-0.2 bg-blue-600 text-white rounded uppercase font-mono">
               {isOwner ? "OWNER" : "ADMIN"}
@@ -2195,11 +2198,10 @@ export default function AdminPage() {
 
           <span className="text-zinc-300 hidden sm:inline">→</span>
 
-          {/* Workspace Dropdown matching Screenshot 1 */}
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700">
-            <Package className="w-3.5 h-3.5 text-blue-600" />
-            <span>CypherTech TTU [ORGTTU]</span>
-            <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+          {/* Storefront Status Pill */}
+          <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Store Live [US · IN]</span>
           </div>
 
           {/* Wipe ISR Cache Button */}
@@ -2222,7 +2224,7 @@ export default function AdminPage() {
             <Lock className="w-3.5 h-3.5" />
           </button>
 
-          {/* Link to Store */}
+          {/* Link to Storefront */}
           <Link
             href="/"
             className="hidden sm:flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-900 px-2 py-1 transition-colors"
@@ -2235,12 +2237,12 @@ export default function AdminPage() {
 
       {/* 2. BODY CONTAINER: SIDEBAR + MAIN WORKSPACE */}
       <div className="flex flex-1 min-h-[calc(100vh-3.5rem)]">
-        {/* TASKPMS LEFT SIDEBAR matching Screenshot 1 */}
+        {/* LEFT SIDEBAR NAVIGATION */}
         <aside className="w-60 bg-white border-r border-zinc-200/80 p-3 space-y-6 shrink-0 hidden md:block">
-          {/* Group 1: OVERVIEW */}
+          {/* Group 1: STORE OVERVIEW */}
           <div className="space-y-1">
             <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold px-2.5 py-1">
-              OVERVIEW
+              STORE OVERVIEW
             </div>
             <button
               onClick={() => setActiveTab("dashboard")}
@@ -2251,7 +2253,7 @@ export default function AdminPage() {
               }`}
             >
               <LayoutDashboard className="w-4 h-4 text-blue-600" />
-              <span>Exec Dashboard</span>
+              <span>Commerce Dashboard</span>
             </button>
 
             <button
@@ -2284,10 +2286,10 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Group 2: WORK / CATALOG */}
+          {/* Group 2: CATALOG & INVENTORY */}
           <div className="space-y-1">
             <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold px-2.5 py-1">
-              WORK
+              CATALOG & INVENTORY
             </div>
             <button
               onClick={() => setActiveTab("inventory")}
@@ -2299,7 +2301,7 @@ export default function AdminPage() {
             >
               <div className="flex items-center gap-2.5">
                 <Grid className="w-4 h-4" />
-                <span>Products Portfolio</span>
+                <span>Products & Stock</span>
               </div>
               <span className="px-1.5 py-0.2 rounded-md bg-zinc-100 text-zinc-600 text-[10px] font-mono font-bold">
                 {products.length}
@@ -2331,10 +2333,10 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Group 3: PEOPLE / COMMUNITY */}
+          {/* Group 3: COMMUNITY & ACCESS */}
           <div className="space-y-1">
             <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold px-2.5 py-1">
-              PEOPLE
+              COMMUNITY & ACCESS
             </div>
             <button
               onClick={() => setActiveTab("reviews")}
@@ -2366,7 +2368,7 @@ export default function AdminPage() {
                 }`}
               >
                 <Users className="w-4 h-4 text-amber-600" />
-                <span>Teams & Members</span>
+                <span>Staff & Roles</span>
               </button>
             )}
           </div>
@@ -2386,287 +2388,47 @@ export default function AdminPage() {
 
         {/* MAIN WORKSPACE CONTENT */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto bg-[#F8F9FA]">
-          {/* Breadcrumb line matching Screenshot 1 */}
+          {/* Breadcrumbs */}
           <div className="flex items-center gap-2 text-xs text-zinc-500">
-            <span>Home</span>
+            <Link href="/" className="hover:text-zinc-900 transition-colors">Storefront</Link>
             <span>›</span>
-            <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-mono text-[11px] font-semibold">
-              ORGTTU
+            <span className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 font-mono text-[11px] font-semibold">
+              Admin
             </span>
             <span>›</span>
-            <span className="text-zinc-800 font-semibold">
-              {activeTab === "dashboard" && "Project Roadmap & Execution Guide"}
-              {activeTab === "inventory" && "Products Portfolio & Inventory Restock"}
-              {activeTab === "orders" && "Completed Orders & Buying Details"}
-              {activeTab === "variation-engine" && "Variation Engine & Hardware Specs"}
-              {activeTab === "shipping" && "Global Shipping Method Pricing Fixtures"}
-              {activeTab === "delivery" && "Hub Logistics & Doorstep Gate Verification"}
-              {activeTab === "reviews" && "Customer Reviews & Media Moderation"}
-              {activeTab === "team" && "Team Access & RBAC Role Directory"}
+            <span className="text-zinc-900 font-semibold">
+              {activeTab === "dashboard" && "Commerce Overview"}
+              {activeTab === "inventory" && "Products & Stock Inventory"}
+              {activeTab === "orders" && "Customer Orders & Buying"}
+              {activeTab === "variation-engine" && "Variation Engine & Specs"}
+              {activeTab === "shipping" && "Shipping Rates & Fixtures"}
+              {activeTab === "delivery" && "Delivery Logistics & Hubs"}
+              {activeTab === "reviews" && "Customer Reviews & Moderation"}
+              {activeTab === "team" && "Staff Access & Roles"}
             </span>
           </div>
 
-          {/* Operational Architecture Blueprint Banner matching Screenshot 1 */}
-          <div className="rounded-2xl bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-950 text-white p-6 sm:p-8 relative overflow-hidden shadow-xs">
-            <div className="relative z-10 space-y-3 max-w-3xl">
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest uppercase bg-white/15 backdrop-blur-md px-2.5 py-1 rounded-md text-blue-100 font-bold border border-white/20">
-                TASKPMS OPERATIONAL ARCHITECTURE · END-TO-END BLUEPRINT
-              </span>
-              <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-white font-sans">
-                How to Create, Execute, Sell, and Profit from Any Project
-              </h2>
-              <p className="text-xs sm:text-sm text-blue-100/90 leading-relaxed font-sans">
-                A concrete operational roadmap explaining how to initialize projects, assign budgets, provision squads, execute task pipelines, acquire clients through campaigns, close milestone deals, and balance incoming revenue against team salary outflows.
-              </p>
-
-              <div className="flex flex-wrap items-center gap-2 pt-2">
-                <button
-                  onClick={() => setActiveTab("inventory")}
-                  className="text-xs bg-white text-blue-900 font-semibold px-3.5 py-2 rounded-xl shadow-xs hover:bg-blue-50 transition-colors cursor-pointer"
-                >
-                  Go to Projects
-                </button>
-                <button
-                  onClick={() => setActiveTab("team")}
-                  className="text-xs bg-white/10 hover:bg-white/20 text-white font-semibold px-3.5 py-2 rounded-xl border border-white/20 transition-colors cursor-pointer"
-                >
-                  Provision Teams
-                </button>
-                <button
-                  onClick={() => setActiveTab("variation-engine")}
-                  className="text-xs bg-white/10 hover:bg-white/20 text-white font-semibold px-3.5 py-2 rounded-xl border border-white/20 transition-colors cursor-pointer"
-                >
-                  Dev Pipelines
-                </button>
-                <button
-                  onClick={() => setActiveTab("orders")}
-                  className="text-xs bg-white/10 hover:bg-white/20 text-white font-semibold px-3.5 py-2 rounded-xl border border-white/20 transition-colors cursor-pointer"
-                >
-                  Sales Campaigns
-                </button>
-                <button
-                  onClick={() => setActiveTab("shipping")}
-                  className="text-xs bg-white/10 hover:bg-white/20 text-white font-semibold px-3.5 py-2 rounded-xl border border-white/20 transition-colors cursor-pointer"
-                >
-                  Revenue Kanban
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Unified 6-Phase Project Lifecycle Roadmap matching Screenshot 1 */}
-          <div className="space-y-4 pt-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">
-                    🧭
-                  </div>
-                  <h3 className="text-sm sm:text-base font-bold text-zinc-950 font-sans">
-                    Unified 6-Phase Project Lifecycle Roadmap
-                  </h3>
-                </div>
-                <p className="text-xs text-zinc-500 mt-0.5">
-                  Click any phase below to inspect the required app module and exact operational action.
-                </p>
-              </div>
-              <span className="text-[11px] font-mono text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200/60 font-semibold self-start sm:self-auto">
-                Connected Lifecycle
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* PHASE 1 */}
-              <div className="rounded-2xl border border-blue-500/80 bg-white p-5 shadow-xs space-y-3 hover:shadow-md transition-shadow flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-blue-600 uppercase tracking-wider">PHASE 1</span>
-                    <span className="text-[10px] font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-semibold">Project Blueprint</span>
-                  </div>
-                  <div className="font-bold text-sm text-zinc-950 flex items-center gap-2">
-                    <FolderKanban className="w-4 h-4 text-blue-600" />
-                    <span>Project Genesis & Budget Envelope</span>
-                  </div>
-                  <div className="text-[11px] font-mono text-blue-600">Module: /projects</div>
-                  <p className="text-xs text-zinc-600 leading-relaxed">
-                    Sets the company boundary, locks initial cash envelope, and prepares the workspace before any team member starts billing hours.
-                  </p>
-                </div>
-                <div className="pt-3 border-t border-zinc-100 flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 font-mono text-[11px]">Step 1 of 6</span>
-                  <button
-                    onClick={() => setActiveTab("inventory")}
-                    className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Open Module</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* PHASE 2 */}
-              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs space-y-3 hover:border-blue-500 transition-colors flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-blue-600 uppercase tracking-wider">PHASE 2</span>
-                    <span className="text-[10px] font-mono bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-semibold">Squad Allocation</span>
-                  </div>
-                  <div className="font-bold text-sm text-zinc-950 flex items-center gap-2">
-                    <Users className="w-4 h-4 text-purple-600" />
-                    <span>Squad Formation & Member Roles</span>
-                  </div>
-                  <div className="text-[11px] font-mono text-blue-600">Module: /teams</div>
-                  <p className="text-xs text-zinc-600 leading-relaxed">
-                    Establishes role hierarchy (Owner, Manager, Lead, Member) and determines fixed monthly salary burden allocated to this project.
-                  </p>
-                </div>
-                <div className="pt-3 border-t border-zinc-100 flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 font-mono text-[11px]">Step 2 of 6</span>
-                  <button
-                    onClick={() => setActiveTab("team")}
-                    className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Open Module</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* PHASE 3 */}
-              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs space-y-3 hover:border-blue-500 transition-colors flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-blue-600 uppercase tracking-wider">PHASE 3</span>
-                    <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">Execution Engine</span>
-                  </div>
-                  <div className="font-bold text-sm text-zinc-950 flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-emerald-600" />
-                    <span>Pipelines, Gantt & Execution Checklist</span>
-                  </div>
-                  <div className="text-[11px] font-mono text-blue-600">Module: /dev/dashboard</div>
-                  <p className="text-xs text-zinc-600 leading-relaxed">
-                    Break project deliverables into trackable sprint focus with assigned owners (Individual or Squad) and monitor cycle time in Frappe Gantt.
-                  </p>
-                </div>
-                <div className="pt-3 border-t border-zinc-100 flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 font-mono text-[11px]">Step 3 of 6</span>
-                  <button
-                    onClick={() => setActiveTab("variation-engine")}
-                    className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Open Module</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* PHASE 4 */}
-              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs space-y-3 hover:border-blue-500 transition-colors flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-blue-600 uppercase tracking-wider">PHASE 4</span>
-                    <span className="text-[10px] font-mono bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold">Commercial Growth</span>
-                  </div>
-                  <div className="font-bold text-sm text-zinc-950 flex items-center gap-2">
-                    <ShoppingBag className="w-4 h-4 text-amber-600" />
-                    <span>Customer Acquisition & Ad Campaigns</span>
-                  </div>
-                  <div className="text-[11px] font-mono text-blue-600">Module: /sales/dashboard</div>
-                  <p className="text-xs text-zinc-600 leading-relaxed">
-                    Connects marketing spend ($) and lead acquisition channels (Meta ads, outbound outreach, partnerships) directly to the project's pipeline.
-                  </p>
-                </div>
-                <div className="pt-3 border-t border-zinc-100 flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 font-mono text-[11px]">Step 4 of 6</span>
-                  <button
-                    onClick={() => setActiveTab("orders")}
-                    className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Open Module</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* PHASE 5 */}
-              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs space-y-3 hover:border-blue-500 transition-colors flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-blue-600 uppercase tracking-wider">PHASE 5</span>
-                    <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">Deal Velocity</span>
-                  </div>
-                  <div className="font-bold text-sm text-zinc-950 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-indigo-600" />
-                    <span>Commercial Deals Kanban & Milestones</span>
-                  </div>
-                  <div className="text-[11px] font-mono text-blue-600">Module: /revenue/dashboard</div>
-                  <p className="text-xs text-zinc-600 leading-relaxed">
-                    Tracks the 7-stage commercial pipeline (Prospect → Initial Analysis → Closing → Closed Won) with contracts uploaded in the S3 vault.
-                  </p>
-                </div>
-                <div className="pt-3 border-t border-zinc-100 flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 font-mono text-[11px]">Step 5 of 6</span>
-                  <button
-                    onClick={() => setActiveTab("shipping")}
-                    className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Open Module</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* PHASE 6 */}
-              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs space-y-3 hover:border-blue-500 transition-colors flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-blue-600 uppercase tracking-wider">PHASE 6</span>
-                    <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">Financial Health</span>
-                  </div>
-                  <div className="font-bold text-sm text-zinc-950 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Treasury Inflow vs Salary Outflows</span>
-                  </div>
-                  <div className="text-[11px] font-mono text-blue-600">Module: /exec/dashboard</div>
-                  <p className="text-xs text-zinc-600 leading-relaxed">
-                    Evaluates whether revenue from customer orders or milestone deposits exceeds operational expenses and team salaries for net profitability.
-                  </p>
-                </div>
-                <div className="pt-3 border-t border-zinc-100 flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 font-mono text-[11px]">Step 6 of 6</span>
-                  <button
-                    onClick={() => setActiveTab("delivery")}
-                    className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Open Module</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Executive & Strategic Portfolio Dashboard Header matching Screenshot 2 */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3">
+          {/* Store Controller Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-950 font-sans">
-                  Executive & Strategic Portfolio Dashboard
+                  Store Operations Controller
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold flex items-center gap-1 border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live Verified Data
+                  Live Storefront · US & India
                 </span>
               </div>
               <p className="text-xs text-zinc-500">
-                Consolidated, real-time operating metrics across all projects, tasks, pipelines, and revenue streams.
+                Real-time catalog inventory, order fulfillment, multi-currency fixtures, and field gate delivery.
               </p>
             </div>
 
             <div className="flex items-center gap-2 self-start sm:self-auto">
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-200 bg-white text-xs font-semibold text-zinc-700 shadow-2xs">
                 <Filter className="w-3.5 h-3.5 text-blue-600" />
-                <span>Project Scope:</span>
+                <span>Catalog Scope:</span>
                 <select
                   value={selectedSlug}
                   onChange={(e) => {
@@ -2675,7 +2437,7 @@ export default function AdminPage() {
                   }}
                   className="bg-transparent font-bold text-zinc-900 focus:outline-none cursor-pointer"
                 >
-                  <option value="all">All Projects (Enterprise Overview - {products.length || 3})</option>
+                  <option value="all">All Models ({products.length} Products)</option>
                   {products.map((p) => (
                     <option key={p.slug} value={p.slug}>{p.name}</option>
                   ))}
@@ -2684,75 +2446,95 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* 5-Column KPI Metric Cards matching Screenshot 2 */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
-            <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-2xs space-y-1">
-              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
-                <span>ACTIVE PROJECTS</span>
-                <Package className="w-3.5 h-3.5 text-blue-600" />
-              </div>
-              <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
-                {products.length || 3} / {products.length || 3}
-              </div>
-              <div className="text-[11px] text-emerald-600 font-medium">
-                {products.length || 3} On Track · 0 At Risk
-              </div>
-            </div>
+          {/* 5-Column High-Density KPI Metric Row */}
+          {(() => {
+            const totalRevenueUsd = orders.reduce((sum, ord) => sum + (Number(ord.total) || 0), 0);
+            const totalRevenueInr = Math.round(totalRevenueUsd * exchangeRate);
+            const totalUnitsOnHand = products.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
+            const paidOrdersCount = orders.filter((o) => (o.paymentStatus || "").toLowerCase() === "paid").length;
+            const dispatchedCount = orders.filter((o) => o.awsEventBridgeDispatched).length;
+            const lowStockCount = products.filter((p) => Number(p.stock) <= 5).length;
+            const avgRating = reviews.length > 0
+              ? (reviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / reviews.length).toFixed(1)
+              : "4.9";
 
-            <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-2xs space-y-1">
-              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
-                <span>DELIVERY VELOCITY</span>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              </div>
-              <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
-                {orders.length} / {orders.length} Tasks
-              </div>
-              <div className="text-[11px] text-emerald-600 font-medium">
-                100% Done · In Progress
-              </div>
-            </div>
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                {/* 1. GROSS REVENUE (GMV) */}
+                <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                    <span>GROSS REVENUE (GMV)</span>
+                    <Tag className="w-3.5 h-3.5 text-emerald-600" />
+                  </div>
+                  <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-600">
+                    ${totalRevenueUsd.toFixed(2)}
+                  </div>
+                  <div className="text-[11px] text-zinc-500 font-mono">
+                    ≈ ₹{totalRevenueInr.toLocaleString("en-IN")} Confirmed
+                  </div>
+                </div>
 
-            <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-2xs space-y-1">
-              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
-                <span>CLOSED WON ARR</span>
-                <Tag className="w-3.5 h-3.5 text-emerald-600" />
-              </div>
-              <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-600">
-                ${orders.reduce((sum, ord) => sum + (Number(ord.total) || 0), 0).toFixed(2)}
-              </div>
-              <div className="text-[11px] text-zinc-500 font-mono">
-                ≈ ₹{Math.round(orders.reduce((sum, ord) => sum + (Number(ord.total) || 0), 0) * exchangeRate).toLocaleString("en-IN")} Confirmed
-              </div>
-            </div>
+                {/* 2. ORDER FULFILLMENT */}
+                <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                    <span>ORDER FULFILLMENT</span>
+                    <ShoppingBag className="w-3.5 h-3.5 text-blue-600" />
+                  </div>
+                  <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
+                    {paidOrdersCount} / {orders.length}
+                  </div>
+                  <div className="text-[11px] text-emerald-600 font-medium">
+                    {orders.length === 0 ? "0 Orders Captured" : `${paidOrdersCount} Paid · ${dispatchedCount} Dispatched`}
+                  </div>
+                </div>
 
-            <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-2xs space-y-1">
-              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
-                <span>PIPELINE FORECAST</span>
-                <TrendingUp className="w-3.5 h-3.5 text-blue-600" />
-              </div>
-              <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
-                {products.reduce((sum, p) => sum + (Number(p.stock) || 0), 0) || 200} <span className="text-xs font-normal text-zinc-400">units</span>
-              </div>
-              <div className="text-[11px] text-zinc-500">
-                Active in flight stock
-              </div>
-            </div>
+                {/* 3. INVENTORY ON HAND */}
+                <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                    <span>INVENTORY ON HAND</span>
+                    <Package className="w-3.5 h-3.5 text-blue-600" />
+                  </div>
+                  <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
+                    {totalUnitsOnHand} <span className="text-xs font-normal text-zinc-400">units</span>
+                  </div>
+                  <div className={`text-[11px] font-medium ${lowStockCount > 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                    {lowStockCount > 0 ? `⚠️ ${lowStockCount} Low Stock Model${lowStockCount > 1 ? "s" : ""}` : "All Models in Stock"}
+                  </div>
+                </div>
 
-            <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-2xs space-y-1 col-span-2 md:col-span-1">
-              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
-                <span>HEADCOUNT & CAPACITY</span>
-                <Users className="w-3.5 h-3.5 text-blue-600" />
-              </div>
-              <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
-                {teamUsers.length || 13} Members
-              </div>
-              <div className="text-[11px] text-zinc-500">
-                Engineering, Sales & Ops
-              </div>
-            </div>
-          </div>
+                {/* 4. ACTIVE PRODUCTS */}
+                <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                    <span>MASTER MODELS</span>
+                    <Grid className="w-3.5 h-3.5 text-purple-600" />
+                  </div>
+                  <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
+                    {products.length} Models
+                  </div>
+                  <div className="text-[11px] text-zinc-500">
+                    Active across US & India
+                  </div>
+                </div>
 
-          {/* Sub-Tab Navigation Strip matching Screenshot 2 & 3 */}
+                {/* 5. REVIEWS & RATINGS */}
+                <div className="p-4 rounded-xl bg-white border border-zinc-200/80 shadow-2xs space-y-1 col-span-2 md:col-span-1">
+                  <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                    <span>CUSTOMER RATING</span>
+                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  </div>
+                  <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950 flex items-center gap-1">
+                    <span>{avgRating}</span>
+                    <span className="text-amber-500 text-sm">★</span>
+                  </div>
+                  <div className="text-[11px] text-zinc-500">
+                    {reviews.length} Verified Buyer Reviews
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Sub-Tab Navigation Strip */}
           <div className="flex items-center gap-2 border-b border-zinc-200/80 overflow-x-auto text-xs font-semibold pb-px">
             <button
               onClick={() => setActiveTab("dashboard")}
@@ -2763,10 +2545,7 @@ export default function AdminPage() {
               }`}
             >
               <LayoutDashboard className="w-4 h-4" />
-              <span>Projects Portfolio & Health</span>
-              <span className="px-1.5 py-0.2 rounded-md bg-zinc-100 text-zinc-600 text-[10px] font-mono">
-                {products.length}
-              </span>
+              <span>Commerce Overview</span>
             </button>
 
             <button
@@ -2778,9 +2557,24 @@ export default function AdminPage() {
               }`}
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>All Tasks / Orders Breakdown</span>
+              <span>Customer Orders</span>
               <span className="px-1.5 py-0.2 rounded-md bg-zinc-100 text-zinc-600 text-[10px] font-mono">
                 {orders.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("inventory")}
+              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
+                activeTab === "inventory"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-zinc-500 hover:text-zinc-900"
+              }`}
+            >
+              <Package className="w-4 h-4" />
+              <span>Products & Inventory</span>
+              <span className="px-1.5 py-0.2 rounded-md bg-zinc-100 text-zinc-600 text-[10px] font-mono">
+                {products.length}
               </span>
             </button>
 
@@ -2793,7 +2587,7 @@ export default function AdminPage() {
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>Variation Engine & Specs</span>
+              <span>Variation Engine</span>
             </button>
 
             <button
@@ -2817,7 +2611,7 @@ export default function AdminPage() {
               }`}
             >
               <Truck className="w-4 h-4" />
-              <span>Delivery Hubs</span>
+              <span>Delivery & Hubs</span>
             </button>
 
             <button
@@ -2830,6 +2624,9 @@ export default function AdminPage() {
             >
               <Star className="w-4 h-4 text-amber-500" />
               <span>Customer Reviews</span>
+              <span className="px-1.5 py-0.2 rounded-md bg-zinc-100 text-zinc-600 text-[10px] font-mono">
+                {reviews.length}
+              </span>
             </button>
 
             {isOwner && (
@@ -2845,30 +2642,70 @@ export default function AdminPage() {
                 }`}
               >
                 <Users className="w-4 h-4 text-amber-600" />
-                <span>Teams & Members</span>
+                <span>Staff & Roles</span>
               </button>
             )}
           </div>
 
           {/* TAB 0: EXEC DASHBOARD & ENTERPRISE PORTFOLIO ROLLUP matching Screenshot 2 */}
+          {/* TAB 0: COMMERCE OVERVIEW DASHBOARD */}
           {activeTab === "dashboard" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Enterprise Project Portfolio & Task Rollup Table matching Screenshot 2 */}
+              {/* Quick Action Buttons Ribbon */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsNewProductModalOpen(true)}
+                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-white hover:bg-zinc-50 border border-zinc-200/80 text-zinc-800 text-xs font-semibold shadow-2xs transition-all hover:border-zinc-300 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 text-emerald-600" />
+                  <span>New Product Item</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => product && openRestockModal(product)}
+                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-white hover:bg-zinc-50 border border-zinc-200/80 text-zinc-800 text-xs font-semibold shadow-2xs transition-all hover:border-zinc-300 cursor-pointer"
+                >
+                  <PackagePlus className="w-4 h-4 text-blue-600" />
+                  <span>Variant Restock Studio</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("shipping")}
+                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-white hover:bg-zinc-50 border border-zinc-200/80 text-zinc-800 text-xs font-semibold shadow-2xs transition-all hover:border-zinc-300 cursor-pointer"
+                >
+                  <Tag className="w-4 h-4 text-purple-600" />
+                  <span>Shipping Fixtures</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("delivery")}
+                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-white hover:bg-zinc-50 border border-zinc-200/80 text-zinc-800 text-xs font-semibold shadow-2xs transition-all hover:border-zinc-300 cursor-pointer"
+                >
+                  <Truck className="w-4 h-4 text-amber-600" />
+                  <span>Hub Logistics & OTP</span>
+                </button>
+              </div>
+
+              {/* Product Catalog & Live Stock Status Table */}
               <div className="rounded-2xl bg-white border border-zinc-200/80 p-6 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-100 gap-2">
                   <div>
                     <h3 className="text-base font-bold text-zinc-950 font-sans">
-                      Enterprise Project Portfolio & Task Rollup
+                      Product Catalog & Live Stock Status
                     </h3>
                     <p className="text-xs text-zinc-500">
-                      Aggregated task progress, health indicators, pipelines, and revenue per project.
+                      Real-time unit allocation, low stock monitoring, and master SKUs across active catalog models.
                     </p>
                   </div>
                   <button
                     onClick={() => setActiveTab("inventory")}
                     className="text-xs text-blue-600 hover:text-blue-800 font-semibold self-start sm:self-auto flex items-center gap-1 cursor-pointer"
                   >
-                    <span>Manage Projects</span>
+                    <span>Manage Inventory ({products.length})</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -2877,49 +2714,51 @@ export default function AdminPage() {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-zinc-100 text-zinc-400 font-mono text-[11px]">
-                        <th className="py-2.5 font-normal">PROJECT</th>
-                        <th className="py-2.5 font-normal">HEALTH / STATUS</th>
-                        <th className="py-2.5 font-normal">TASKS PROGRESS</th>
-                        <th className="py-2.5 font-normal">TASK BREAKDOWN</th>
-                        <th className="py-2.5 font-normal">PIPELINES</th>
-                        <th className="py-2.5 font-normal">WON REVENUE</th>
+                        <th className="py-2.5 font-normal">PRODUCT & MASTER SKU</th>
+                        <th className="py-2.5 font-normal">CATEGORY</th>
+                        <th className="py-2.5 font-normal">PRICE (USD / INR)</th>
+                        <th className="py-2.5 font-normal">STOCK ON HAND</th>
+                        <th className="py-2.5 font-normal">VARIANTS</th>
+                        <th className="py-2.5 font-normal">STATUS</th>
                         <th className="py-2.5 font-normal text-right">ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
-                      {products.map((p, idx) => {
-                        const stockPercent = Math.min(100, Math.round(((Number(p.stock) || 0) / 40) * 100));
+                      {products.map((p) => {
+                        const stockNum = Number(p.stock) || 0;
+                        const stockPercent = Math.min(100, Math.round((stockNum / 40) * 100));
                         const isSelected = p.slug === selectedSlug;
-                        const fakeRevenue = p.slug === "form-01" ? "$3,690,000" : p.slug === "nova-x1-smartphone" ? "$2,530,000" : "$800,000";
+                        const variantCount = (p.childVariants && p.childVariants.length) || 1;
 
                         return (
                           <tr key={p.slug} className="hover:bg-zinc-50/70 transition-colors">
                             <td className="py-3.5 font-sans font-bold text-zinc-900">
                               <div>{p.name}</div>
                               <div className="text-[11px] font-mono text-zinc-400 font-normal">
-                                {p.productId || p.sku || p.slug} · Internal
+                                SKU: {p.productId || p.sku || p.slug}
                               </div>
                             </td>
                             <td className="py-3.5">
-                              <div className="flex items-center gap-1.5">
-                                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-200/60">
-                                  On Track
-                                </span>
-                                <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 text-[10px] font-medium">
-                                  Active
-                                </span>
-                              </div>
+                              <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 text-[10px] font-medium">
+                                {p.category || "Audio & Wear"}
+                              </span>
+                            </td>
+                            <td className="py-3.5 font-mono text-zinc-800 text-xs">
+                              <div className="font-bold">${(Number(p.price) || 0).toFixed(2)}</div>
+                              <div className="text-[10px] text-zinc-400">≈ ₹{Math.round((Number(p.price) || 0) * exchangeRate).toLocaleString("en-IN")}</div>
                             </td>
                             <td className="py-3.5 min-w-[140px]">
                               <div className="space-y-1">
                                 <div className="flex justify-between text-[11px] font-mono">
-                                  <span className="font-bold text-zinc-800">{p.stock} Done</span>
+                                  <span className={`font-bold ${stockNum <= 5 ? "text-amber-600" : "text-zinc-800"}`}>
+                                    {stockNum} units
+                                  </span>
                                   <span className="text-zinc-400">{stockPercent}%</span>
                                 </div>
                                 <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
                                   <div
                                     className={`h-full rounded-full ${
-                                      p.stock <= 5 ? "bg-amber-500" : "bg-blue-600"
+                                      stockNum <= 5 ? "bg-amber-500" : "bg-emerald-600"
                                     }`}
                                     style={{ width: `${Math.max(5, stockPercent)}%` }}
                                   />
@@ -2927,35 +2766,41 @@ export default function AdminPage() {
                               </div>
                             </td>
                             <td className="py-3.5">
-                              <div className="flex items-center gap-1.5">
-                                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-mono font-semibold">
-                                  {(p.childVariants && p.childVariants.length) || 3} Done
+                              <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-mono font-semibold">
+                                {variantCount} {variantCount === 1 ? "Option" : "Variants"}
+                              </span>
+                            </td>
+                            <td className="py-3.5">
+                              {stockNum <= 5 ? (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-semibold border border-amber-200/60">
+                                  Low Stock
                                 </span>
-                                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-mono font-semibold">
-                                  1 Active
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-200/60">
+                                  In Stock
                                 </span>
-                              </div>
+                              )}
                             </td>
-                            <td className="py-3.5 font-mono text-zinc-600 text-xs">
-                              {idx + 3}
-                            </td>
-                            <td className="py-3.5 font-mono font-bold text-emerald-600 text-xs sm:text-sm">
-                              {fakeRevenue}
-                            </td>
-                            <td className="py-3.5 text-right">
+                            <td className="py-3.5 text-right space-x-2">
+                              <button
+                                onClick={() => openRestockModal(p)}
+                                className="text-xs px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold transition-colors cursor-pointer"
+                              >
+                                Restock
+                              </button>
                               <button
                                 onClick={() => {
                                   setSelectedSlug(p.slug);
                                   fetchAdminData(p.slug);
                                   setActiveTab("inventory");
                                 }}
-                                className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+                                className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
                                   isSelected
                                     ? "bg-blue-600 text-white"
                                     : "bg-blue-50 text-blue-700 hover:bg-blue-100"
                                 }`}
                               >
-                                Filter
+                                {isSelected ? "Active" : "Inspect"}
                               </button>
                             </td>
                           </tr>
@@ -2966,21 +2811,124 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Cross-Department Rollup Telemetry matching Screenshot 2 */}
+              {/* Recent Customer Orders Table */}
+              <div className="rounded-2xl bg-white border border-zinc-200/80 p-6 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-100 gap-2">
+                  <div>
+                    <h3 className="text-base font-bold text-zinc-950 font-sans">
+                      Recent Customer Orders & Buying Details
+                    </h3>
+                    <p className="text-xs text-zinc-500">
+                      Live audit of completed customer checkouts, items purchased, totals, and delivery statuses.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab("orders")}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold self-start sm:self-auto flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>View All Orders ({orders.length})</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {orders.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-500 text-xs bg-zinc-50/70 rounded-xl border border-dashed border-zinc-200">
+                    <ShoppingBag className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
+                    <p className="font-semibold text-zinc-700">No customer orders placed yet</p>
+                    <p className="text-zinc-400 mt-0.5">As soon as customers checkout on the store, purchases will appear here in real time.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-zinc-100 text-zinc-400 font-mono text-[11px]">
+                          <th className="py-2.5 font-normal">ORDER ID</th>
+                          <th className="py-2.5 font-normal">CUSTOMER</th>
+                          <th className="py-2.5 font-normal">ITEMS</th>
+                          <th className="py-2.5 font-normal">AMOUNT (USD / INR)</th>
+                          <th className="py-2.5 font-normal">PAYMENT</th>
+                          <th className="py-2.5 font-normal">DELIVERY STATUS</th>
+                          <th className="py-2.5 font-normal">DATE</th>
+                          <th className="py-2.5 font-normal text-right">ACTION</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100">
+                        {orders.slice(0, 5).map((ord) => {
+                          const orderTotal = Number(ord.total) || 0;
+                          const totalInr = Math.round(orderTotal * exchangeRate);
+                          const itemsSummary = Array.isArray(ord.items)
+                            ? ord.items.map((i: any) => `${i.quantity || 1}x ${i.name || "Product"}`).join(", ")
+                            : "Items";
+
+                          return (
+                            <tr key={ord.id} className="hover:bg-zinc-50/70 transition-colors">
+                              <td className="py-3.5 font-mono font-bold text-zinc-900">
+                                #{ord.orderNumber || ord.id.slice(0, 8)}
+                              </td>
+                              <td className="py-3.5 font-sans">
+                                <div className="font-bold text-zinc-900">{ord.customer?.fullName || "Guest Customer"}</div>
+                                <div className="text-[11px] text-zinc-400 font-mono">{ord.customer?.email || ord.customer?.city || "—"}</div>
+                              </td>
+                              <td className="py-3.5 max-w-[200px] truncate text-zinc-600 font-medium" title={itemsSummary}>
+                                {itemsSummary}
+                              </td>
+                              <td className="py-3.5 font-mono">
+                                <div className="font-bold text-zinc-900">${orderTotal.toFixed(2)}</div>
+                                <div className="text-[10px] text-zinc-400">≈ ₹{totalInr.toLocaleString("en-IN")}</div>
+                              </td>
+                              <td className="py-3.5">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  (ord.paymentStatus || "").toLowerCase() === "paid"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                                    : "bg-amber-50 text-amber-700 border border-amber-200/60"
+                                }`}>
+                                  {ord.paymentStatus === "paid" ? "Paid" : "Pending"}
+                                </span>
+                              </td>
+                              <td className="py-3.5">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  ord.awsEventBridgeDispatched
+                                    ? "bg-blue-50 text-blue-700 border border-blue-200/60"
+                                    : "bg-zinc-100 text-zinc-600 border border-zinc-200/60"
+                                }`}>
+                                  {ord.awsEventBridgeDispatched ? "Dispatched" : "Processing"}
+                                </span>
+                              </td>
+                              <td className="py-3.5 text-zinc-400 font-mono text-[11px]">
+                                {ord.createdAt ? new Date(ord.createdAt).toLocaleDateString() : "Recent"}
+                              </td>
+                              <td className="py-3.5 text-right">
+                                <button
+                                  onClick={() => setActiveTab("orders")}
+                                  className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold transition-colors cursor-pointer"
+                                >
+                                  View
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Cross-Store Operations Telemetry & Quick Action Cards */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Left Telemetry Card */}
                 <div className="rounded-2xl bg-white border border-zinc-200/80 p-6 shadow-xs space-y-4">
                   <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
                     <div>
                       <h4 className="text-sm font-bold text-zinc-950 font-sans">
-                        Engineering Velocity & Task Distribution
+                        Multi-Variant Stock Allocation
                       </h4>
                       <p className="text-[11px] text-zinc-500">
-                        Across all projects ({products.length} catalog models)
+                        Direct colorway and architecture quantity assignment
                       </p>
                     </div>
                     <span className="text-xs font-mono font-bold text-blue-600">
-                      23 of 32 Done
+                      {childVariants.length} Active Colorways
                     </span>
                   </div>
 
@@ -2990,7 +2938,7 @@ export default function AdminPage() {
                       <div>
                         <h5 className="text-xs font-bold text-blue-950">Multi-Variant Restock Studio</h5>
                         <p className="text-[11px] text-blue-800/80 leading-relaxed mt-0.5">
-                          Allocate stock directly to specific architectures and colors without master numbers.
+                          Allocate inventory directly to individual architectures (A1, A2) and colorways without master limit errors.
                         </p>
                       </div>
                     </div>
@@ -3010,26 +2958,26 @@ export default function AdminPage() {
                   <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
                     <div>
                       <h4 className="text-sm font-bold text-zinc-950 font-sans">
-                        Finance & Contract Revenue Trajectory
+                        Global Shipping & Currency Fixtures
                       </h4>
                       <p className="text-[11px] text-zinc-500">
-                        Closed Won ARR vs. Forecasted Opportunities
+                        Checkout delivery pricing across US & India storefronts
                       </p>
                     </div>
                     <span className="text-xs font-mono font-bold text-emerald-600">
-                      $3,690,000 ARR
+                      Live Rates
                     </span>
                   </div>
 
                   <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-200 space-y-3 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-zinc-600 font-medium">Standard US Shipping Fixture:</span>
+                      <span className="text-zinc-600 font-medium">Standard US Shipping:</span>
                       <strong className="font-mono text-zinc-900">
                         {generalDeliveryPriceUsd === 0 ? "Free ($0.00)" : `$${generalDeliveryPriceUsd.toFixed(2)}`}
                       </strong>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-zinc-600 font-medium">India General Delivery Fixture:</span>
+                      <span className="text-zinc-600 font-medium">Standard India Shipping:</span>
                       <strong className="font-mono text-zinc-900">
                         {generalDeliveryPriceInr === 0 ? "Free (₹0)" : `₹${generalDeliveryPriceInr}`}
                       </strong>
