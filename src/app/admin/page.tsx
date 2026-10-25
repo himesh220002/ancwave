@@ -539,7 +539,11 @@ export default function AdminPage() {
   };
 
   const handleCascadePriceToAllVariants = (priceUsd: number, priceInr?: number) => {
-    const inrVal = priceInr ?? Math.round(priceUsd * exchangeRate);
+    const inrVal =
+      priceInr ??
+      (priceUsd < 1
+        ? Number((priceUsd * exchangeRate).toFixed(2))
+        : Math.round(priceUsd * exchangeRate));
     const updated = variantGroups.map((g) => ({
       ...g,
       price: priceUsd,
@@ -563,7 +567,10 @@ export default function AdminPage() {
     setMasterBasePrice(newUsd);
     setQuickPriceInput(newUsd);
     if (autoCascadePrice) {
-      const inrVal = Math.round(newUsd * exchangeRate);
+      const inrVal =
+        newUsd < 1
+          ? Number((newUsd * exchangeRate).toFixed(2))
+          : Math.round(newUsd * exchangeRate);
       const updated = variantGroups.map((g) => ({
         ...g,
         price: newUsd,
@@ -779,7 +786,10 @@ export default function AdminPage() {
         newColors[colorIndex] = {
           ...newColors[colorIndex],
           price: val,
-          priceInr: Math.round(val * exchangeRate),
+          priceInr:
+            val < 1
+              ? Number((val * exchangeRate).toFixed(2))
+              : Math.round(val * exchangeRate),
         };
       } else if (field === "priceInr") {
         newColors[colorIndex] = {

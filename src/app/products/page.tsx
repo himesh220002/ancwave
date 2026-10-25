@@ -803,7 +803,7 @@ function ProductCatalogCard({
     product.variants?.[0]?.image ||
     "/images/hero-silver.jpg";
 
-  const displayPrice = activeChild?.price ?? product.price;
+  const displayPrice = activeChild?.price ?? activeVariant?.price ?? product.price;
 
   // Derive contextual badge for top-left
   const badgeLabel = useMemo(() => {

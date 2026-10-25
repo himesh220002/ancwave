@@ -55,6 +55,8 @@ const ProductSchema = new Schema(
     baseDiscount: { type: Number, default: 0 },
     type: { type: String, default: "Over-Ear Headphones" },
     variants: [VariantSchema],
+    childVariants: [VariantSchema],
+    variantGroups: { type: Schema.Types.Mixed, default: [] },
     averageRating: { type: Number, default: 5.0 },
     reviewCount: { type: Number, default: 0 },
 
@@ -84,7 +86,11 @@ const ProductSchema = new Schema(
         hex: String,
         borderHex: String,
         image: String,
+        images: [String],
         tag: String,
+        price: Number,
+        priceInr: Number,
+        stock: Number,
       },
     ],
     specs: {
@@ -109,7 +115,7 @@ const ProductSchema = new Schema(
     },
     lastRevalidatedAt: { type: String, default: () => new Date().toISOString() },
   },
-  { timestamps: true }
+  { timestamps: true, strict: false }
 );
 
 const ReviewSchema = new Schema(

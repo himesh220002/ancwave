@@ -1753,7 +1753,8 @@ class AncWaveStore {
 const globalStore = global as unknown as { __ancWaveStore?: AncWaveStore };
 if (
   !globalStore.__ancWaveStore ||
-  typeof (globalStore.__ancWaveStore as any)?.addProduct !== "function"
+  typeof (globalStore.__ancWaveStore as any)?.addProduct !== "function" ||
+  typeof (globalStore.__ancWaveStore as any)?.getShippingFixtures !== "function"
 ) {
   globalStore.__ancWaveStore = new AncWaveStore();
 }

@@ -4,6 +4,13 @@ import { connectDB } from "@/lib/db";
 import { ShippingSettingsModel } from "@/lib/models";
 import { ShippingSettings } from "@/types";
 
+const DEFAULT_SHIPPING: ShippingSettings = {
+  generalDeliveryPriceUsd: 0,
+  generalDeliveryPriceInr: 0,
+  expressDeliveryPriceUsd: 15,
+  expressDeliveryPriceInr: 1200,
+};
+
 export async function GET() {
   try {
     const db = await connectDB();
@@ -16,19 +23,22 @@ export async function GET() {
           expressDeliveryPriceUsd: doc.expressDeliveryPriceUsd ?? 15,
           expressDeliveryPriceInr: doc.expressDeliveryPriceInr ?? 1200,
         };
-        store.updateShippingFixtures(settings);
+        if (typeof store?.updateShippingFixtures === "function") {
+          store.updateShippingFixtures(settings);
+        }
         return NextResponse.json({ success: true, shipping: settings });
       }
     }
 
-    const current = store.getShippingFixtures();
+    const current =
+      typeof store?.getShippingFixtures === "function"
+        ? store.getShippingFixtures()
+        : DEFAULT_SHIPPING;
+
     return NextResponse.json({ success: true, shipping: current });
   } catch (error: any) {
     console.error("Failed to load shipping settings:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to load shipping settings" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, shipping: DEFAULT_SHIPPING });
   }
 }
 
@@ -50,7 +60,9 @@ export async function POST(req: NextRequest) {
     };
 
     // Update memory store
-    store.updateShippingFixtures(updatedSettings);
+    if (typeof store?.updateShippingFixtures === "function") {
+      store.updateShippingFixtures(updatedSettings);
+    }
 
     // Update MongoDB
     const db = await connectDB();

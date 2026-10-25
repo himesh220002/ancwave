@@ -12,32 +12,88 @@ export async function GET(req: NextRequest) {
     const slug = searchParams.get("slug");
     const all = searchParams.get("all");
 
-    await connectDB();
+    const db = await connectDB();
 
     if (all === "true") {
-      const products = store.getAllProducts();
-      return NextResponse.json({
-        success: true,
-        products,
-        cachedAt: new Date().toISOString(),
-      });
+      let products: any[] = [];
+      if (db) {
+        try {
+          const dbProducts = await ProductModel.find({}).lean();
+          if (dbProducts && dbProducts.length > 0) {
+            products = dbProducts.map((p: any) => {
+              const formatted = {
+                ...p,
+                id: p.slug || p.id,
+                variants: p.colorVariants?.length ? p.colorVariants : (p.variants || []),
+                colorVariants: p.colorVariants || p.variants || [],
+              };
+              if (typeof store?.addProduct === "function") {
+                store.addProduct(formatted as any);
+              }
+              return formatted;
+            });
+          }
+        } catch (dbErr) {
+          console.warn("DB find failed in /api/product, falling back to store:", dbErr);
+        }
+      }
+
+      if (!products.length) {
+        products = store.getAllProducts();
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          products,
+          cachedAt: new Date().toISOString(),
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        }
+      );
     }
 
-    const product = store.getProduct(slug || "form-01");
+    const targetSlug = slug || "form-01";
+    let product: any = null;
+
+    if (db) {
+      try {
+        const doc = await ProductModel.findOne({
+          $or: [{ slug: targetSlug }, { productId: targetSlug }, { id: targetSlug }],
+        }).lean();
+        if (doc) {
+          product = {
+            ...doc,
+            id: (doc as any).slug || (doc as any).id,
+            variants: (doc as any).colorVariants?.length ? (doc as any).colorVariants : ((doc as any).variants || []),
+            colorVariants: (doc as any).colorVariants || (doc as any).variants || [],
+          };
+          if (typeof store?.addProduct === "function") {
+            store.addProduct(product as any);
+          }
+        }
+      } catch (dbErr) {
+        console.warn("DB findOne failed in /api/product:", dbErr);
+      }
+    }
+
+    if (!product) {
+      product = store.getProduct(targetSlug);
+    }
 
     return NextResponse.json(
       {
         success: true,
         product,
-        cachedAt: product.lastRevalidatedAt,
-        cacheStatus: "HIT - Edge CloudFront (max-age=60, stale-while-revalidate=300)",
+        cachedAt: product?.lastRevalidatedAt || new Date().toISOString(),
       },
       {
-        status: 200,
         headers: {
-          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
-          "X-Cache-Provider": "AWS-CloudFront-ancwave-edge",
-          "X-Inventory-Status": product.stock <= product.lowStockThreshold ? "LOW_STOCK" : "IN_STOCK",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "X-Inventory-Status": (product?.stock ?? 0) <= (product?.lowStockThreshold ?? 5) ? "LOW_STOCK" : "IN_STOCK",
         },
       }
     );
@@ -162,6 +218,9 @@ export async function PATCH(req: NextRequest) {
               basePrice: updatedProduct.basePrice || updatedProduct.price,
               priceInr: updatedProduct.priceInr,
               variants: updatedProduct.childVariants || [],
+              childVariants: updatedProduct.childVariants || [],
+              variantGroups: updatedProduct.variantGroups || [],
+              colorVariants: updatedProduct.variants || [],
             },
           },
           { upsert: true, new: true }

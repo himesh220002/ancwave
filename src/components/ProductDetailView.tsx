@@ -78,10 +78,36 @@ export function ProductDetailView({
     product.childVariants?.[0]?.sku || ""
   );
 
+  // Live product sync state to ensure dynamic prices from MongoDB / Admin reflect instantaneously
+  const [liveProduct, setLiveProduct] = useState<ProductData>(product);
+
+  useEffect(() => {
+    setLiveProduct(product);
+  }, [product]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch(`/api/product?slug=${product.slug}&_t=${Date.now()}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted && data.success && data.product) {
+          setLiveProduct(data.product);
+          if (data.product.averageRating) setLiveRating(data.product.averageRating);
+          if (typeof data.product.reviewCount === "number") setLiveReviewCount(data.product.reviewCount);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [product.slug]);
+
+  const p = liveProduct || product;
+
   // Dynamic reviews & live rating state
   const [reviewsList, setReviewsList] = useState<(Review & IReview)[]>(sampleReviews);
-  const [liveRating, setLiveRating] = useState<number>(product.averageRating || product.rating);
-  const [liveReviewCount, setLiveReviewCount] = useState<number>(product.reviewCount);
+  const [liveRating, setLiveRating] = useState<number>(p.averageRating || p.rating);
+  const [liveReviewCount, setLiveReviewCount] = useState<number>(p.reviewCount);
   const [eligibility, setEligibility] = useState<{
     eligible: boolean;
     reason?: string;
@@ -95,7 +121,7 @@ export function ProductDetailView({
   const [formHoverRating, setFormHoverRating] = useState<number>(0);
   const [formComment, setFormComment] = useState<string>("");
   const [formVariantSku, setFormVariantSku] = useState<string>(
-    product.childVariants?.[0]?.sku || ""
+    p.childVariants?.[0]?.sku || ""
   );
   const [formImages, setFormImages] = useState<string[]>([]);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
@@ -104,7 +130,7 @@ export function ProductDetailView({
 
   // Active color variant
   const [selectedColor, setSelectedColor] = useState<ProductColor>(
-    (initialColor as ProductColor) || product.variants[0]?.id || "silver"
+    (initialColor as ProductColor) || p.variants?.[0]?.id || "silver"
   );
 
   // Active media gallery item
@@ -125,45 +151,49 @@ export function ProductDetailView({
   const [reviewFilterTag, setReviewFilterTag] = useState<string>("all");
 
   // Q&A Accordion open state
-  const [openQnaId, setOpenQnaId] = useState<string | null>(product.qna?.[0]?.id || null);
+  const [openQnaId, setOpenQnaId] = useState<string | null>(p.qna?.[0]?.id || null);
 
   // Added-to-cart temporary state
   const [isAddedRecently, setIsAddedRecently] = useState(false);
 
   // Derived current color variant
   const currentVariant =
-    product.variants.find((v) => v.id === selectedColor) || product.variants[0];
+    p.variants?.find((v) => v.id === selectedColor) || p.variants?.[0] || product.variants[0];
 
   // Derived current child variant (hardware architecture / sku variance)
   const currentChildVariant =
-    product.childVariants?.find((cv) => cv.sku === selectedVariantSku) ||
-    product.childVariants?.find(
+    p.childVariants?.find((cv) => cv.sku === selectedVariantSku) ||
+    p.childVariants?.find(
       (cv) => cv.color.toLowerCase() === currentVariant?.name.toLowerCase()
     ) ||
-    product.childVariants?.[0];
+    p.childVariants?.[0];
 
   // Derived TWS component option (if product is TWS)
   const currentTwsOption =
-    product.isTws && product.twsComponents
-      ? product.twsComponents.find((c) => c.id === selectedTwsComponent) || product.twsComponents[0]
+    p.isTws && p.twsComponents
+      ? p.twsComponents.find((c) => c.id === selectedTwsComponent) || p.twsComponents[0]
       : null;
 
-  // Active pricing based on child variant / component selection
+  // Active pricing based on color variant / child variant / component selection
   const activePrice = currentTwsOption
     ? currentTwsOption.price
-    : (currentChildVariant?.price ?? product.price);
+    : (currentChildVariant?.price ?? currentVariant?.price ?? p.price);
   const activePriceInr = currentTwsOption
     ? Math.round(currentTwsOption.price * 83)
-    : (currentChildVariant?.priceInr ?? (currentChildVariant?.price ? Math.round(currentChildVariant.price * 83) : (product.priceInr ?? Math.round(product.price * 83))));
+    : (currentChildVariant?.priceInr ??
+       currentVariant?.priceInr ??
+       (activePrice < 1
+         ? Number((activePrice * 83).toFixed(2))
+         : (p.priceInr ?? Math.round(activePrice * 83))));
   const activeOriginalPrice = currentTwsOption
     ? currentTwsOption.originalPrice
-    : product.originalPrice;
+    : p.originalPrice;
   const activeSku = currentTwsOption
     ? currentTwsOption.sku
-    : (currentChildVariant?.sku || product.sku);
+    : (currentChildVariant?.sku || currentVariant?.tag || p.sku);
   const activeStock = currentTwsOption
     ? currentTwsOption.stock
-    : (typeof currentChildVariant?.stock === "number" ? currentChildVariant.stock : product.stock);
+    : (typeof currentChildVariant?.stock === "number" ? currentChildVariant.stock : p.stock);
 
   // Derived dynamic multiple images for the active variant
   const variantImages: string[] = React.useMemo(() => {
@@ -245,9 +275,9 @@ export function ProductDetailView({
   // When color changes, switch hero image to match color and sync child variant
   const handleColorSelect = (colorId: ProductColor) => {
     setSelectedColor(colorId);
-    const selectedVariant = product.variants.find((v) => v.id === colorId);
-    if (selectedVariant && product.childVariants) {
-      const matchingChild = product.childVariants.find(
+    const selectedVariant = p.variants?.find((v) => v.id === colorId);
+    if (selectedVariant && p.childVariants) {
+      const matchingChild = p.childVariants.find(
         (cv) => cv.color.toLowerCase() === selectedVariant.name.toLowerCase()
       );
       if (matchingChild) {
@@ -266,8 +296,8 @@ export function ProductDetailView({
     const coverImage = variantImages[0] || currentVariant.image;
 
     addItem({
-      productId: product.id,
-      name: `${product.name} - ${currentChildVariant?.color || currentVariant.name}`,
+      productId: p.id,
+      name: `${p.name} - ${currentChildVariant?.color || currentVariant.name}`,
       variant: currentVariant.id,
       variantName: `${currentVariant.name}${currentChildVariant?.specOverride ? ` (${currentChildVariant.specOverride})` : ""}`,
       component: componentLabel,
@@ -275,7 +305,7 @@ export function ProductDetailView({
       price: activePrice,
       priceInr: activePriceInr,
       image: coverImage,
-      fit: product.categorySlug === "headphones" ? "Adjustable fit" : "Universal ergonomic fit",
+      fit: p.categorySlug === "headphones" ? "Adjustable fit" : "Universal ergonomic fit",
     });
 
     setIsAddedRecently(true);
