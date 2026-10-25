@@ -738,6 +738,25 @@ export interface CartItem {
   fit: string;
 }
 
+export interface OrderEvent {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: string;
+  type: "order" | "payment" | "delivery" | "cancellation" | "refund";
+  actor?: string;
+}
+
+export interface OrderCancellation {
+  requested: boolean;
+  requestedAt?: string;
+  reason?: string;
+  status: "none" | "requested" | "approved" | "rejected";
+  reviewedBy?: string;
+  reviewedAt?: string;
+  adminNotes?: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -758,9 +777,17 @@ export interface Order {
   tax: number;
   total: number;
   paymentMethod: "razorpay" | "apple_pay" | "google_pay";
-  paymentStatus: "paid" | "pending";
+  paymentStatus: "paid" | "pending" | "refunded" | "refund_initiated";
   razorpayPaymentId?: string;
   razorpayOrderId?: string;
+  razorpayRefundId?: string;
+  refundAmount?: number;
+  refundInitiatedAt?: string;
+  deliveryStatus?: "processing" | "dispatched" | "in_transit" | "out_for_delivery" | "delivered" | "cancelled";
+  currentHub?: string;
+  trackingNumber?: string;
+  cancellation?: OrderCancellation;
+  events?: OrderEvent[];
   createdAt: string;
   awsEventBridgeDispatched: boolean;
   cacheRevalidated: boolean;

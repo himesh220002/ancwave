@@ -169,15 +169,42 @@ const OrderSchema = new Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["paid", "pending"],
       default: "paid",
     },
     razorpayPaymentId: String,
     razorpayOrderId: String,
+    razorpayRefundId: String,
+    refundAmount: Number,
+    refundInitiatedAt: String,
+    deliveryStatus: {
+      type: String,
+      default: "processing",
+    },
+    currentHub: String,
+    trackingNumber: String,
+    cancellation: {
+      requested: { type: Boolean, default: false },
+      requestedAt: String,
+      reason: String,
+      status: { type: String, default: "none" },
+      reviewedBy: String,
+      reviewedAt: String,
+      adminNotes: String,
+    },
+    events: [
+      {
+        id: String,
+        title: String,
+        description: String,
+        timestamp: String,
+        type: { type: String },
+        actor: String,
+      },
+    ],
     awsEventBridgeDispatched: { type: Boolean, default: true },
     cacheRevalidated: { type: Boolean, default: true },
   },
-  { timestamps: true }
+  { timestamps: true, strict: false }
 );
 
 const UserSchema = new Schema(

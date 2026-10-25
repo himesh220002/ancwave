@@ -1,6 +1,8 @@
 import {
   ProductData,
   Order,
+  OrderEvent,
+  OrderCancellation,
   AWSEventLog,
   Review,
   IVariant,
@@ -1264,6 +1266,31 @@ class AncWaveStore {
       paymentStatus: "paid",
       razorpayPaymentId: "pay_demo_seed_verified",
       razorpayOrderId: "order_demo_seed",
+      deliveryStatus: "processing",
+      currentHub: "Portland Primary Logistics Center",
+      trackingNumber: "TRK-ANC-914820",
+      cancellation: {
+        requested: false,
+        status: "none",
+      },
+      events: [
+        {
+          id: "ev-seed-1",
+          title: "Order Placed & Paid",
+          description: "Razorpay payment of $361.00 captured successfully (ID: pay_demo_seed_verified)",
+          timestamp: new Date(Date.now() - 86400000 * 3).toISOString(),
+          type: "payment",
+          actor: "Razorpay Gateway",
+        },
+        {
+          id: "ev-seed-2",
+          title: "Package Checked at Fulfillment Hub",
+          description: "Allocated at Portland Assembly Facility for acoustic QA calibration",
+          timestamp: new Date(Date.now() - 86400000 * 2).toISOString(),
+          type: "delivery",
+          actor: "Portland Logistics Hub",
+        },
+      ],
       createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
       awsEventBridgeDispatched: true,
       cacheRevalidated: true,
@@ -1593,6 +1620,56 @@ class AncWaveStore {
 
   getOrders(): Order[] {
     return [...this.orders];
+  }
+
+  getOrder(idOrNumber: string): Order | undefined {
+    const q = (idOrNumber || "").toLowerCase();
+    return this.orders.find(
+      (o) => o.id?.toLowerCase() === q || o.orderNumber?.toLowerCase() === q
+    );
+  }
+
+  updateOrder(idOrNumber: string, updates: Partial<Order>): Order | null {
+    const q = (idOrNumber || "").toLowerCase();
+    const idx = this.orders.findIndex(
+      (o) => o.id?.toLowerCase() === q || o.orderNumber?.toLowerCase() === q
+    );
+    if (idx === -1) return null;
+
+    const existing = this.orders[idx];
+    const updatedCancellation = updates.cancellation
+      ? { ...(existing.cancellation || { requested: false, status: "none" }), ...updates.cancellation }
+      : existing.cancellation;
+
+    const updatedEvents = updates.events
+      ? updates.events
+      : existing.events;
+
+    this.orders[idx] = {
+      ...existing,
+      ...updates,
+      cancellation: updatedCancellation,
+      events: updatedEvents,
+    };
+    return { ...this.orders[idx] };
+  }
+
+  addOrderEvent(idOrNumber: string, event: OrderEvent): Order | null {
+    const q = (idOrNumber || "").toLowerCase();
+    const idx = this.orders.findIndex(
+      (o) => o.id?.toLowerCase() === q || o.orderNumber?.toLowerCase() === q
+    );
+    if (idx === -1) return null;
+
+    const existing = this.orders[idx];
+    const events = Array.isArray(existing.events) ? [...existing.events] : [];
+    events.push(event);
+
+    this.orders[idx] = {
+      ...existing,
+      events,
+    };
+    return { ...this.orders[idx] };
   }
 
   hasUserPurchased(userId: string, userEmail: string, productIdOrSlug: string): boolean {

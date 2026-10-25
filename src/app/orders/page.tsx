@@ -21,8 +21,11 @@ import {
   X,
   Send,
   AlertCircle,
+  AlertTriangle,
+  XCircle,
   RefreshCw,
   Sparkles,
+  RotateCcw,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -47,6 +50,12 @@ function MyOrdersContent() {
   const [emailPreviewData, setEmailPreviewData] = useState<CustomRazorpayEmailData | null>(null);
   const [selectedOrderForTracking, setSelectedOrderForTracking] = useState<Order | null>(null);
   const [isResendingEmail, setIsResendingEmail] = useState(false);
+
+  // Order cancellation state
+  const [selectedOrderForCancellation, setSelectedOrderForCancellation] = useState<Order | null>(null);
+  const [cancellationReason, setCancellationReason] = useState("Ordered wrong variant / color");
+  const [cancellationNotes, setCancellationNotes] = useState("");
+  const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
 
   // Fetch orders
   const fetchOrders = async (emailParam?: string) => {
@@ -156,6 +165,52 @@ function MyOrdersContent() {
       });
     } finally {
       setIsResendingEmail(false);
+    }
+  };
+
+  // Submit cancellation request
+  const handleSubmitCancellation = async () => {
+    if (!selectedOrderForCancellation) return;
+    setIsSubmittingCancellation(true);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "request-cancellation",
+          orderNumber: selectedOrderForCancellation.orderNumber,
+          reason: cancellationReason,
+          notes: cancellationNotes,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        setSelectedOrderForCancellation(null);
+        setCancellationNotes("");
+        toast({
+          type: "success",
+          title: "Cancellation Request Submitted",
+          description: "Our admin team will review your cancellation. Once verified, your Razorpay refund will be initiated.",
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Request Error",
+          description: data.error || "Unable to submit cancellation request.",
+        });
+      }
+    } catch {
+      toast({
+        type: "error",
+        title: "Network Notice",
+        description: "Could not submit cancellation. Please check connection and try again.",
+      });
+    } finally {
+      setIsSubmittingCancellation(false);
     }
   };
 
@@ -357,22 +412,122 @@ function MyOrdersContent() {
 
                     {/* Status & Gateway Badges */}
                     <div className="flex flex-wrap items-center gap-2">
-                      {/* Razorpay verified badge */}
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                        <CreditCard className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Paid via Razorpay</span>
-                      </span>
+                      {/* Payment status badge */}
+                      {order.paymentStatus === "refund_initiated" ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Refund Initiated (2–7 Days)</span>
+                        </span>
+                      ) : order.paymentStatus === "refunded" ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">
+                          <span>Refund Completed</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                          <CreditCard className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Paid via Razorpay</span>
+                        </span>
+                      )}
 
-                      {/* Fulfillment badge */}
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span>Order Confirmed</span>
-                      </span>
+                      {/* Cancellation request badge */}
+                      {order.cancellation?.status === "requested" && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-300 animate-pulse">
+                          <Clock className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Cancellation Under Admin Review</span>
+                        </span>
+                      )}
+
+                      {/* Delivery status badge */}
+                      {order.deliveryStatus === "cancelled" || order.cancellation?.status === "approved" ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                          <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Order Cancelled</span>
+                        </span>
+                      ) : order.deliveryStatus === "delivered" ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Delivered</span>
+                        </span>
+                      ) : order.deliveryStatus === "out_for_delivery" ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          <Truck className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                          <span>Out For Delivery</span>
+                        </span>
+                      ) : order.deliveryStatus === "in_transit" ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                          <Truck className="w-3.5 h-3.5 text-blue-600" />
+                          <span>In Transit ({order.currentHub || "Main Hub"})</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span>Processing at Hub</span>
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Card Body: Purchased Items */}
                   <div className="p-5 sm:p-8 space-y-6">
+                    {/* Active Refund Notification Banner */}
+                    {order.paymentStatus === "refund_initiated" && (
+                      <div className="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200 flex items-start gap-3.5">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <div className="font-bold text-emerald-950 text-sm flex items-center gap-2">
+                            <span>Razorpay Refund Initiated</span>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold">
+                              ${Number(order.refundAmount || order.total).toFixed(2)} USD
+                            </span>
+                          </div>
+                          <p className="text-emerald-800 leading-relaxed text-xs">
+                            The refund is being initiated and will be sent back to your original payment account in <strong>2–7 business days</strong>.
+                            {order.razorpayRefundId && (
+                              <span className="block mt-1 font-mono text-[11px] text-emerald-900">
+                                Refund Reference ID: <strong>{order.razorpayRefundId}</strong>
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pending Cancellation Notification Banner */}
+                    {order.cancellation?.status === "requested" && order.paymentStatus !== "refund_initiated" && (
+                      <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 flex items-start gap-3.5">
+                        <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                          <Clock className="w-4 h-4 text-amber-600" />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <div className="font-bold text-amber-950 text-sm">
+                            Order Cancellation Request Under Admin Review
+                          </div>
+                          <p className="text-amber-800 leading-relaxed text-xs">
+                            You requested cancellation for reason: &quot;{order.cancellation?.reason || "Customer requested"}&quot;. Once verified and approved by admin, an automated refund will release the payment to your Razorpay account.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Approved Cancellation Pending Refund Release */}
+                    {order.cancellation?.status === "approved" && order.paymentStatus !== "refund_initiated" && (
+                      <div className="p-4 rounded-2xl bg-blue-50/90 border border-blue-200 flex items-start gap-3.5">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                          <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <div className="font-bold text-blue-950 text-sm">
+                            Cancellation Verified by Admin
+                          </div>
+                          <p className="text-blue-800 leading-relaxed text-xs">
+                            Admin has approved your cancellation request. The Razorpay payment refund trigger is being executed.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="divide-y divide-zinc-100">
                       {order.items.map((item, idx) => (
                         <div
@@ -430,7 +585,7 @@ function MyOrdersContent() {
                         </p>
                         <p className="text-zinc-500 pt-1 flex items-center gap-1.5 font-mono text-[11px]">
                           <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                          <span>Estimated Arrival: 3–5 Business Days via Express Insured Courier</span>
+                          <span>Hub: {order.currentHub || "Portland Primary Logistics Center"} · Tracking #{order.trackingNumber || `TRK-${order.orderNumber}`}</span>
                         </p>
                       </div>
 
@@ -488,6 +643,28 @@ function MyOrdersContent() {
                           <Mail className="w-4 h-4 text-blue-600" />
                           <span>Razorpay Email Receipt</span>
                         </button>
+
+                        {/* Customer Cancel Order Request Option */}
+                        {order.deliveryStatus !== "delivered" &&
+                          order.deliveryStatus !== "cancelled" &&
+                          order.paymentStatus !== "refund_initiated" &&
+                          order.paymentStatus !== "refunded" &&
+                          order.cancellation?.status !== "requested" &&
+                          order.cancellation?.status !== "approved" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedOrderForCancellation(order);
+                                setCancellationReason("Ordered wrong variant / color");
+                                setCancellationNotes("");
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-rose-200 hover:border-rose-300 hover:bg-rose-50 text-rose-700 text-xs font-semibold transition-colors cursor-pointer"
+                              title="Request order cancellation and Razorpay refund"
+                            >
+                              <XCircle className="w-4 h-4 text-rose-600" />
+                              <span>Request Order Cancellation</span>
+                            </button>
+                          )}
                       </div>
 
                       {/* Track Delivery Timeline Button */}
@@ -715,10 +892,114 @@ function MyOrdersContent() {
         </div>
       )}
 
+      {/* Cancellation Request Modal */}
+      {selectedOrderForCancellation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="relative max-w-lg w-full bg-white rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl border border-zinc-200">
+            <button
+              type="button"
+              disabled={isSubmittingCancellation}
+              onClick={() => setSelectedOrderForCancellation(null)}
+              className="absolute top-5 right-5 p-2 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition cursor-pointer disabled:opacity-50"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-mono tracking-wider text-rose-600 uppercase font-semibold flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                <span>ORDER CANCELLATION REQUEST</span>
+              </span>
+              <h3 className="text-xl font-bold text-zinc-900">
+                Cancel Order #{selectedOrderForCancellation.orderNumber}
+              </h3>
+              <p className="text-xs text-zinc-500 font-normal leading-relaxed">
+                Submit a cancellation request for your order. Once verified and approved by admin, the full amount of <strong>${selectedOrderForCancellation.total.toFixed(2)} USD</strong> will be refunded to your Razorpay account.
+              </p>
+            </div>
+
+            {/* Form Fields */}
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block text-zinc-700 font-medium mb-1.5 font-mono text-[11px] uppercase tracking-wider">
+                  Select Reason for Cancellation
+                </label>
+                <select
+                  value={cancellationReason}
+                  onChange={(e) => setCancellationReason(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 focus:outline-none focus:border-rose-500 focus:bg-white transition"
+                >
+                  <option value="Ordered wrong variant / color">Ordered wrong variant / color</option>
+                  <option value="Delivery timeline too long">Delivery timeline too long</option>
+                  <option value="Changed mind / No longer needed">Changed mind / No longer needed</option>
+                  <option value="Need to alter delivery address">Need to alter delivery address</option>
+                  <option value="Found alternative product">Found alternative product</option>
+                  <option value="Other / Unspecified">Other / Unspecified</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-zinc-700 font-medium mb-1.5 font-mono text-[11px] uppercase tracking-wider">
+                  Additional Notes (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={cancellationNotes}
+                  onChange={(e) => setCancellationNotes(e.target.value)}
+                  placeholder="Share any additional details for our logistics team..."
+                  className="w-full p-3 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-rose-500 focus:bg-white transition resize-none"
+                />
+              </div>
+
+              {/* Razorpay Automatic Refund Guarantee Note */}
+              <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                <div className="flex items-center gap-1.5 text-zinc-900 font-semibold text-[11px]">
+                  <CreditCard className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>Razorpay Payment Protection</span>
+                </div>
+                <p className="text-[11px] text-zinc-600 leading-relaxed">
+                  Upon admin approval, a refund trigger will be sent to Razorpay to release the money back to your bank/card account in <strong>2–7 business days</strong>.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isSubmittingCancellation}
+                onClick={() => setSelectedOrderForCancellation(null)}
+                className="px-4 py-2.5 rounded-xl border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingCancellation}
+                onClick={handleSubmitCancellation}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                {isSubmittingCancellation ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-4 h-4" />
+                    <span>Confirm Cancellation Request</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tracking Timeline Modal */}
       {selectedOrderForTracking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
-          <div className="relative max-w-lg w-full bg-white rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl border border-zinc-200">
+          <div className="relative max-w-lg w-full max-h-[90vh] bg-white rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl border border-zinc-200 flex flex-col">
             <button
               type="button"
               onClick={() => setSelectedOrderForTracking(null)}
@@ -729,53 +1010,106 @@ function MyOrdersContent() {
 
             <div className="space-y-1">
               <span className="text-[10px] font-mono tracking-wider text-blue-600 uppercase font-semibold">
-                LIVE SHIPMENT TIMELINE
+                LIVE SHIPMENT & AUDIT TIMELINE
               </span>
               <h3 className="text-xl font-bold text-zinc-900">
                 Order #{selectedOrderForTracking.orderNumber}
               </h3>
               <p className="text-xs text-zinc-500 font-mono">
-                Carrier: Express Insured Dispatch · Tracking #ANC-TRK-984210
+                Hub: {selectedOrderForTracking.currentHub || "Portland Primary Logistics Center"} · Tracking #{selectedOrderForTracking.trackingNumber || `TRK-${selectedOrderForTracking.orderNumber}`}
               </p>
             </div>
 
-            {/* Steps Timeline */}
-            <div className="space-y-6 pt-2">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-zinc-900">Payment Authorized via Razorpay</h4>
-                  <p className="text-[11px] text-zinc-500 mt-0.5">
-                    Transaction ID {selectedOrderForTracking.razorpayPaymentId || "pay_verified"}. Amount captured successfully.
-                  </p>
-                </div>
-              </div>
+            {/* Dynamic Events Timeline */}
+            <div className="flex-1 overflow-y-auto space-y-5 pr-1">
+              {Array.isArray(selectedOrderForTracking.events) && selectedOrderForTracking.events.length > 0 ? (
+                selectedOrderForTracking.events.map((ev, evIdx) => {
+                  const evDate = new Date(ev.timestamp).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
 
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                  <Package className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-zinc-900">Quality Inspection & Packaging</h4>
-                  <p className="text-[11px] text-zinc-500 mt-0.5">
-                    Acoustic drivers tested and serialized at our Portland assembly facility.
-                  </p>
-                </div>
-              </div>
+                  const isRefund = ev.type === "refund";
+                  const isCancel = ev.type === "cancellation";
+                  const isDelivery = ev.type === "delivery";
 
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center shrink-0">
-                  <Truck className="w-4 h-4" />
+                  return (
+                    <div key={ev.id || evIdx} className="flex items-start gap-3.5 relative">
+                      {evIdx !== (selectedOrderForTracking.events?.length || 1) - 1 && (
+                        <div className="absolute left-4 top-8 bottom-0 w-px bg-zinc-200 -mb-5" />
+                      )}
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 ${
+                          isRefund
+                            ? "bg-emerald-100 text-emerald-700"
+                            : isCancel
+                            ? "bg-rose-100 text-rose-700"
+                            : isDelivery
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-zinc-100 text-zinc-700"
+                        }`}
+                      >
+                        {isRefund ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : isCancel ? (
+                          <AlertTriangle className="w-4 h-4" />
+                        ) : isDelivery ? (
+                          <Truck className="w-4 h-4" />
+                        ) : (
+                          <Package className="w-4 h-4" />
+                        )}
+                      </div>
+
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-xs font-bold text-zinc-900 truncate">
+                            {ev.title}
+                          </h4>
+                          <span className="text-[10px] font-mono text-zinc-400 shrink-0">
+                            {evDate}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-600 leading-relaxed">
+                          {ev.description}
+                        </p>
+                        {ev.actor && (
+                          <span className="inline-block px-1.5 py-0.5 rounded bg-zinc-100 text-[10px] font-mono text-zinc-500">
+                            Logged by: {ev.actor}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="space-y-6 pt-2">
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-zinc-900">Payment Authorized via Razorpay</h4>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        Transaction ID {selectedOrderForTracking.razorpayPaymentId || "pay_verified"}. Amount captured successfully.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                      <Package className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-zinc-900">Quality Inspection & Packaging</h4>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        Acoustic drivers tested and serialized at our Portland assembly facility.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-zinc-400">Carrier Handover & Transit</h4>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">
-                    Estimated departure within 24 business hours with tracking notifications.
-                  </p>
-                </div>
-              </div>
+              )}
             </div>
 
             <button

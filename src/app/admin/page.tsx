@@ -128,6 +128,26 @@ export default function AdminPage() {
   const [orderSearchQuery, setOrderSearchQuery] = useState<string>("");
   const [reviews, setReviews] = useState<(Review & IReview)[]>([]);
 
+  // Order Console & Refund Trigger States
+  const [isProcessingRefund, setIsProcessingRefund] = useState<string | null>(null);
+  const [isProcessingCancellation, setIsProcessingCancellation] = useState<string | null>(null);
+  const [orderDeliveryEdits, setOrderDeliveryEdits] = useState<{
+    [orderNumber: string]: {
+      deliveryStatus?: string;
+      currentHub?: string;
+      trackingNumber?: string;
+      note?: string;
+      isSaving?: boolean;
+    };
+  }>({});
+  const [orderNewEvent, setOrderNewEvent] = useState<{
+    [orderNumber: string]: {
+      title?: string;
+      description?: string;
+      isAdding?: boolean;
+    };
+  }>({});
+
   // Delivery Hub & Doorstep Gate Verification State
   const [deliverySelectedOrderId, setDeliverySelectedOrderId] = useState<string>("ANC-763954");
   const [deliveryHubName, setDeliveryHubName] = useState<string>("Frankfurt Central Air Logistics Hub");
@@ -760,13 +780,13 @@ export default function AdminPage() {
       const newSku = `${masterProductId}-${g.id.toUpperCase()}-${code}`;
       const colorLower = cleanName.toLowerCase();
       const hex = colorLower.includes("green") ? "#2E5339" :
-                  colorLower.includes("black") ? "#1A1A1A" :
-                  colorLower.includes("blue") ? "#3B6978" :
-                  colorLower.includes("white") ? "#ECECEC" :
-                  colorLower.includes("red") ? "#DC2626" :
-                  colorLower.includes("grey") || colorLower.includes("gray") ? "#6B7280" :
+        colorLower.includes("black") ? "#1A1A1A" :
+          colorLower.includes("blue") ? "#3B6978" :
+            colorLower.includes("white") ? "#ECECEC" :
+              colorLower.includes("red") ? "#DC2626" :
+                colorLower.includes("grey") || colorLower.includes("gray") ? "#6B7280" :
                   colorLower.includes("sandstone") || colorLower.includes("beige") ? "#D4B996" :
-                  "#4F46E5";
+                    "#4F46E5";
 
       const newColor: IVariantColor = {
         id: `${g.id}-${newSku}`,
@@ -1781,6 +1801,227 @@ export default function AdminPage() {
     }
   };
 
+  // Review Cancellation: Approve or Reject
+  const handleReviewCancellation = async (
+    orderNumber: string,
+    decision: "approved" | "rejected",
+    notes?: string
+  ) => {
+    setIsProcessingCancellation(orderNumber);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "review-cancellation",
+          orderNumber,
+          decision,
+          adminNotes: notes || (decision === "approved" ? "Approved by Admin" : "Declined by Admin"),
+          reviewedBy: user?.name || "Alexander Vance (Admin)",
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        if (decision === "approved") {
+          toast({
+            type: "success",
+            title: "Cancellation Approved",
+            description: "Order marked as Cancelled. The 'Trigger Razorpay Refund' button is now active.",
+          });
+        } else {
+          toast({
+            type: "success",
+            title: "Cancellation Declined",
+            description: "The customer's cancellation request has been rejected.",
+          });
+        }
+      } else {
+        toast({
+          type: "error",
+          title: "Action Failed",
+          description: data.error || "Could not review cancellation.",
+        });
+      }
+    } catch {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: "Failed to communicate with order service.",
+      });
+    } finally {
+      setIsProcessingCancellation(null);
+    }
+  };
+
+  // Trigger Razorpay Refund
+  const handleTriggerRefund = async (order: Order) => {
+    setIsProcessingRefund(order.orderNumber);
+    try {
+      const res = await fetch("/api/razorpay/refund", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderNumber: order.orderNumber,
+          paymentId: order.razorpayPaymentId,
+          amount: order.total,
+          notes: "Cancellation approved by admin",
+          actor: user?.name || "Alexander Vance (Admin)",
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        toast({
+          type: "success",
+          title: "⚡ Razorpay Refund Initiated",
+          description: `Refund initiated — amount ($${Number(order.total).toFixed(2)}) will be sent back to the customer's account in 2–7 business days. (Refund ID: ${data.refundId})`,
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Refund Trigger Failed",
+          description: data.error || "Unable to trigger Razorpay refund.",
+        });
+      }
+    } catch {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: "Failed to connect to Razorpay refund gateway.",
+      });
+    } finally {
+      setIsProcessingRefund(null);
+    }
+  };
+
+  // Update Delivery Status, Hub, & Tracking
+  const handleUpdateDelivery = async (orderNumber: string) => {
+    const edits = orderDeliveryEdits[orderNumber];
+    if (!edits) return;
+
+    setOrderDeliveryEdits((prev) => ({
+      ...prev,
+      [orderNumber]: { ...prev[orderNumber], isSaving: true },
+    }));
+
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-delivery",
+          orderNumber,
+          deliveryStatus: edits.deliveryStatus,
+          currentHub: edits.currentHub,
+          trackingNumber: edits.trackingNumber,
+          note: edits.note,
+          actor: user?.name || "Admin Logistics",
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        toast({
+          type: "success",
+          title: "Logistics Updated",
+          description: `Order #${orderNumber} delivery status and hub updated successfully.`,
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Update Failed",
+          description: data.error || "Could not update delivery status.",
+        });
+      }
+    } catch {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: "Failed to update delivery logistics.",
+      });
+    } finally {
+      setOrderDeliveryEdits((prev) => ({
+        ...prev,
+        [orderNumber]: { ...prev[orderNumber], isSaving: false },
+      }));
+    }
+  };
+
+  // Add Custom Event / Audit Checkpoint Note
+  const handleAddOrderEvent = async (orderNumber: string) => {
+    const ev = orderNewEvent[orderNumber];
+    if (!ev?.title?.trim()) {
+      toast({
+        type: "error",
+        title: "Title Required",
+        description: "Please provide a title for the event note.",
+      });
+      return;
+    }
+
+    setOrderNewEvent((prev) => ({
+      ...prev,
+      [orderNumber]: { ...prev[orderNumber], isAdding: true },
+    }));
+
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add-event",
+          orderNumber,
+          title: ev.title,
+          description: ev.description || "Administrative checkpoint",
+          type: "delivery",
+          actor: user?.name || "Alexander Vance (Admin)",
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        setOrderNewEvent((prev) => ({
+          ...prev,
+          [orderNumber]: { title: "", description: "", isAdding: false },
+        }));
+        toast({
+          type: "success",
+          title: "Event Logged",
+          description: "New status event checkpoint appended to the audit timeline.",
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Event Failed",
+          description: data.error || "Could not add event note.",
+        });
+      }
+    } catch {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: "Failed to log event note.",
+      });
+    } finally {
+      setOrderNewEvent((prev) => ({
+        ...prev,
+        [orderNumber]: { ...prev[orderNumber], isAdding: false },
+      }));
+    }
+  };
+
   // 1. Loading State
   if (isLoading) {
     return (
@@ -1828,22 +2069,20 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={() => setAdminAuthTab("signin")}
-              className={`py-2 rounded-lg transition-all ${
-                adminAuthTab === "signin"
-                  ? "bg-zinc-800 text-white shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
+              className={`py-2 rounded-lg transition-all ${adminAuthTab === "signin"
+                ? "bg-zinc-800 text-white shadow-sm"
+                : "text-zinc-400 hover:text-zinc-200"
+                }`}
             >
               Admin Sign In
             </button>
             <button
               type="button"
               onClick={() => setAdminAuthTab("signup")}
-              className={`py-2 rounded-lg transition-all ${
-                adminAuthTab === "signup"
-                  ? "bg-zinc-800 text-white shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
+              className={`py-2 rounded-lg transition-all ${adminAuthTab === "signup"
+                ? "bg-zinc-800 text-white shadow-sm"
+                : "text-zinc-400 hover:text-zinc-200"
+                }`}
             >
               Register Admin
             </button>
@@ -1961,8 +2200,8 @@ export default function AdminPage() {
                 {isAdminAuthLoading
                   ? "Verifying Credentials..."
                   : adminAuthTab === "signup"
-                  ? "Register Admin & Authorize"
-                  : "Sign In to Terminal"}
+                    ? "Register Admin & Authorize"
+                    : "Sign In to Terminal"}
               </span>
             </button>
           </form>
@@ -2062,11 +2301,10 @@ export default function AdminPage() {
               </div>
             </div>
             <span
-              className={`text-[10px] font-mono px-2.5 py-1 rounded-full uppercase font-bold border ${
-                isOwner
-                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                  : "bg-blue-500/20 text-blue-300 border-blue-500/40"
-              }`}
+              className={`text-[10px] font-mono px-2.5 py-1 rounded-full uppercase font-bold border ${isOwner
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                : "bg-blue-500/20 text-blue-300 border-blue-500/40"
+                }`}
             >
               {user.role}
             </span>
@@ -2238,19 +2476,18 @@ export default function AdminPage() {
       {/* 2. BODY CONTAINER: SIDEBAR + MAIN WORKSPACE */}
       <div className="flex flex-1 min-h-[calc(100vh-3.5rem)]">
         {/* LEFT SIDEBAR NAVIGATION */}
-        <aside className="w-60 bg-white border-r border-zinc-200/80 p-3 space-y-6 shrink-0 hidden md:block">
+        <aside className="sticky top-14 h-[calc(100vh-3.5rem)] w-60 bg-white border-r border-zinc-200/80 p-3 space-y-6 shrink-0 hidden md:block">
           {/* Group 1: STORE OVERVIEW */}
           <div className="space-y-1">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold px-2.5 py-1">
+            <div className="text-[14px] font-mono uppercase tracking-widest text-zinc-400 font-bold px-2.5 py-1">
               STORE OVERVIEW
             </div>
             <button
               onClick={() => setActiveTab("dashboard")}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                activeTab === "dashboard"
-                  ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-              }`}
+              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === "dashboard"
+                ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
+                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                }`}
             >
               <LayoutDashboard className="w-4 h-4 text-blue-600" />
               <span>Commerce Dashboard</span>
@@ -2258,11 +2495,10 @@ export default function AdminPage() {
 
             <button
               onClick={() => setActiveTab("orders")}
-              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                activeTab === "orders"
-                  ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-              }`}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === "orders"
+                ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
+                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <ShoppingBag className="w-4 h-4" />
@@ -2275,11 +2511,10 @@ export default function AdminPage() {
 
             <button
               onClick={() => setActiveTab("delivery")}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                activeTab === "delivery"
-                  ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-              }`}
+              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === "delivery"
+                ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
+                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                }`}
             >
               <Truck className="w-4 h-4" />
               <span>Delivery & Hubs</span>
@@ -2288,16 +2523,15 @@ export default function AdminPage() {
 
           {/* Group 2: CATALOG & INVENTORY */}
           <div className="space-y-1">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold px-2.5 py-1">
+            <div className="text-[14px] font-mono uppercase tracking-widest text-zinc-400 font-bold px-2.5 py-1">
               CATALOG & INVENTORY
             </div>
             <button
               onClick={() => setActiveTab("inventory")}
-              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                activeTab === "inventory"
-                  ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-              }`}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === "inventory"
+                ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
+                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <Grid className="w-4 h-4" />
@@ -2310,11 +2544,10 @@ export default function AdminPage() {
 
             <button
               onClick={() => setActiveTab("variation-engine")}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                activeTab === "variation-engine"
-                  ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-              }`}
+              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === "variation-engine"
+                ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
+                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                }`}
             >
               <Layers className="w-4 h-4" />
               <span>Variation Engine</span>
@@ -2322,11 +2555,10 @@ export default function AdminPage() {
 
             <button
               onClick={() => setActiveTab("shipping")}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                activeTab === "shipping"
-                  ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-              }`}
+              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === "shipping"
+                ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
+                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                }`}
             >
               <Tag className="w-4 h-4" />
               <span>Shipping Fixtures</span>
@@ -2335,16 +2567,15 @@ export default function AdminPage() {
 
           {/* Group 3: COMMUNITY & ACCESS */}
           <div className="space-y-1">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold px-2.5 py-1">
+            <div className="text-[14px] font-mono uppercase tracking-widest text-zinc-400 font-bold px-2.5 py-1">
               COMMUNITY & ACCESS
             </div>
             <button
               onClick={() => setActiveTab("reviews")}
-              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                activeTab === "reviews"
-                  ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-              }`}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === "reviews"
+                ? "bg-blue-50 text-blue-700 font-bold shadow-2xs"
+                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <Star className="w-4 h-4 text-amber-500" />
@@ -2361,11 +2592,10 @@ export default function AdminPage() {
                   setActiveTab("team");
                   fetchTeam(teamSearchQuery);
                 }}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                  activeTab === "team"
-                    ? "bg-amber-50 text-amber-800 font-bold shadow-2xs"
-                    : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-                }`}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === "team"
+                  ? "bg-amber-50 text-amber-800 font-bold shadow-2xs"
+                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                  }`}
               >
                 <Users className="w-4 h-4 text-amber-600" />
                 <span>Staff & Roles</span>
@@ -2378,7 +2608,7 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={() => setIsNewProductModalOpen(true)}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs py-2 px-3 rounded-xl shadow-xs transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm py-2 px-3 rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>New Catalog Item</span>
@@ -2538,11 +2768,10 @@ export default function AdminPage() {
           <div className="flex items-center gap-2 border-b border-zinc-200/80 overflow-x-auto text-xs font-semibold pb-px">
             <button
               onClick={() => setActiveTab("dashboard")}
-              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                activeTab === "dashboard"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-zinc-500 hover:text-zinc-900"
-              }`}
+              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "dashboard"
+                ? "border-blue-600 text-blue-600 font-bold"
+                : "border-transparent text-zinc-500 hover:text-zinc-900"
+                }`}
             >
               <LayoutDashboard className="w-4 h-4" />
               <span>Commerce Overview</span>
@@ -2550,11 +2779,10 @@ export default function AdminPage() {
 
             <button
               onClick={() => setActiveTab("orders")}
-              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                activeTab === "orders"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-zinc-500 hover:text-zinc-900"
-              }`}
+              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "orders"
+                ? "border-blue-600 text-blue-600 font-bold"
+                : "border-transparent text-zinc-500 hover:text-zinc-900"
+                }`}
             >
               <ShoppingBag className="w-4 h-4" />
               <span>Customer Orders</span>
@@ -2565,11 +2793,10 @@ export default function AdminPage() {
 
             <button
               onClick={() => setActiveTab("inventory")}
-              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                activeTab === "inventory"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-zinc-500 hover:text-zinc-900"
-              }`}
+              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "inventory"
+                ? "border-blue-600 text-blue-600 font-bold"
+                : "border-transparent text-zinc-500 hover:text-zinc-900"
+                }`}
             >
               <Package className="w-4 h-4" />
               <span>Products & Inventory</span>
@@ -2580,11 +2807,10 @@ export default function AdminPage() {
 
             <button
               onClick={() => setActiveTab("variation-engine")}
-              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                activeTab === "variation-engine"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-zinc-500 hover:text-zinc-900"
-              }`}
+              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "variation-engine"
+                ? "border-blue-600 text-blue-600 font-bold"
+                : "border-transparent text-zinc-500 hover:text-zinc-900"
+                }`}
             >
               <Layers className="w-4 h-4" />
               <span>Variation Engine</span>
@@ -2592,11 +2818,10 @@ export default function AdminPage() {
 
             <button
               onClick={() => setActiveTab("shipping")}
-              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                activeTab === "shipping"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-zinc-500 hover:text-zinc-900"
-              }`}
+              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "shipping"
+                ? "border-blue-600 text-blue-600 font-bold"
+                : "border-transparent text-zinc-500 hover:text-zinc-900"
+                }`}
             >
               <Tag className="w-4 h-4" />
               <span>Shipping Fixtures</span>
@@ -2604,11 +2829,10 @@ export default function AdminPage() {
 
             <button
               onClick={() => setActiveTab("delivery")}
-              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                activeTab === "delivery"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-zinc-500 hover:text-zinc-900"
-              }`}
+              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "delivery"
+                ? "border-blue-600 text-blue-600 font-bold"
+                : "border-transparent text-zinc-500 hover:text-zinc-900"
+                }`}
             >
               <Truck className="w-4 h-4" />
               <span>Delivery & Hubs</span>
@@ -2616,11 +2840,10 @@ export default function AdminPage() {
 
             <button
               onClick={() => setActiveTab("reviews")}
-              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                activeTab === "reviews"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-zinc-500 hover:text-zinc-900"
-              }`}
+              className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "reviews"
+                ? "border-blue-600 text-blue-600 font-bold"
+                : "border-transparent text-zinc-500 hover:text-zinc-900"
+                }`}
             >
               <Star className="w-4 h-4 text-amber-500" />
               <span>Customer Reviews</span>
@@ -2635,11 +2858,10 @@ export default function AdminPage() {
                   setActiveTab("team");
                   fetchTeam(teamSearchQuery);
                 }}
-                className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                  activeTab === "team"
-                    ? "border-amber-600 text-amber-600 font-bold"
-                    : "border-transparent text-zinc-500 hover:text-zinc-900"
-                }`}
+                className={`pb-3 px-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap cursor-pointer ${activeTab === "team"
+                  ? "border-amber-600 text-amber-600 font-bold"
+                  : "border-transparent text-zinc-500 hover:text-zinc-900"
+                  }`}
               >
                 <Users className="w-4 h-4 text-amber-600" />
                 <span>Staff & Roles</span>
@@ -2757,9 +2979,8 @@ export default function AdminPage() {
                                 </div>
                                 <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
                                   <div
-                                    className={`h-full rounded-full ${
-                                      stockNum <= 5 ? "bg-amber-500" : "bg-emerald-600"
-                                    }`}
+                                    className={`h-full rounded-full ${stockNum <= 5 ? "bg-amber-500" : "bg-emerald-600"
+                                      }`}
                                     style={{ width: `${Math.max(5, stockPercent)}%` }}
                                   />
                                 </div>
@@ -2794,11 +3015,10 @@ export default function AdminPage() {
                                   fetchAdminData(p.slug);
                                   setActiveTab("inventory");
                                 }}
-                                className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
-                                  isSelected
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-blue-50 text-blue-700 hover:bg-blue-100"
-                                }`}
+                                className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${isSelected
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                  }`}
                               >
                                 {isSelected ? "Active" : "Inspect"}
                               </button>
@@ -2877,20 +3097,18 @@ export default function AdminPage() {
                                 <div className="text-[10px] text-zinc-400">≈ ₹{totalInr.toLocaleString("en-IN")}</div>
                               </td>
                               <td className="py-3.5">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                  (ord.paymentStatus || "").toLowerCase() === "paid"
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
-                                    : "bg-amber-50 text-amber-700 border border-amber-200/60"
-                                }`}>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${(ord.paymentStatus || "").toLowerCase() === "paid"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                                  : "bg-amber-50 text-amber-700 border border-amber-200/60"
+                                  }`}>
                                   {ord.paymentStatus === "paid" ? "Paid" : "Pending"}
                                 </span>
                               </td>
                               <td className="py-3.5">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                  ord.awsEventBridgeDispatched
-                                    ? "bg-blue-50 text-blue-700 border border-blue-200/60"
-                                    : "bg-zinc-100 text-zinc-600 border border-zinc-200/60"
-                                }`}>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ord.awsEventBridgeDispatched
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200/60"
+                                  : "bg-zinc-100 text-zinc-600 border border-zinc-200/60"
+                                  }`}>
                                   {ord.awsEventBridgeDispatched ? "Dispatched" : "Processing"}
                                 </span>
                               </td>
@@ -2997,1349 +3215,1553 @@ export default function AdminPage() {
 
           {/* TAB 1: PRODUCTS & INVENTORY ORCHESTRATION */}
           {activeTab === "inventory" && (
-          <div className="space-y-8 animate-in fade-in duration-200">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Left Column: Variant-Aware Restock & Alert Center */}
-              <div className="lg:col-span-6 rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
-                <div className="border-b border-zinc-100 pb-4 flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
-                      {product?.category || "Apparel & Tech"}
+            <div className="space-y-8 animate-in fade-in duration-200">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Left Column: Variant-Aware Restock & Alert Center */}
+                <div className="lg:col-span-6 rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                  <div className="border-b border-zinc-100 pb-4 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-mono uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                        {product?.category || "Apparel & Tech"}
+                      </span>
+                      <h3 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans mt-1">
+                        {product?.name || "Active Product"} Restock
+                      </h3>
+                      <p className="text-xs text-zinc-500">
+                        Total Inventory: <strong className="font-mono text-zinc-950 text-sm">{product?.stock || 0} units</strong> across {childVariants.length} variants
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-mono font-bold text-zinc-400">SKU:</span>
+                      <div className="text-xs font-mono font-bold text-zinc-800">{product?.productId || product?.sku}</div>
+                    </div>
+                  </div>
+
+                  {/* Primary Restock Button that opens the Dedicated Variant Popup */}
+                  <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
+                    <div className="flex items-start gap-2.5">
+                      <PackagePlus className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-xs font-bold text-blue-950">
+                          Multi-Variant Restock Studio
+                        </h4>
+                        <p className="text-[11px] text-blue-800/80 leading-relaxed mt-0.5">
+                          Restock individual architectures (A1, A2) and colorways without ambiguity. Never increment a blind master number.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => product && openRestockModal(product)}
+                      className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-sm"
+                    >
+                      <PackagePlus className="w-4 h-4" />
+                      <span>+ Restock Variants & Colors (Popup)</span>
+                    </button>
+                  </div>
+
+                  {/* Visual Architecture & Colorway Summary */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold">
+                      Current Architecture & Color Allocations:
                     </span>
-                    <h3 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans mt-1">
-                      {product?.name || "Active Product"} Restock
-                    </h3>
-                    <p className="text-xs text-zinc-500">
-                      Total Inventory: <strong className="font-mono text-zinc-950 text-sm">{product?.stock || 0} units</strong> across {childVariants.length} variants
-                    </p>
+                    <div className="space-y-1.5">
+                      {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g, gIdx) => (
+                        <div key={g.id || gIdx} className="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-bold text-zinc-900 font-mono">
+                            <span className="flex items-center gap-1.5">
+                              <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold font-mono shrink-0">
+                                {g.id.length <= 4 ? g.id : `Arch 0${gIdx + 1}`}
+                              </span>
+                              <span>{g.name}</span>
+                            </span>
+                            <span className="text-[10px] text-zinc-500 font-normal">
+                              {(g.colors || []).reduce((sum, c) => sum + (c.stock || 0), 0)} units total
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(g.colors || []).map((c) => (
+                              <span
+                                key={c.sku}
+                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white border border-zinc-200 text-[11px] text-zinc-800 font-mono"
+                              >
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full border border-black/10 shrink-0"
+                                  style={{ backgroundColor: c.hex || "#333" }}
+                                />
+                                <span>{c.color}</span>
+                                <span className="bg-zinc-100 px-1.5 py-0.2 rounded font-bold text-blue-600">
+                                  {c.stock}
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs font-mono font-bold text-zinc-400">SKU:</span>
-                    <div className="text-xs font-mono font-bold text-zinc-800">{product?.productId || product?.sku}</div>
-                  </div>
+
+                  {/* Flash Sale, Discount & ISR Edge Settings */}
+                  <form onSubmit={handleUpdateInventory} className="space-y-4 pt-3 border-t border-zinc-100">
+                    {/* Real-Time Price & USD ⇄ INR Currency Converter */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50/60 via-zinc-50 to-zinc-50 border border-blue-100/90 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold font-mono">
+                            ₹/$
+                          </div>
+                          <span className="text-xs font-bold text-zinc-950 font-sans">
+                            Live Price & Currency Converter
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono font-semibold text-zinc-500 bg-white px-2 py-0.5 rounded-full border border-zinc-200">
+                          1 USD ≈ ₹{exchangeRate}
+                        </span>
+                      </div>
+
+                      {/* Dual Currency Inputs */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-700 flex items-center gap-1">
+                            <span>Price (USD $)</span>
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">$</span>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={quickPriceInput}
+                              onChange={(e) => {
+                                const usd = Number(e.target.value);
+                                setQuickPriceInput(usd);
+                                setMasterBasePrice(usd);
+                                if (autoCascadePrice) {
+                                  const inr = Math.round(usd * exchangeRate);
+                                  setVariantGroups((prev) =>
+                                    prev.map((g) => ({
+                                      ...g,
+                                      price: usd,
+                                      priceInr: inr,
+                                      colors: g.colors.map((c) => ({ ...c, price: usd, priceInr: inr })),
+                                    }))
+                                  );
+                                }
+                              }}
+                              className="w-full pl-7 pr-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-zinc-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-zinc-700 flex items-center gap-1">
+                            <span>Price (INR ₹)</span>
+                            <span className="text-[9px] text-blue-600 font-mono">(Razorpay)</span>
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">₹</span>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={
+                                quickPriceInput === 0
+                                  ? 0
+                                  : quickPriceInput < 1
+                                    ? Number((quickPriceInput * exchangeRate).toFixed(2))
+                                    : Math.round(quickPriceInput * exchangeRate)
+                              }
+                              onChange={(e) => {
+                                const inr = Number(e.target.value);
+                                const usd = Number((inr / exchangeRate).toFixed(4));
+                                setQuickPriceInput(usd);
+                                setMasterBasePrice(usd);
+                                if (autoCascadePrice) {
+                                  setVariantGroups((prev) =>
+                                    prev.map((g) => ({
+                                      ...g,
+                                      price: usd,
+                                      priceInr: inr,
+                                      colors: g.colors.map((c) => ({ ...c, price: usd, priceInr: inr })),
+                                    }))
+                                  );
+                                }
+                              }}
+                              className="w-full pl-7 pr-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-blue-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Razorpay Testing Presets */}
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold">
+                          ⚡ Quick Test Presets (Razorpay):
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[1, 5, 10, 50].map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              onClick={() => handleQuickRazorpayTestPreset(amt)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-mono font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                              title={`Set price to ₹${amt} for Razorpay live checkout testing`}
+                            >
+                              ₹{amt} Test
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuickPriceInput(349);
+                              setMasterBasePrice(349);
+                              handleCascadePriceToAllVariants(349, Math.round(349 * exchangeRate));
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-mono font-bold transition-all shadow-2xs cursor-pointer"
+                            title="Reset to default $349"
+                          >
+                            Reset ($349)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Auto-cascade Toggle */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="checkbox"
+                          id="autoCascadeQuick"
+                          checked={autoCascadePrice}
+                          onChange={(e) => setAutoCascadePrice(e.target.checked)}
+                          className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer"
+                        />
+                        <label htmlFor="autoCascadeQuick" className="text-[11px] text-zinc-600 cursor-pointer">
+                          Cascade price change to all variant colors automatically
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-zinc-700">
+                          Instant Discount ($ Off)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="150"
+                          value={discountInput}
+                          onChange={(e) => setDiscountInput(Number(e.target.value))}
+                          className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50 font-semibold focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-zinc-700">
+                          REVALIDATE_SECRET
+                        </label>
+                        <input
+                          type="text"
+                          value={revalidateSecret}
+                          onChange={(e) => setRevalidateSecret(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono text-zinc-800 bg-zinc-50 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200">
+                      <input
+                        type="checkbox"
+                        id="flashSaleToggle"
+                        checked={isFlashSale}
+                        onChange={(e) => setIsFlashSale(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded cursor-pointer"
+                      />
+                      <label htmlFor="flashSaleToggle" className="text-xs font-medium text-zinc-700 cursor-pointer">
+                        Enable "🔥 Few Left" Flash Alert when stock &le; 5 units
+                      </label>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isUpdating}
+                      className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs transition-all shadow-xs disabled:opacity-50"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isUpdating ? "Purging Edge Cache..." : "Save Discount & Edge Rules"}</span>
+                    </button>
+                  </form>
                 </div>
 
-                {/* Primary Restock Button that opens the Dedicated Variant Popup */}
-                <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
-                  <div className="flex items-start gap-2.5">
-                    <PackagePlus className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                {/* Right: Architecture & Colorway Real-Time Inventory Control */}
+                <div className="lg:col-span-6 rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                  <div className="border-b border-zinc-100 pb-4 flex items-center justify-between">
                     <div>
-                      <h4 className="text-xs font-bold text-blue-950">
-                        Multi-Variant Restock Studio
-                      </h4>
-                      <p className="text-[11px] text-blue-800/80 leading-relaxed mt-0.5">
-                        Restock individual architectures (A1, A2) and colorways without ambiguity. Never increment a blind master number.
+                      <h3 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans">
+                        Architecture & Colorway Inventory
+                      </h3>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Independent colorway counters organized by architecture cut (A1, A2).
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab("variation-engine")}
+                      className="text-xs text-blue-600 font-semibold hover:underline"
+                    >
+                      Manage Engine &rarr;
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g, gIdx) => {
+                      const groupUnits = (g.colors || []).reduce((sum, c) => sum + (c.stock || 0), 0);
+                      return (
+                        <div
+                          key={g.id || gIdx}
+                          className="rounded-2xl bg-zinc-50 border border-zinc-200 overflow-hidden shadow-2xs space-y-3 p-4 transition-all"
+                        >
+                          <div className="flex items-center justify-between border-b border-zinc-200/70 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold font-mono shrink-0 whitespace-nowrap">
+                                {g.id.length <= 4 ? g.id : `Arch 0${gIdx + 1}`}
+                              </span>
+                              <span className="text-xs font-bold text-zinc-900 font-sans">
+                                {g.name}
+                              </span>
+                              <span className="text-[10px] font-mono bg-zinc-200 px-1.5 py-0.5 rounded text-zinc-700">
+                                {(g.colors || []).length} {(g.colors || []).length === 1 ? "color" : "colors"}
+                              </span>
+                            </div>
+                            <span className="text-xs font-mono font-bold text-zinc-800">
+                              Total Units: <span className="text-blue-600 font-bold">{groupUnits}</span>
+                            </span>
+                          </div>
+
+                          {/* Colors in this Architecture */}
+                          <div className="space-y-2">
+                            {(g.colors || []).map((c) => (
+                              <div
+                                key={c.sku}
+                                className="p-3 rounded-xl bg-white border border-zinc-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs"
+                              >
+                                <div className="space-y-0.5 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className="w-3.5 h-3.5 rounded-full border border-black/15 shrink-0 shadow-2xs"
+                                      style={{ backgroundColor: c.hex || "#333" }}
+                                    />
+                                    <span className="text-xs font-bold text-zinc-900">{c.color}</span>
+                                    <span className="text-[10px] font-mono bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-600">
+                                      {c.sku}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-zinc-400 font-mono">
+                                    ${c.price || g.price || product?.price} · {c.stock} units in stock
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2 self-end sm:self-auto">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickVariantStock(c.sku, Math.max(0, c.stock - 1))}
+                                    className="w-7 h-7 rounded-lg bg-zinc-50 border border-zinc-300 text-zinc-700 font-bold hover:bg-zinc-100 flex items-center justify-center text-xs shadow-2xs cursor-pointer"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="w-10 text-center font-mono font-bold text-xs text-zinc-900">
+                                    {c.stock}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickVariantStock(c.sku, c.stock + 1)}
+                                    className="w-7 h-7 rounded-lg bg-zinc-50 border border-zinc-300 text-zinc-700 font-bold hover:bg-zinc-100 flex items-center justify-center text-xs shadow-2xs cursor-pointer"
+                                  >
+                                    +
+                                  </button>
+                                  <span
+                                    className={`text-[10px] px-2 py-0.5 rounded-md font-semibold font-mono ${c.stock === 0
+                                      ? "bg-red-100 text-red-700"
+                                      : c.stock <= 5
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-emerald-100 text-emerald-800"
+                                      }`}
+                                  >
+                                    {c.stock === 0 ? "SOLD OUT" : c.stock <= 5 ? "LOW STOCK" : "IN STOCK"}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Inline Quick Add Color to this Architecture */}
+                          <div className="pt-2 border-t border-zinc-200/60 flex items-center gap-2">
+                            <input
+                              type="text"
+                              placeholder="Add Color (e.g. Heather Grey)"
+                              id={`quick-add-color-${g.id}`}
+                              className="flex-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-semibold text-zinc-800 focus:outline-none"
+                            />
+                            <input
+                              type="number"
+                              min="0"
+                              defaultValue={5}
+                              id={`quick-add-stock-${g.id}`}
+                              className="w-14 px-2 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-mono font-bold text-center text-zinc-800 focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nameInput = document.getElementById(`quick-add-color-${g.id}`) as HTMLInputElement;
+                                const stockInputEl = document.getElementById(`quick-add-stock-${g.id}`) as HTMLInputElement;
+                                const colorName = nameInput?.value?.trim();
+                                const initialStock = parseInt(stockInputEl?.value) || 5;
+                                if (!colorName) return;
+                                handleAddColorToArchitecture(g.id, colorName, initialStock);
+                                if (nameInput) nameInput.value = "";
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Color</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* CloudFront / ISR Information */}
+                  <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-100 text-xs text-zinc-600 space-y-1.5">
+                    <div className="flex items-center gap-1.5 font-bold text-blue-900">
+                      <Zap className="w-4 h-4 text-amber-500" />
+                      <span>Edge ISR & EventBridge Synchronization</span>
+                    </div>
+                    <p>
+                      Every inventory mutation triggers an AWS EventBridge <code>StockUpdated</code> event and issues Next.js on-demand ISR revalidation via <code>revalidatePath</code>, ensuring subsequent visitors hit zero-latency CloudFront edge caches.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Multi-Category Inventory & Product Catalog Hub */}
+              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center">
+                      <Grid className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
+                        Multi-Category Inventory Hub ({products.length} Products)
+                      </h3>
+                      <p className="text-xs text-zinc-500">
+                        Manage stock allocations, architectures, and variants across 10 top-selling e-commerce categories
                       </p>
                     </div>
                   </div>
 
                   <button
                     type="button"
-                    onClick={() => product && openRestockModal(product)}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-sm"
+                    onClick={() => setIsNewProductModalOpen(true)}
+                    className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-semibold shadow-xs transition-colors self-start sm:self-auto"
                   >
-                    <PackagePlus className="w-4 h-4" />
-                    <span>+ Restock Variants & Colors (Popup)</span>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add New Product</span>
                   </button>
                 </div>
 
-                {/* Visual Architecture & Colorway Summary */}
-                <div className="space-y-2">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold">
-                    Current Architecture & Color Allocations:
-                  </span>
-                  <div className="space-y-1.5">
-                    {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g, gIdx) => (
-                      <div key={g.id || gIdx} className="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1.5">
-                        <div className="flex items-center justify-between text-xs font-bold text-zinc-900 font-mono">
-                          <span className="flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold font-mono shrink-0">
-                              {g.id.length <= 4 ? g.id : `Arch 0${gIdx + 1}`}
-                            </span>
-                            <span>{g.name}</span>
-                          </span>
-                          <span className="text-[10px] text-zinc-500 font-normal">
-                            {(g.colors || []).reduce((sum, c) => sum + (c.stock || 0), 0)} units total
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {(g.colors || []).map((c) => (
-                            <span
-                              key={c.sku}
-                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white border border-zinc-200 text-[11px] text-zinc-800 font-mono"
-                            >
-                              <span
-                                className="w-2.5 h-2.5 rounded-full border border-black/10 shrink-0"
-                                style={{ backgroundColor: c.hex || "#333" }}
-                              />
-                              <span>{c.color}</span>
-                              <span className="bg-zinc-100 px-1.5 py-0.2 rounded font-bold text-blue-600">
-                                {c.stock}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-100 text-zinc-400 font-mono">
+                        <th className="py-2.5 px-3 font-normal">PRODUCT & ROOT SKU</th>
+                        <th className="py-2.5 px-3 font-normal">CATEGORY</th>
+                        <th className="py-2.5 px-3 font-normal">RETAIL PRICE</th>
+                        <th className="py-2.5 px-3 font-normal">TOTAL STOCK</th>
+                        <th className="py-2.5 px-3 font-normal">VARIANTS & ARCHITECTURES</th>
+                        <th className="py-2.5 px-3 font-normal text-right">RESTOCK ACTION</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {products.map((p) => {
+                        const isSelected = p.slug === selectedSlug;
+                        const hasLowStock = p.stock <= (p.lowStockThreshold || 5);
+                        const isSoldOut = p.stock === 0;
+
+                        return (
+                          <tr
+                            key={p.slug}
+                            className={`hover:bg-zinc-50/80 transition-colors ${isSelected ? "bg-blue-50/30" : ""
+                              }`}
+                          >
+                            <td className="py-3 px-3">
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-zinc-900">{p.name}</span>
+                                  {isSelected && (
+                                    <span className="text-[9px] font-mono px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded font-bold">
+                                      ACTIVE
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] font-mono text-zinc-400">
+                                  {p.productId || p.sku} · {p.model}
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3">
+                              <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">
+                                {p.category || p.categorySlug}
                               </span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                            </td>
+
+                            <td className="py-3 px-3 font-mono text-xs">
+                              <div className="font-bold text-zinc-900">${p.price}</div>
+                              <div className="text-[10px] text-zinc-400">₹{p.priceInr || Math.round(p.price * exchangeRate)}</div>
+                            </td>
+
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className="font-bold text-zinc-950">{p.stock} units</span>
+                                <span
+                                  className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${isSoldOut
+                                    ? "bg-red-100 text-red-700"
+                                    : hasLowStock
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-emerald-100 text-emerald-800"
+                                    }`}
+                                >
+                                  {isSoldOut ? "SOLD OUT" : hasLowStock ? "LOW" : "HEALTHY"}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3">
+                              <div className="flex flex-col gap-1.5 max-w-sm">
+                                {(() => {
+                                  const groups = p.variantGroups && p.variantGroups.length > 0
+                                    ? p.variantGroups
+                                    : p.childVariants && p.childVariants.length > 0
+                                      ? childVariantsToVariantGroups(p.childVariants)
+                                      : [];
+                                  if (groups.length === 0) {
+                                    return (
+                                      <div className="flex flex-wrap gap-1">
+                                        {(p.variants || []).map((v, vIdx) => (
+                                          <span
+                                            key={`${p.slug || p.id}-var-${v.id || v.name || vIdx}-${vIdx}`}
+                                            className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200"
+                                          >
+                                            {v.name}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    );
+                                  }
+                                  return groups.map((vg, vgIdx) => {
+                                    const archBadge = vg.id?.length <= 4 ? vg.id : `Arch 0${vgIdx + 1}`;
+                                    return (
+                                      <div key={vg.id || `vg-${vgIdx}`} className="flex flex-wrap items-center gap-1.5">
+                                        <span
+                                          className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200/60 shrink-0"
+                                          title={vg.name}
+                                        >
+                                          {archBadge}
+                                        </span>
+                                        <div className="flex flex-wrap gap-1">
+                                          {(vg.colors || []).map((c, cIdx) => (
+                                            <span
+                                              key={`${vg.id || vgIdx}-${c.sku || c.color || cIdx}-${cIdx}`}
+                                              className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-white text-zinc-700 border border-zinc-200 shadow-2xs"
+                                            >
+                                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.hex || "#666" }} />
+                                              <span>{c.color}</span>
+                                              <span className="font-bold text-blue-600">({c.stock})</span>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => openRestockModal(p)}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors shadow-2xs"
+                                  title="Open Dedicated Variant Restock Popup"
+                                >
+                                  <PackagePlus className="w-3 h-3" />
+                                  <span>+ Restock</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedSlug(p.slug);
+                                    fetchAdminData(p.slug);
+                                    setActiveTab("variation-engine");
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-medium transition-colors"
+                                  title="Edit in Variation Engine"
+                                >
+                                  Edit
+                                </button>
+
+                                <Link
+                                  href={`/products/${p.slug}`}
+                                  target="_blank"
+                                  className="p-1.5 text-zinc-400 hover:text-zinc-700 transition-colors"
+                                  title="View on Storefront"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </Link>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: GLOBAL SHIPPING METHOD PRICING FIXTURES */}
+          {activeTab === "shipping" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
+                        <span>Shipping Method Pricing Fixtures</span>
+                        <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                          Global Checkout Rates
+                        </span>
+                      </h3>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Direct option of pricing from 0 (Free Delivery) to any amount. Dynamic rates will be calculated later; currently provides direct fixtures in USD and INR.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGeneralDeliveryPriceUsd(0);
+                        setGeneralDeliveryPriceInr(0);
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold font-mono transition-colors cursor-pointer"
+                      title="Set general delivery to ₹0 / $0 for live testing"
+                    >
+                      ⚡ Set General Delivery to Free (₹0)
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSavingShipping}
+                      onClick={handleSaveShippingFixtures}
+                      className="flex items-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isSavingShipping ? "Saving..." : "Save Shipping Pricing"}</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* Flash Sale, Discount & ISR Edge Settings */}
-                <form onSubmit={handleUpdateInventory} className="space-y-4 pt-3 border-t border-zinc-100">
-                  {/* Real-Time Price & USD ⇄ INR Currency Converter */}
-                  <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50/60 via-zinc-50 to-zinc-50 border border-blue-100/90 space-y-3">
+                {/* Two Pricing Cards: General Delivery & Express Delivery */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Method 1: General Delivery */}
+                  <div className="p-5 rounded-2xl bg-zinc-50/80 border border-zinc-200 space-y-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold font-mono">
-                          ₹/$
-                        </div>
-                        <span className="text-xs font-bold text-zinc-950 font-sans">
-                          Live Price & Currency Converter
+                      <div>
+                        <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                          Standard Shipping
                         </span>
+                        <h4 className="text-sm font-bold text-zinc-900 mt-0.5">
+                          General Delivery (Tracked Courier)
+                        </h4>
                       </div>
-                      <span className="text-[10px] font-mono font-semibold text-zinc-500 bg-white px-2 py-0.5 rounded-full border border-zinc-200">
-                        1 USD ≈ ₹{exchangeRate}
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-zinc-200/70 text-zinc-700">
+                        3–5 Days
                       </span>
                     </div>
 
-                    {/* Dual Currency Inputs */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <p className="text-[11px] text-zinc-500">
+                      Applied when customer selects Standard Delivery. Set to 0 for Free Delivery during tests or promotions.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-3 pt-1">
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-zinc-700 flex items-center gap-1">
-                          <span>Price (USD $)</span>
-                        </label>
+                        <label className="text-[11px] font-semibold text-zinc-700">Price (USD $)</label>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">$</span>
                           <input
                             type="number"
                             step="any"
                             min="0"
-                            value={quickPriceInput}
-                            onChange={(e) => {
-                              const usd = Number(e.target.value);
-                              setQuickPriceInput(usd);
-                              setMasterBasePrice(usd);
-                              if (autoCascadePrice) {
-                                const inr = Math.round(usd * exchangeRate);
-                                setVariantGroups((prev) =>
-                                  prev.map((g) => ({
-                                    ...g,
-                                    price: usd,
-                                    priceInr: inr,
-                                    colors: g.colors.map((c) => ({ ...c, price: usd, priceInr: inr })),
-                                  }))
-                                );
-                              }
-                            }}
-                            className="w-full pl-7 pr-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-zinc-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                            value={generalDeliveryPriceUsd}
+                            onChange={(e) => handleGeneralPriceChangeUSD(Number(e.target.value))}
+                            className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:outline-none focus:border-blue-500 shadow-2xs"
                           />
                         </div>
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-zinc-700 flex items-center gap-1">
-                          <span>Price (INR ₹)</span>
-                          <span className="text-[9px] text-blue-600 font-mono">(Razorpay)</span>
-                        </label>
+                        <label className="text-[11px] font-semibold text-zinc-700">Price (INR ₹)</label>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">₹</span>
                           <input
                             type="number"
                             step="any"
                             min="0"
-                            value={
-                              quickPriceInput === 0
-                                ? 0
-                                : quickPriceInput < 1
-                                ? Number((quickPriceInput * exchangeRate).toFixed(2))
-                                : Math.round(quickPriceInput * exchangeRate)
-                            }
-                            onChange={(e) => {
-                              const inr = Number(e.target.value);
-                              const usd = Number((inr / exchangeRate).toFixed(4));
-                              setQuickPriceInput(usd);
-                              setMasterBasePrice(usd);
-                              if (autoCascadePrice) {
-                                setVariantGroups((prev) =>
-                                  prev.map((g) => ({
-                                    ...g,
-                                    price: usd,
-                                    priceInr: inr,
-                                    colors: g.colors.map((c) => ({ ...c, price: usd, priceInr: inr })),
-                                  }))
-                                );
-                              }
-                            }}
-                            className="w-full pl-7 pr-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-blue-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                            value={generalDeliveryPriceInr}
+                            onChange={(e) => handleGeneralPriceChangeINR(Number(e.target.value))}
+                            className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-blue-200 rounded-xl text-blue-900 focus:outline-none focus:border-blue-500 shadow-2xs"
                           />
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Quick Razorpay Testing Presets */}
-                    <div className="space-y-1.5 pt-1">
-                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold">
-                        ⚡ Quick Test Presets (Razorpay):
+                  {/* Method 2: Express Delivery */}
+                  <div className="p-5 rounded-2xl bg-zinc-50/80 border border-zinc-200 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                          Expedited Shipping
+                        </span>
+                        <h4 className="text-sm font-bold text-zinc-900 mt-0.5">
+                          Priority Express Dispatch
+                        </h4>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                        1–2 Days
                       </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {[1, 5, 10, 50].map((amt) => (
-                          <button
-                            key={amt}
-                            type="button"
-                            onClick={() => handleQuickRazorpayTestPreset(amt)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-mono font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
-                            title={`Set price to ₹${amt} for Razorpay live checkout testing`}
-                          >
-                            ₹{amt} Test
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setQuickPriceInput(349);
-                            setMasterBasePrice(349);
-                            handleCascadePriceToAllVariants(349, Math.round(349 * exchangeRate));
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-mono font-bold transition-all shadow-2xs cursor-pointer"
-                          title="Reset to default $349"
-                        >
-                          Reset ($349)
-                        </button>
-                      </div>
                     </div>
 
-                    {/* Auto-cascade Toggle */}
-                    <div className="flex items-center gap-2 pt-1">
-                      <input
-                        type="checkbox"
-                        id="autoCascadeQuick"
-                        checked={autoCascadePrice}
-                        onChange={(e) => setAutoCascadePrice(e.target.checked)}
-                        className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer"
-                      />
-                      <label htmlFor="autoCascadeQuick" className="text-[11px] text-zinc-600 cursor-pointer">
-                        Cascade price change to all variant colors automatically
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-zinc-700">
-                        Instant Discount ($ Off)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="150"
-                        value={discountInput}
-                        onChange={(e) => setDiscountInput(Number(e.target.value))}
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50 font-semibold focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-zinc-700">
-                        REVALIDATE_SECRET
-                      </label>
-                      <input
-                        type="text"
-                        value={revalidateSecret}
-                        onChange={(e) => setRevalidateSecret(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono text-zinc-800 bg-zinc-50 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200">
-                    <input
-                      type="checkbox"
-                      id="flashSaleToggle"
-                      checked={isFlashSale}
-                      onChange={(e) => setIsFlashSale(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded cursor-pointer"
-                    />
-                    <label htmlFor="flashSaleToggle" className="text-xs font-medium text-zinc-700 cursor-pointer">
-                      Enable "🔥 Few Left" Flash Alert when stock &le; 5 units
-                    </label>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isUpdating}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs transition-all shadow-xs disabled:opacity-50"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>{isUpdating ? "Purging Edge Cache..." : "Save Discount & Edge Rules"}</span>
-                  </button>
-                </form>
-              </div>
-
-              {/* Right: Architecture & Colorway Real-Time Inventory Control */}
-              <div className="lg:col-span-6 rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
-                <div className="border-b border-zinc-100 pb-4 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans">
-                      Architecture & Colorway Inventory
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-1">
-                      Independent colorway counters organized by architecture cut (A1, A2).
+                    <p className="text-[11px] text-zinc-500">
+                      Applied when customer selects Priority Express Dispatch. Can be set to 0 or any custom surcharge.
                     </p>
-                  </div>
-                  <button
-                    onClick={() => setActiveTab("variation-engine")}
-                    className="text-xs text-blue-600 font-semibold hover:underline"
-                  >
-                    Manage Engine &rarr;
-                  </button>
-                </div>
 
-                <div className="space-y-4">
-                  {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g, gIdx) => {
-                    const groupUnits = (g.colors || []).reduce((sum, c) => sum + (c.stock || 0), 0);
-                    return (
-                      <div
-                        key={g.id || gIdx}
-                        className="rounded-2xl bg-zinc-50 border border-zinc-200 overflow-hidden shadow-2xs space-y-3 p-4 transition-all"
-                      >
-                        <div className="flex items-center justify-between border-b border-zinc-200/70 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold font-mono shrink-0 whitespace-nowrap">
-                              {g.id.length <= 4 ? g.id : `Arch 0${gIdx + 1}`}
-                            </span>
-                            <span className="text-xs font-bold text-zinc-900 font-sans">
-                              {g.name}
-                            </span>
-                            <span className="text-[10px] font-mono bg-zinc-200 px-1.5 py-0.5 rounded text-zinc-700">
-                              {(g.colors || []).length} {(g.colors || []).length === 1 ? "color" : "colors"}
-                            </span>
-                          </div>
-                          <span className="text-xs font-mono font-bold text-zinc-800">
-                            Total Units: <span className="text-blue-600 font-bold">{groupUnits}</span>
-                          </span>
-                        </div>
-
-                        {/* Colors in this Architecture */}
-                        <div className="space-y-2">
-                          {(g.colors || []).map((c) => (
-                            <div
-                              key={c.sku}
-                              className="p-3 rounded-xl bg-white border border-zinc-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs"
-                            >
-                              <div className="space-y-0.5 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className="w-3.5 h-3.5 rounded-full border border-black/15 shrink-0 shadow-2xs"
-                                    style={{ backgroundColor: c.hex || "#333" }}
-                                  />
-                                  <span className="text-xs font-bold text-zinc-900">{c.color}</span>
-                                  <span className="text-[10px] font-mono bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-600">
-                                    {c.sku}
-                                  </span>
-                                </div>
-                                <p className="text-[11px] text-zinc-400 font-mono">
-                                  ${c.price || g.price || product?.price} · {c.stock} units in stock
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-2 self-end sm:self-auto">
-                                <button
-                                  type="button"
-                                  onClick={() => handleQuickVariantStock(c.sku, Math.max(0, c.stock - 1))}
-                                  className="w-7 h-7 rounded-lg bg-zinc-50 border border-zinc-300 text-zinc-700 font-bold hover:bg-zinc-100 flex items-center justify-center text-xs shadow-2xs cursor-pointer"
-                                >
-                                  -
-                                </button>
-                                <span className="w-10 text-center font-mono font-bold text-xs text-zinc-900">
-                                  {c.stock}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleQuickVariantStock(c.sku, c.stock + 1)}
-                                  className="w-7 h-7 rounded-lg bg-zinc-50 border border-zinc-300 text-zinc-700 font-bold hover:bg-zinc-100 flex items-center justify-center text-xs shadow-2xs cursor-pointer"
-                                >
-                                  +
-                                </button>
-                                <span
-                                  className={`text-[10px] px-2 py-0.5 rounded-md font-semibold font-mono ${
-                                    c.stock === 0
-                                      ? "bg-red-100 text-red-700"
-                                      : c.stock <= 5
-                                      ? "bg-amber-100 text-amber-800"
-                                      : "bg-emerald-100 text-emerald-800"
-                                  }`}
-                                >
-                                  {c.stock === 0 ? "SOLD OUT" : c.stock <= 5 ? "LOW STOCK" : "IN STOCK"}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Inline Quick Add Color to this Architecture */}
-                        <div className="pt-2 border-t border-zinc-200/60 flex items-center gap-2">
-                          <input
-                            type="text"
-                            placeholder="Add Color (e.g. Heather Grey)"
-                            id={`quick-add-color-${g.id}`}
-                            className="flex-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-semibold text-zinc-800 focus:outline-none"
-                          />
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-zinc-700">Price (USD $)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">$</span>
                           <input
                             type="number"
+                            step="any"
                             min="0"
-                            defaultValue={5}
-                            id={`quick-add-stock-${g.id}`}
-                            className="w-14 px-2 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-mono font-bold text-center text-zinc-800 focus:outline-none"
+                            value={expressDeliveryPriceUsd}
+                            onChange={(e) => handleExpressPriceChangeUSD(Number(e.target.value))}
+                            className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:outline-none focus:border-blue-500 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-zinc-700">Price (INR ₹)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">₹</span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={expressDeliveryPriceInr}
+                            onChange={(e) => handleExpressPriceChangeINR(Number(e.target.value))}
+                            className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-blue-200 rounded-xl text-blue-900 focus:outline-none focus:border-blue-500 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: DELIVERY HUBS & DOORSTEP GATE VERIFICATION */}
+          {activeTab === "delivery" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Delivery Hub Logistics & Gate Verification Console */}
+              <div className="p-6 sm:p-8 rounded-3xl bg-white border border-zinc-200/80 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0">
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans">
+                          Hub Logistics & Doorstep Gate Verification Console
+                        </h2>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold uppercase">
+                          AWS SES + S3 Live
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Orchestrate hub-to-hub transitions, field package scanning, GPS gate arrival, and 5-minute alive OTP verification.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Real-Time Fleet Sync Active</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Order Scope Selector */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-zinc-700">Select Active Consignment:</span>
+                    <select
+                      value={deliverySelectedOrderId}
+                      onChange={(e) => setDeliverySelectedOrderId(e.target.value)}
+                      className="text-xs font-mono font-bold bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    >
+                      {orders.map((ord) => (
+                        <option key={ord.id} value={ord.orderNumber || ord.id}>
+                          {ord.orderNumber} · {ord.customer?.fullName || "Customer"} · ${Number(ord.total).toFixed(2)} ({ord.paymentStatus || "Paid"})
+                        </option>
+                      ))}
+                      {orders.length === 0 && (
+                        <option value="ANC-763954">ANC-763954 · Himesh · $349.00 (Paid)</option>
+                      )}
+                    </select>
+                  </div>
+
+                  <div className="text-xs text-zinc-500 font-mono">
+                    Current Waybill: <strong className="text-blue-600 font-bold">{deliverySelectedOrderId}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2-Column Operational Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Card 1: Hub Inbound & Outbound Logging */}
+                <div className="p-6 rounded-3xl bg-white border border-zinc-200/80 shadow-xs space-y-5">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-blue-600" />
+                      <h3 className="text-sm font-bold text-zinc-950 font-sans">
+                        1. Transit Hub In/Out Dispatch Logging
+                      </h3>
+                    </div>
+                    <span className="text-[10px] font-mono bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded font-semibold">
+                      Step 1: In-Flight
+                    </span>
+                  </div>
+
+                  <div className="space-y-4 text-xs">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-zinc-700">Current Hub Facility Name</label>
+                      <input
+                        type="text"
+                        value={deliveryHubName}
+                        onChange={(e) => setDeliveryHubName(e.target.value)}
+                        placeholder="e.g. Frankfurt Central Air Cargo Hub"
+                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-semibold text-zinc-700">Hub City / Region</label>
+                        <input
+                          type="text"
+                          value={deliveryCity}
+                          onChange={(e) => setDeliveryCity(e.target.value)}
+                          placeholder="e.g. Frankfurt / Hesse"
+                          className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-semibold text-zinc-700">Hub Security Status</label>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold w-full">
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Manifest Verified</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-semibold text-zinc-700">Inbound Transport Mode</label>
+                        <input
+                          type="text"
+                          value={deliveryInboundType}
+                          onChange={(e) => setDeliveryInboundType(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-semibold text-zinc-700">Outbound Dispatch Mode</label>
+                        <input
+                          type="text"
+                          value={deliveryOutboundType}
+                          onChange={(e) => setDeliveryOutboundType(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toast({
+                          type: "success",
+                          title: "Route Updated",
+                          description: `Consignment ${deliverySelectedOrderId} route updated: ${deliveryHubName} (${deliveryCity}). Inbound: ${deliveryInboundType} → Outbound: ${deliveryOutboundType}`,
+                        });
+                      }}
+                      className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Record Hub Transition & Broadcast Telemetry</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Card 2: Doorstep Gate Arrival & 5-Min Alive OTP Verification */}
+                <div className="p-6 rounded-3xl bg-white border border-zinc-200/80 shadow-xs space-y-5">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
+                    <div className="flex items-center gap-2">
+                      <QrCode className="w-4 h-4 text-emerald-600" />
+                      <h3 className="text-sm font-bold text-zinc-950 font-sans">
+                        2. Doorstep Gate Arrival & 5-Min Alive OTP
+                      </h3>
+                    </div>
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${deliveryGateStatus === "delivered"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : deliveryGateStatus === "otp_sent"
+                        ? "bg-amber-100 text-amber-800 animate-pulse"
+                        : "bg-blue-100 text-blue-800"
+                      }`}>
+                      {deliveryGateStatus.replace("_", " ")}
+                    </span>
+                  </div>
+
+                  <div className="space-y-4 text-xs">
+                    {/* Step A: Gate Arrival */}
+                    <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200/70 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-zinc-900">Step A: Courier at Customer Gate</span>
+                        <span className="text-[10px] font-mono text-zinc-500">GPS Verified</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-600">
+                        When the delivery courier scans the package barcode at the customer entrance, tap below to dispatch an automated OTP email via AWS SES.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+                          setGeneratedOtp(newOtp);
+                          setDeliveryGateStatus("otp_sent");
+                          setDeliveryOtpRemainingSeconds(300);
+                          toast({
+                            type: "info",
+                            title: "Gate OTP Dispatched",
+                            description: `[AWS SES Simulator] 5-minute alive OTP dispatched to customer: ${newOtp}`,
+                          });
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                      >
+                        <Radio className="w-3.5 h-3.5 animate-pulse" />
+                        <span>Reached Location → Trigger 5-Min Alive OTP Email</span>
+                      </button>
+                    </div>
+
+                    {/* Step B: 5-Minute Alive OTP Verification */}
+                    {deliveryGateStatus !== "in_transit" && (
+                      <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-blue-950">Step B: Customer Handover Verification</span>
+                          <span className="text-[10px] font-mono font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                            Alive: 5m 00s (Demo OTP: {generatedOtp})
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-blue-900/80">
+                          Ask the customer for the 6-digit OTP received in their email to authorize parcel release.
+                        </p>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            maxLength={6}
+                            value={deliveryOtpValue}
+                            onChange={(e) => setDeliveryOtpValue(e.target.value)}
+                            placeholder="Enter 6-digit OTP"
+                            className="flex-1 px-3 py-2 text-center text-sm font-mono font-bold tracking-widest bg-white border border-blue-200 rounded-xl text-zinc-900 focus:outline-none"
                           />
                           <button
                             type="button"
                             onClick={() => {
-                              const nameInput = document.getElementById(`quick-add-color-${g.id}`) as HTMLInputElement;
-                              const stockInputEl = document.getElementById(`quick-add-stock-${g.id}`) as HTMLInputElement;
-                              const colorName = nameInput?.value?.trim();
-                              const initialStock = parseInt(stockInputEl?.value) || 5;
-                              if (!colorName) return;
-                              handleAddColorToArchitecture(g.id, colorName, initialStock);
-                              if (nameInput) nameInput.value = "";
+                              if (deliveryOtpValue === generatedOtp || deliveryOtpValue === "123456" || deliveryOtpValue === "849201") {
+                                setDeliveryGateStatus("delivered");
+                                toast({
+                                  type: "success",
+                                  title: "OTP Verified",
+                                  description: "OTP matched! Doorstep box camera snap unlocked.",
+                                });
+                              } else {
+                                toast({
+                                  type: "error",
+                                  title: "Invalid OTP",
+                                  description: "The entered code does not match the customer OTP.",
+                                });
+                              }
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer"
                           >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add Color</span>
+                            Verify OTP
                           </button>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-
-                {/* CloudFront / ISR Information */}
-                <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-100 text-xs text-zinc-600 space-y-1.5">
-                  <div className="flex items-center gap-1.5 font-bold text-blue-900">
-                    <Zap className="w-4 h-4 text-amber-500" />
-                    <span>Edge ISR & EventBridge Synchronization</span>
-                  </div>
-                  <p>
-                    Every inventory mutation triggers an AWS EventBridge <code>StockUpdated</code> event and issues Next.js on-demand ISR revalidation via <code>revalidatePath</code>, ensuring subsequent visitors hit zero-latency CloudFront edge caches.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Multi-Category Inventory & Product Catalog Hub */}
-            <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-100">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center">
-                    <Grid className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
-                      Multi-Category Inventory Hub ({products.length} Products)
-                    </h3>
-                    <p className="text-xs text-zinc-500">
-                      Manage stock allocations, architectures, and variants across 10 top-selling e-commerce categories
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsNewProductModalOpen(true)}
-                  className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-semibold shadow-xs transition-colors self-start sm:self-auto"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Add New Product</span>
-                </button>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-zinc-100 text-zinc-400 font-mono">
-                      <th className="py-2.5 px-3 font-normal">PRODUCT & ROOT SKU</th>
-                      <th className="py-2.5 px-3 font-normal">CATEGORY</th>
-                      <th className="py-2.5 px-3 font-normal">RETAIL PRICE</th>
-                      <th className="py-2.5 px-3 font-normal">TOTAL STOCK</th>
-                      <th className="py-2.5 px-3 font-normal">VARIANTS & ARCHITECTURES</th>
-                      <th className="py-2.5 px-3 font-normal text-right">RESTOCK ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100">
-                    {products.map((p) => {
-                      const isSelected = p.slug === selectedSlug;
-                      const hasLowStock = p.stock <= (p.lowStockThreshold || 5);
-                      const isSoldOut = p.stock === 0;
-
-                      return (
-                        <tr
-                          key={p.slug}
-                          className={`hover:bg-zinc-50/80 transition-colors ${
-                            isSelected ? "bg-blue-50/30" : ""
-                          }`}
-                        >
-                          <td className="py-3 px-3">
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-zinc-900">{p.name}</span>
-                                {isSelected && (
-                                  <span className="text-[9px] font-mono px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded font-bold">
-                                    ACTIVE
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] font-mono text-zinc-400">
-                                {p.productId || p.sku} · {p.model}
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="py-3 px-3">
-                            <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">
-                              {p.category || p.categorySlug}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-3 font-mono text-xs">
-                            <div className="font-bold text-zinc-900">${p.price}</div>
-                            <div className="text-[10px] text-zinc-400">₹{p.priceInr || Math.round(p.price * exchangeRate)}</div>
-                          </td>
-
-                          <td className="py-3 px-3">
-                            <div className="flex items-center gap-1.5 font-mono">
-                              <span className="font-bold text-zinc-950">{p.stock} units</span>
-                              <span
-                                className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                                  isSoldOut
-                                    ? "bg-red-100 text-red-700"
-                                    : hasLowStock
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-emerald-100 text-emerald-800"
-                                }`}
-                              >
-                                {isSoldOut ? "SOLD OUT" : hasLowStock ? "LOW" : "HEALTHY"}
-                              </span>
-                            </div>
-                          </td>
-
-                          <td className="py-3 px-3">
-                            <div className="flex flex-col gap-1.5 max-w-sm">
-                              {(() => {
-                                const groups = p.variantGroups && p.variantGroups.length > 0
-                                  ? p.variantGroups
-                                  : p.childVariants && p.childVariants.length > 0
-                                  ? childVariantsToVariantGroups(p.childVariants)
-                                  : [];
-                                if (groups.length === 0) {
-                                  return (
-                                    <div className="flex flex-wrap gap-1">
-                                      {(p.variants || []).map((v, vIdx) => (
-                                        <span
-                                          key={`${p.slug || p.id}-var-${v.id || v.name || vIdx}-${vIdx}`}
-                                          className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200"
-                                        >
-                                          {v.name}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  );
-                                }
-                                return groups.map((vg, vgIdx) => {
-                                  const archBadge = vg.id?.length <= 4 ? vg.id : `Arch 0${vgIdx + 1}`;
-                                  return (
-                                    <div key={vg.id || `vg-${vgIdx}`} className="flex flex-wrap items-center gap-1.5">
-                                      <span
-                                        className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200/60 shrink-0"
-                                        title={vg.name}
-                                      >
-                                        {archBadge}
-                                      </span>
-                                      <div className="flex flex-wrap gap-1">
-                                        {(vg.colors || []).map((c, cIdx) => (
-                                          <span
-                                            key={`${vg.id || vgIdx}-${c.sku || c.color || cIdx}-${cIdx}`}
-                                            className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-white text-zinc-700 border border-zinc-200 shadow-2xs"
-                                          >
-                                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.hex || "#666" }} />
-                                            <span>{c.color}</span>
-                                            <span className="font-bold text-blue-600">({c.stock})</span>
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  );
-                                });
-                              })()}
-                            </div>
-                          </td>
-
-                          <td className="py-3 px-3 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => openRestockModal(p)}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors shadow-2xs"
-                                title="Open Dedicated Variant Restock Popup"
-                              >
-                                <PackagePlus className="w-3 h-3" />
-                                <span>+ Restock</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedSlug(p.slug);
-                                  fetchAdminData(p.slug);
-                                  setActiveTab("variation-engine");
-                                }}
-                                className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-medium transition-colors"
-                                title="Edit in Variation Engine"
-                              >
-                                Edit
-                              </button>
-
-                              <Link
-                                href={`/products/${p.slug}`}
-                                target="_blank"
-                                className="p-1.5 text-zinc-400 hover:text-zinc-700 transition-colors"
-                                title="View on Storefront"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </Link>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: GLOBAL SHIPPING METHOD PRICING FIXTURES */}
-        {activeTab === "shipping" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
-                    <Truck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
-                      <span>Shipping Method Pricing Fixtures</span>
-                      <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
-                        Global Checkout Rates
-                      </span>
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Direct option of pricing from 0 (Free Delivery) to any amount. Dynamic rates will be calculated later; currently provides direct fixtures in USD and INR.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setGeneralDeliveryPriceUsd(0);
-                      setGeneralDeliveryPriceInr(0);
-                    }}
-                    className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold font-mono transition-colors cursor-pointer"
-                    title="Set general delivery to ₹0 / $0 for live testing"
-                  >
-                    ⚡ Set General Delivery to Free (₹0)
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={isSavingShipping}
-                    onClick={handleSaveShippingFixtures}
-                    className="flex items-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>{isSavingShipping ? "Saving..." : "Save Shipping Pricing"}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Two Pricing Cards: General Delivery & Express Delivery */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Method 1: General Delivery */}
-                <div className="p-5 rounded-2xl bg-zinc-50/80 border border-zinc-200 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
-                        Standard Shipping
-                      </span>
-                      <h4 className="text-sm font-bold text-zinc-900 mt-0.5">
-                        General Delivery (Tracked Courier)
-                      </h4>
-                    </div>
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-zinc-200/70 text-zinc-700">
-                      3–5 Days
-                    </span>
-                  </div>
-
-                  <p className="text-[11px] text-zinc-500">
-                    Applied when customer selects Standard Delivery. Set to 0 for Free Delivery during tests or promotions.
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-zinc-700">Price (USD $)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">$</span>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={generalDeliveryPriceUsd}
-                          onChange={(e) => handleGeneralPriceChangeUSD(Number(e.target.value))}
-                          className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:outline-none focus:border-blue-500 shadow-2xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-zinc-700">Price (INR ₹)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">₹</span>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={generalDeliveryPriceInr}
-                          onChange={(e) => handleGeneralPriceChangeINR(Number(e.target.value))}
-                          className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-blue-200 rounded-xl text-blue-900 focus:outline-none focus:border-blue-500 shadow-2xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Method 2: Express Delivery */}
-                <div className="p-5 rounded-2xl bg-zinc-50/80 border border-zinc-200 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
-                        Expedited Shipping
-                      </span>
-                      <h4 className="text-sm font-bold text-zinc-900 mt-0.5">
-                        Priority Express Dispatch
-                      </h4>
-                    </div>
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                      1–2 Days
-                    </span>
-                  </div>
-
-                  <p className="text-[11px] text-zinc-500">
-                    Applied when customer selects Priority Express Dispatch. Can be set to 0 or any custom surcharge.
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-zinc-700">Price (USD $)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">$</span>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={expressDeliveryPriceUsd}
-                          onChange={(e) => handleExpressPriceChangeUSD(Number(e.target.value))}
-                          className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-zinc-200 rounded-xl text-zinc-900 focus:outline-none focus:border-blue-500 shadow-2xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-zinc-700">Price (INR ₹)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">₹</span>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={expressDeliveryPriceInr}
-                          onChange={(e) => handleExpressPriceChangeINR(Number(e.target.value))}
-                          className="w-full pl-7 pr-3 py-2 text-xs font-mono font-bold bg-white border border-blue-200 rounded-xl text-blue-900 focus:outline-none focus:border-blue-500 shadow-2xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: DELIVERY HUBS & DOORSTEP GATE VERIFICATION */}
-        {activeTab === "delivery" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            {/* Delivery Hub Logistics & Gate Verification Console */}
-            <div className="p-6 sm:p-8 rounded-3xl bg-white border border-zinc-200/80 shadow-xs space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0">
-                    <Truck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans">
-                        Hub Logistics & Doorstep Gate Verification Console
-                      </h2>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold uppercase">
-                        AWS SES + S3 Live
-                      </span>
-                    </div>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Orchestrate hub-to-hub transitions, field package scanning, GPS gate arrival, and 5-minute alive OTP verification.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Real-Time Fleet Sync Active</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Order Scope Selector */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-zinc-700">Select Active Consignment:</span>
-                  <select
-                    value={deliverySelectedOrderId}
-                    onChange={(e) => setDeliverySelectedOrderId(e.target.value)}
-                    className="text-xs font-mono font-bold bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                  >
-                    {orders.map((ord) => (
-                      <option key={ord.id} value={ord.orderNumber || ord.id}>
-                        {ord.orderNumber} · {ord.customer?.fullName || "Customer"} · ${Number(ord.total).toFixed(2)} ({ord.paymentStatus || "Paid"})
-                      </option>
-                    ))}
-                    {orders.length === 0 && (
-                      <option value="ANC-763954">ANC-763954 · Himesh · $349.00 (Paid)</option>
                     )}
-                  </select>
-                </div>
 
-                <div className="text-xs text-zinc-500 font-mono">
-                  Current Waybill: <strong className="text-blue-600 font-bold">{deliverySelectedOrderId}</strong>
-                </div>
-              </div>
-            </div>
+                    {/* Step C: Box Camera Photo Proof & Final Confirmation */}
+                    {deliveryGateStatus === "delivered" && (
+                      <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-emerald-950 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span>Step C: Doorstep Camera Proof of Delivery (PoD)</span>
+                          </span>
+                          <span className="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded">
+                            OTP MATCHED
+                          </span>
+                        </div>
 
-            {/* 2-Column Operational Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Card 1: Hub Inbound & Outbound Logging */}
-              <div className="p-6 rounded-3xl bg-white border border-zinc-200/80 shadow-xs space-y-5">
-                <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-blue-600" />
-                    <h3 className="text-sm font-bold text-zinc-950 font-sans">
-                      1. Transit Hub In/Out Dispatch Logging
-                    </h3>
-                  </div>
-                  <span className="text-[10px] font-mono bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded font-semibold">
-                    Step 1: In-Flight
-                  </span>
-                </div>
-
-                <div className="space-y-4 text-xs">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-zinc-700">Current Hub Facility Name</label>
-                    <input
-                      type="text"
-                      value={deliveryHubName}
-                      onChange={(e) => setDeliveryHubName(e.target.value)}
-                      placeholder="e.g. Frankfurt Central Air Cargo Hub"
-                      className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-zinc-700">Hub City / Region</label>
-                      <input
-                        type="text"
-                        value={deliveryCity}
-                        onChange={(e) => setDeliveryCity(e.target.value)}
-                        placeholder="e.g. Frankfurt / Hesse"
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-zinc-700">Hub Security Status</label>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold w-full">
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Manifest Verified</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-zinc-700">Inbound Transport Mode</label>
-                      <input
-                        type="text"
-                        value={deliveryInboundType}
-                        onChange={(e) => setDeliveryInboundType(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-zinc-700">Outbound Dispatch Mode</label>
-                      <input
-                        type="text"
-                        value={deliveryOutboundType}
-                        onChange={(e) => setDeliveryOutboundType(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      toast({
-                        type: "success",
-                        title: "Route Updated",
-                        description: `Consignment ${deliverySelectedOrderId} route updated: ${deliveryHubName} (${deliveryCity}). Inbound: ${deliveryInboundType} → Outbound: ${deliveryOutboundType}`,
-                      });
-                    }}
-                    className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Record Hub Transition & Broadcast Telemetry</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Card 2: Doorstep Gate Arrival & 5-Min Alive OTP Verification */}
-              <div className="p-6 rounded-3xl bg-white border border-zinc-200/80 shadow-xs space-y-5">
-                <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-                  <div className="flex items-center gap-2">
-                    <QrCode className="w-4 h-4 text-emerald-600" />
-                    <h3 className="text-sm font-bold text-zinc-950 font-sans">
-                      2. Doorstep Gate Arrival & 5-Min Alive OTP
-                    </h3>
-                  </div>
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
-                    deliveryGateStatus === "delivered"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : deliveryGateStatus === "otp_sent"
-                      ? "bg-amber-100 text-amber-800 animate-pulse"
-                      : "bg-blue-100 text-blue-800"
-                  }`}>
-                    {deliveryGateStatus.replace("_", " ")}
-                  </span>
-                </div>
-
-                <div className="space-y-4 text-xs">
-                  {/* Step A: Gate Arrival */}
-                  <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200/70 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-zinc-900">Step A: Courier at Customer Gate</span>
-                      <span className="text-[10px] font-mono text-zinc-500">GPS Verified</span>
-                    </div>
-                    <p className="text-[11px] text-zinc-600">
-                      When the delivery courier scans the package barcode at the customer entrance, tap below to dispatch an automated OTP email via AWS SES.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-                        setGeneratedOtp(newOtp);
-                        setDeliveryGateStatus("otp_sent");
-                        setDeliveryOtpRemainingSeconds(300);
-                        toast({
-                          type: "info",
-                          title: "Gate OTP Dispatched",
-                          description: `[AWS SES Simulator] 5-minute alive OTP dispatched to customer: ${newOtp}`,
-                        });
-                      }}
-                      className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
-                    >
-                      <Radio className="w-3.5 h-3.5 animate-pulse" />
-                      <span>Reached Location → Trigger 5-Min Alive OTP Email</span>
-                    </button>
-                  </div>
-
-                  {/* Step B: 5-Minute Alive OTP Verification */}
-                  {deliveryGateStatus !== "in_transit" && (
-                    <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-blue-950">Step B: Customer Handover Verification</span>
-                        <span className="text-[10px] font-mono font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                          Alive: 5m 00s (Demo OTP: {generatedOtp})
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-blue-900/80">
-                        Ask the customer for the 6-digit OTP received in their email to authorize parcel release.
-                      </p>
-
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          maxLength={6}
-                          value={deliveryOtpValue}
-                          onChange={(e) => setDeliveryOtpValue(e.target.value)}
-                          placeholder="Enter 6-digit OTP"
-                          className="flex-1 px-3 py-2 text-center text-sm font-mono font-bold tracking-widest bg-white border border-blue-200 rounded-xl text-zinc-900 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (deliveryOtpValue === generatedOtp || deliveryOtpValue === "123456" || deliveryOtpValue === "849201") {
-                              setDeliveryGateStatus("delivered");
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeliveryPhotoProof("/images/hero-graphite.jpg");
                               toast({
                                 type: "success",
-                                title: "OTP Verified",
-                                description: "OTP matched! Doorstep box camera snap unlocked.",
+                                title: "Photo Proof Captured",
+                                description: "Doorstep box delivery photo uploaded to S3 proof vault.",
                               });
-                            } else {
-                              toast({
-                                type: "error",
-                                title: "Invalid OTP",
-                                description: "The entered code does not match the customer OTP.",
-                              });
-                            }
-                          }}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer"
-                        >
-                          Verify OTP
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                            }}
+                            className="flex-1 py-2 px-3 rounded-xl border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-900 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Snap Box Photo Proof (S3 Upload)</span>
+                          </button>
 
-                  {/* Step C: Box Camera Photo Proof & Final Confirmation */}
-                  {deliveryGateStatus === "delivered" && (
-                    <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-emerald-950 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>Step C: Doorstep Camera Proof of Delivery (PoD)</span>
-                        </span>
-                        <span className="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded">
-                          OTP MATCHED
-                        </span>
-                      </div>
+                          {deliveryPhotoProof && (
+                            <span className="text-[11px] font-mono text-emerald-700 font-bold">
+                              ✓ Photo Verified
+                            </span>
+                          )}
+                        </div>
 
-                      <div className="flex items-center gap-3">
                         <button
                           type="button"
                           onClick={() => {
-                            setDeliveryPhotoProof("/images/hero-graphite.jpg");
                             toast({
                               type: "success",
-                              title: "Photo Proof Captured",
-                              description: "Doorstep box delivery photo uploaded to S3 proof vault.",
+                              title: "Delivery Confirmed",
+                              description: `Consignment ${deliverySelectedOrderId} permanently marked as DELIVERED with customer OTP signature.`,
                             });
                           }}
-                          className="flex-1 py-2 px-3 rounded-xl border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-900 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs"
                         >
-                          <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Snap Box Photo Proof (S3 Upload)</span>
+                          <Check className="w-4 h-4" />
+                          <span>Confirm Order as Successfully Delivered</span>
                         </button>
-
-                        {deliveryPhotoProof && (
-                          <span className="text-[11px] font-mono text-emerald-700 font-bold">
-                            ✓ Photo Verified
-                          </span>
-                        )}
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          toast({
-                            type: "success",
-                            title: "Delivery Confirmed",
-                            description: `Consignment ${deliverySelectedOrderId} permanently marked as DELIVERED with customer OTP signature.`,
-                          });
-                        }}
-                        className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>Confirm Order as Successfully Delivered</span>
-                      </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* TAB 4: COMPLETED ORDERS & TASK BREAKDOWN matching Screenshot 3 */}
-        {activeTab === "orders" && (() => {
-              const totalRevenueUsd = orders.reduce((sum, ord) => sum + (Number(ord.total) || 0), 0);
-              const totalUnitsBought = orders.reduce(
-                (sum, ord) =>
-                  sum + (ord.items || []).reduce((iSum, i) => iSum + (Number(i.quantity) || 1), 0),
-                0
+          {/* TAB 4: COMPLETED ORDERS & TASK BREAKDOWN matching Screenshot 3 */}
+          {activeTab === "orders" && (() => {
+            const totalRevenueUsd = orders.reduce((sum, ord) => sum + (Number(ord.total) || 0), 0);
+            const totalUnitsBought = orders.reduce(
+              (sum, ord) =>
+                sum + (ord.items || []).reduce((iSum, i) => iSum + (Number(i.quantity) || 1), 0),
+              0
+            );
+            const paidOrdersCount = orders.filter((ord) => (ord.paymentStatus || "").toLowerCase() === "paid").length;
+            const aov = orders.length > 0 ? totalRevenueUsd / orders.length : 0;
+            const totalRevenueInr = Math.round(totalRevenueUsd * exchangeRate);
+
+            const filteredOrders = orders.filter((ord) => {
+              if (!orderSearchQuery.trim()) return true;
+              const q = orderSearchQuery.toLowerCase();
+              const matchNumber = ord.orderNumber?.toLowerCase().includes(q);
+              const matchCustomer =
+                ord.customer?.fullName?.toLowerCase().includes(q) ||
+                ord.customer?.email?.toLowerCase().includes(q) ||
+                ord.customer?.contact?.toLowerCase().includes(q) ||
+                ord.customer?.city?.toLowerCase().includes(q);
+              const matchItem = ord.items?.some(
+                (i) =>
+                  i.name?.toLowerCase().includes(q) ||
+                  i.variantName?.toLowerCase().includes(q) ||
+                  i.componentSku?.toLowerCase().includes(q)
               );
-              const paidOrdersCount = orders.filter((ord) => (ord.paymentStatus || "").toLowerCase() === "paid").length;
-              const aov = orders.length > 0 ? totalRevenueUsd / orders.length : 0;
-              const totalRevenueInr = Math.round(totalRevenueUsd * exchangeRate);
+              return matchNumber || matchCustomer || matchItem;
+            });
 
-              const filteredOrders = orders.filter((ord) => {
-                if (!orderSearchQuery.trim()) return true;
-                const q = orderSearchQuery.toLowerCase();
-                const matchNumber = ord.orderNumber?.toLowerCase().includes(q);
-                const matchCustomer =
-                  ord.customer?.fullName?.toLowerCase().includes(q) ||
-                  ord.customer?.email?.toLowerCase().includes(q) ||
-                  ord.customer?.contact?.toLowerCase().includes(q) ||
-                  ord.customer?.city?.toLowerCase().includes(q);
-                const matchItem = ord.items?.some(
-                  (i) =>
-                    i.name?.toLowerCase().includes(q) ||
-                    i.variantName?.toLowerCase().includes(q) ||
-                    i.componentSku?.toLowerCase().includes(q)
-                );
-                return matchNumber || matchCustomer || matchItem;
-              });
-
-              return (
-                <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
-                  {/* Section Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <ShoppingBag className="w-5 h-5 text-blue-600" />
-                        <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
-                          Order Buying Details & Analytics ({orders.length})
-                        </h3>
-                      </div>
-                      <p className="text-xs text-zinc-500 mt-1">
-                        Real-time order buying totals, customer records, and itemized variant sales aggregated from MongoDB Atlas.
-                      </p>
-                    </div>
+            return (
+              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                {/* Section Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 gap-4">
+                  <div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleQuickDemoVerify}
-                        className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold px-3 py-1.5 rounded-xl transition-colors"
-                      >
-                        ＋ Add Demo Verified Purchase
-                      </button>
+                      <ShoppingBag className="w-5 h-5 text-blue-600" />
+                      <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
+                        Order Buying Details & Analytics ({orders.length})
+                      </h3>
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Real-time order buying totals, customer records, and itemized variant sales aggregated from MongoDB Atlas.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleQuickDemoVerify}
+                      className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold px-3 py-1.5 rounded-xl transition-colors"
+                    >
+                      ＋ Add Demo Verified Purchase
+                    </button>
+                  </div>
+                </div>
+
+                {/* Buying Totals & Analytics Summary Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                    <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
+                      TOTAL GROSS REVENUE
+                    </span>
+                    <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
+                      ${totalRevenueUsd.toFixed(2)}
+                    </div>
+                    <div className="text-[11px] font-mono text-zinc-500">
+                      ≈ ₹{totalRevenueInr.toLocaleString("en-IN")} INR
                     </div>
                   </div>
 
-                  {/* Buying Totals & Analytics Summary Cards */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
-                      <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
-                        TOTAL GROSS REVENUE
-                      </span>
-                      <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
-                        ${totalRevenueUsd.toFixed(2)}
-                      </div>
-                      <div className="text-[11px] font-mono text-zinc-500">
-                        ≈ ₹{totalRevenueInr.toLocaleString("en-IN")} INR
-                      </div>
+                  <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                    <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
+                      TOTAL UNITS BOUGHT
+                    </span>
+                    <div className="text-xl sm:text-2xl font-bold font-mono text-blue-600">
+                      {totalUnitsBought} <span className="text-xs font-normal text-zinc-500">items</span>
                     </div>
+                    <div className="text-[11px] text-zinc-500">Across all catalog variants</div>
+                  </div>
 
-                    <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
-                      <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
-                        TOTAL UNITS BOUGHT
-                      </span>
-                      <div className="text-xl sm:text-2xl font-bold font-mono text-blue-600">
-                        {totalUnitsBought} <span className="text-xs font-normal text-zinc-500">items</span>
-                      </div>
-                      <div className="text-[11px] text-zinc-500">Across all catalog variants</div>
+                  <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                    <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
+                      CONFIRMED PAID ORDERS
+                    </span>
+                    <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-600">
+                      {paidOrdersCount}{" "}
+                      <span className="text-xs font-normal text-zinc-400">/ {orders.length} total</span>
                     </div>
-
-                    <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
-                      <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
-                        CONFIRMED PAID ORDERS
-                      </span>
-                      <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-600">
-                        {paidOrdersCount}{" "}
-                        <span className="text-xs font-normal text-zinc-400">/ {orders.length} total</span>
-                      </div>
-                      <div className="text-[11px] text-zinc-500">
-                        {orders.length > 0 ? `${Math.round((paidOrdersCount / orders.length) * 100)}% conversion rate` : "No orders"}
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
-                      <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
-                        AVG. ORDER VALUE (AOV)
-                      </span>
-                      <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
-                        ${aov.toFixed(2)}
-                      </div>
-                      <div className="text-[11px] font-mono text-zinc-500">
-                        ≈ ₹{Math.round(aov * exchangeRate).toLocaleString("en-IN")} INR
-                      </div>
+                    <div className="text-[11px] text-zinc-500">
+                      {orders.length > 0 ? `${Math.round((paidOrdersCount / orders.length) * 100)}% conversion rate` : "No orders"}
                     </div>
                   </div>
 
-                  {/* Filter & Search Bar */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                    <div className="relative w-full sm:w-80">
-                      <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={orderSearchQuery}
-                        onChange={(e) => setOrderSearchQuery(e.target.value)}
-                        placeholder="Search order #, customer, email, variant..."
-                        className="w-full pl-9 pr-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
+                  <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                    <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
+                      AVG. ORDER VALUE (AOV)
+                    </span>
+                    <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
+                      ${aov.toFixed(2)}
                     </div>
-                    <div className="text-xs text-zinc-400 font-mono">
-                      Showing {filteredOrders.length} of {orders.length} order(s)
+                    <div className="text-[11px] font-mono text-zinc-500">
+                      ≈ ₹{Math.round(aov * exchangeRate).toLocaleString("en-IN")} INR
                     </div>
                   </div>
+                </div>
 
-                  {/* Orders Table */}
-                  {orders.length === 0 ? (
-                    <div className="text-center py-12 text-zinc-400 text-xs">
-                      No orders recorded yet. Place a test order via the checkout flow.
-                    </div>
-                  ) : filteredOrders.length === 0 ? (
-                    <div className="text-center py-8 text-zinc-400 text-xs">
-                      No orders match &quot;{orderSearchQuery}&quot;.
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead>
-                          <tr className="border-b border-zinc-100 text-zinc-400 font-mono">
-                            <th className="py-2.5 font-normal">ORDER #</th>
-                            <th className="py-2.5 font-normal">CUSTOMER</th>
-                            <th className="py-2.5 font-normal">BUYING DETAILS / ITEMS</th>
-                            <th className="py-2.5 font-normal">SHIPPING</th>
-                            <th className="py-2.5 font-normal">STATUS</th>
-                            <th className="py-2.5 font-normal">TOTAL</th>
-                            <th className="py-2.5 font-normal text-right">ACTION</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                          {filteredOrders.map((ord) => {
-                            const isExpanded = expandedOrderId === ord.id;
-                            const totalItemsInOrder = (ord.items || []).reduce(
-                              (sum, it) => sum + (Number(it.quantity) || 1),
-                              0
-                            );
+                {/* Filter & Search Bar */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                  <div className="relative w-full sm:w-80">
+                    <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={orderSearchQuery}
+                      onChange={(e) => setOrderSearchQuery(e.target.value)}
+                      placeholder="Search order #, customer, email, variant..."
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="text-xs text-zinc-400 font-mono">
+                    Showing {filteredOrders.length} of {orders.length} order(s)
+                  </div>
+                </div>
 
-                            return (
-                              <React.Fragment key={ord.id}>
-                                <tr
-                                  className={`hover:bg-zinc-50/70 transition-colors ${
-                                    isExpanded ? "bg-blue-50/20" : ""
-                                  }`}
-                                >
-                                  <td className="py-3 font-mono font-bold text-zinc-900 align-top">
-                                    <div className="text-blue-600 font-bold">{ord.orderNumber}</div>
-                                    <div className="text-[10px] text-zinc-400 font-normal">
-                                      {ord.createdAt
-                                        ? new Date(ord.createdAt).toLocaleDateString("en-US", {
-                                            month: "short",
-                                            day: "numeric",
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                          })
-                                        : "Recent"}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 text-zinc-700 align-top">
-                                    <div className="font-semibold text-zinc-900">
-                                      {ord.customer?.fullName || "Guest Customer"}
-                                    </div>
-                                    <div className="text-[11px] text-zinc-500 font-mono">
-                                      {ord.customer?.email}
-                                    </div>
-                                    {ord.customer?.contact && (
-                                      <div className="text-[10px] text-zinc-400 font-mono">
-                                        {ord.customer.contact}
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="py-3 text-zinc-600 align-top">
-                                    <div className="space-y-1">
-                                      {(ord.items || []).map((i, idx) => (
-                                        <div key={idx} className="flex items-center gap-1.5 flex-wrap">
-                                          <span className="font-medium text-zinc-900">{i.name}</span>
-                                          {i.variantName && (
-                                            <span className="px-1.5 py-0.5 rounded-md bg-zinc-100 text-zinc-700 text-[10px] font-mono">
-                                              {i.variantName}
-                                            </span>
-                                          )}
-                                          <span className="text-[10px] text-zinc-400 font-mono">
-                                            ×{i.quantity || 1}
-                                          </span>
-                                          <span className="text-[10px] font-mono text-zinc-600">
-                                            (${Number(i.price || 0).toFixed(2)})
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 font-mono text-zinc-700 align-top">
-                                    {ord.shipping === 0 ? (
-                                      <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-semibold">
-                                        FREE
-                                      </span>
-                                    ) : (
-                                      <span>${Number(ord.shipping || 0).toFixed(2)}</span>
-                                    )}
-                                  </td>
-                                  <td className="py-3 align-top">
+                {/* Orders Table */}
+                {orders.length === 0 ? (
+                  <div className="text-center py-12 text-zinc-400 text-xs">
+                    No orders recorded yet. Place a test order via the checkout flow.
+                  </div>
+                ) : filteredOrders.length === 0 ? (
+                  <div className="text-center py-8 text-zinc-400 text-xs">
+                    No orders match &quot;{orderSearchQuery}&quot;.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-zinc-200 text-zinc-400 font-mono text-[11px]">
+                          <th className="py-3 font-medium">ORDER #</th>
+                          <th className="py-3 font-medium">CUSTOMER</th>
+                          <th className="py-3 font-medium">ITEMS & VARIANTS</th>
+                          <th className="py-3 font-medium">DELIVERY STATUS & HUB</th>
+                          <th className="py-3 font-medium">PAYMENT</th>
+                          <th className="py-3 font-medium">TOTAL</th>
+                          <th className="py-3 font-medium text-right">ACTION</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100">
+                        {filteredOrders.map((ord) => {
+                          const isExpanded = expandedOrderId === ord.id;
+                          const edits = orderDeliveryEdits[ord.orderNumber] || {
+                            deliveryStatus: ord.deliveryStatus || "processing",
+                            currentHub: ord.currentHub || "Portland Primary Logistics Center",
+                            trackingNumber: ord.trackingNumber || `TRK-${ord.orderNumber}`,
+                            note: "",
+                          };
+                          const newEv = orderNewEvent[ord.orderNumber] || {
+                            title: "",
+                            description: "",
+                          };
+
+                          return (
+                            <React.Fragment key={ord.id}>
+                              <tr
+                                className={`hover:bg-zinc-50/80 transition-colors ${
+                                  isExpanded ? "bg-blue-50/30" : ""
+                                }`}
+                              >
+                                {/* 1. Order Number & Timestamp */}
+                                <td className="py-3.5 font-mono font-bold text-zinc-900 align-top">
+                                  <div className="text-blue-600 font-bold text-xs">{ord.orderNumber}</div>
+                                  <div className="text-[10px] text-zinc-400 font-normal">
+                                    {ord.createdAt
+                                      ? new Date(ord.createdAt).toLocaleDateString("en-US", {
+                                          month: "short",
+                                          day: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : "Recent"}
+                                  </div>
+                                  <div className="pt-1">
                                     <span
-                                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                        (ord.paymentStatus || "").toLowerCase() === "paid"
+                                      className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-mono ${
+                                        ord.awsEventBridgeDispatched
                                           ? "bg-emerald-50 text-emerald-700"
                                           : "bg-amber-50 text-amber-700"
                                       }`}
                                     >
-                                      {(ord.paymentStatus || "PAID").toUpperCase()}
+                                      AWS-EB: {ord.awsEventBridgeDispatched ? "SYNC" : "PEND"}
                                     </span>
-                                  </td>
-                                  <td className="py-3 font-mono font-bold text-zinc-900 align-top">
-                                    <div>${Number(ord.total || 0).toFixed(2)}</div>
-                                    <div className="text-[10px] text-zinc-400 font-normal">
-                                      ≈ ₹{Math.round(Number(ord.total || 0) * exchangeRate).toLocaleString("en-IN")}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 text-right align-top">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setExpandedOrderId(isExpanded ? null : ord.id)
-                                      }
-                                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold px-2.5 py-1 rounded-lg hover:bg-blue-50 transition-colors"
-                                    >
-                                      <span>{isExpanded ? "Hide" : "Details"}</span>
-                                      {isExpanded ? (
-                                        <ChevronDown className="w-3.5 h-3.5" />
-                                      ) : (
-                                        <ChevronRight className="w-3.5 h-3.5" />
-                                      )}
-                                    </button>
-                                  </td>
-                                </tr>
+                                  </div>
+                                </td>
 
-                                {/* Expanded Itemized Customer Buying Details Drawer */}
-                                {isExpanded && (
-                                  <tr className="bg-zinc-50/90 border-b border-zinc-200">
-                                    <td colSpan={7} className="p-4 sm:p-6 space-y-4">
-                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                                        {/* 1. Customer & Shipping Destination */}
-                                        <div className="p-4 rounded-xl bg-white border border-zinc-200 space-y-2">
-                                          <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold">
-                                            CUSTOMER & SHIPPING DESTINATION
+                                {/* 2. Customer Destination */}
+                                <td className="py-3.5 text-zinc-700 align-top">
+                                  <div className="font-semibold text-zinc-900">
+                                    {ord.customer?.fullName || "Guest Customer"}
+                                  </div>
+                                  <div className="text-[11px] text-zinc-500 font-mono truncate max-w-[180px]">
+                                    {ord.customer?.email}
+                                  </div>
+                                  <div className="text-[10px] text-zinc-400">
+                                    {ord.customer?.city && `${ord.customer.city}, `}
+                                    {ord.customer?.country || "US"}
+                                  </div>
+                                </td>
+
+                                {/* 3. Buying Details / Items & Variants */}
+                                <td className="py-3.5 text-zinc-600 align-top">
+                                  <div className="space-y-1 max-w-[220px]">
+                                    {(ord.items || []).map((i, idx) => (
+                                      <div key={idx} className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-semibold text-zinc-900">{i.name}</span>
+                                        {i.variantName && (
+                                          <span className="px-1.5 py-0.5 rounded-md bg-zinc-100 text-zinc-700 text-[10px] font-mono">
+                                            {i.variantName}
+                                          </span>
+                                        )}
+                                        <span className="text-[10px] text-zinc-400 font-mono">
+                                          ×{i.quantity || 1}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+
+                                {/* 4. Delivery Status & Hub Location */}
+                                <td className="py-3.5 align-top">
+                                  <div className="space-y-1">
+                                    {/* Cancellation Request Warning Badge */}
+                                    {ord.cancellation?.status === "requested" && (
+                                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] animate-pulse">
+                                        <Clock className="w-3 h-3 text-amber-600" />
+                                        <span>CANCEL REQUESTED</span>
+                                      </div>
+                                    )}
+
+                                    {/* Delivery Status Badge */}
+                                    <div>
+                                      {ord.deliveryStatus === "cancelled" || ord.cancellation?.status === "approved" ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                          <span>Cancelled</span>
+                                        </span>
+                                      ) : ord.deliveryStatus === "delivered" ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                          <span>Delivered</span>
+                                        </span>
+                                      ) : ord.deliveryStatus === "out_for_delivery" ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                          <Truck className="w-3 h-3 text-indigo-600" />
+                                          <span>Out for Delivery</span>
+                                        </span>
+                                      ) : ord.deliveryStatus === "in_transit" ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                          <Truck className="w-3 h-3 text-blue-600" />
+                                          <span>In Transit</span>
+                                        </span>
+                                      ) : ord.deliveryStatus === "dispatched" ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                          <span>Dispatched</span>
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                          <span>Processing</span>
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Hub & Tracking preview */}
+                                    <div className="text-[10px] text-zinc-500 font-mono truncate max-w-[190px]">
+                                      {ord.currentHub || "Portland Primary Logistics Center"}
+                                    </div>
+                                    <div className="text-[9px] text-zinc-400 font-mono">
+                                      #{ord.trackingNumber || `TRK-${ord.orderNumber}`}
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* 5. Payment Status */}
+                                <td className="py-3.5 align-top">
+                                  {ord.paymentStatus === "refund_initiated" ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                      <Zap className="w-3 h-3 text-emerald-600 fill-emerald-600" />
+                                      <span>REFUND INITIATED</span>
+                                    </span>
+                                  ) : ord.paymentStatus === "refunded" ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-700">
+                                      REFUNDED
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      PAID (RAZORPAY)
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* 6. Total Amount */}
+                                <td className="py-3.5 font-mono font-bold text-zinc-900 align-top">
+                                  <div>${Number(ord.total || 0).toFixed(2)}</div>
+                                  <div className="text-[10px] text-zinc-400 font-normal">
+                                    ≈ ₹{Math.round(Number(ord.total || 0) * exchangeRate).toLocaleString("en-IN")}
+                                  </div>
+                                </td>
+
+                                {/* 7. Open Controller Action */}
+                                <td className="py-3.5 text-right align-top">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedOrderId(isExpanded ? null : ord.id)
+                                    }
+                                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                                      isExpanded
+                                        ? "bg-zinc-900 text-white hover:bg-black shadow-xs"
+                                        : "border border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-800"
+                                    }`}
+                                  >
+                                    <span>{isExpanded ? "Close" : "Open"}</span>
+                                    {isExpanded ? (
+                                      <ChevronDown className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+                                    )}
+                                  </button>
+                                </td>
+                              </tr>
+
+                              {/* Expanded Full Order Command Console */}
+                              {isExpanded && (
+                                <tr className="bg-zinc-50/95 border-b border-zinc-200">
+                                  <td colSpan={7} className="p-4 sm:p-6 space-y-5">
+                                    {/* Console Header Bar */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-200 text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                                        <span className="font-mono font-bold uppercase tracking-wider text-zinc-900">
+                                          Order Control Console · #{ord.orderNumber}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-3 font-mono text-[11px] text-zinc-500">
+                                        <span>Customer: <strong>{ord.customer?.fullName}</strong></span>
+                                        <span>•</span>
+                                        <span>Total: <strong>${Number(ord.total || 0).toFixed(2)} USD</strong></span>
+                                        <span>•</span>
+                                        <span>Gateway: <strong>RAZORPAY</strong></span>
+                                      </div>
+                                    </div>
+
+                                    {/* Cancellation Verification & Razorpay Refund Module */}
+                                    <div className="space-y-3">
+                                      {/* Alert 1: Customer Requested Cancellation (Awaiting Admin Review) */}
+                                      {ord.cancellation?.status === "requested" && (
+                                        <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-3">
+                                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div className="space-y-1">
+                                              <div className="flex items-center gap-2 text-amber-950 font-bold text-sm">
+                                                <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
+                                                <span>Customer Order Cancellation Request Received</span>
+                                              </div>
+                                              <p className="text-xs text-amber-800 leading-relaxed">
+                                                Reason: &quot;<strong>{ord.cancellation?.reason || "Customer requested"}</strong>&quot;
+                                                {ord.cancellation?.requestedAt && (
+                                                  <span className="text-[11px] font-mono text-amber-700 ml-2">
+                                                    (Requested on {new Date(ord.cancellation.requestedAt).toLocaleString()})
+                                                  </span>
+                                                )}
+                                              </p>
+                                            </div>
+
+                                            {/* Action Buttons to Approve or Reject */}
+                                            <div className="flex items-center gap-2 shrink-0">
+                                              <button
+                                                type="button"
+                                                disabled={isProcessingCancellation === ord.orderNumber}
+                                                onClick={() => handleReviewCancellation(ord.orderNumber, "approved")}
+                                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs disabled:opacity-50"
+                                              >
+                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                <span>Approve Cancellation</span>
+                                              </button>
+                                              <button
+                                                type="button"
+                                                disabled={isProcessingCancellation === ord.orderNumber}
+                                                onClick={() => {
+                                                  const notes = prompt("Enter optional reason for declining cancellation:") || "Order packed for dispatch.";
+                                                  handleReviewCancellation(ord.orderNumber, "rejected", notes);
+                                                }}
+                                                className="px-3.5 py-2 rounded-xl border border-zinc-300 hover:bg-zinc-100 text-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                                <span>Decline Request</span>
+                                              </button>
+                                            </div>
                                           </div>
-                                          <div className="font-semibold text-zinc-900">
+                                        </div>
+                                      )}
+
+                                      {/* Alert 2: Cancellation Approved -> Trigger Razorpay Refund Button Appears! */}
+                                      {(ord.cancellation?.status === "approved" || ord.deliveryStatus === "cancelled") &&
+                                        ord.paymentStatus !== "refund_initiated" &&
+                                        ord.paymentStatus !== "refunded" && (
+                                          <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                            <div className="space-y-1">
+                                              <div className="font-bold text-amber-950 text-sm flex items-center gap-2">
+                                                <Zap className="w-4 h-4 text-amber-600 fill-amber-600" />
+                                                <span>Cancellation Approved · Razorpay Refund Trigger Active</span>
+                                              </div>
+                                              <p className="text-amber-800 text-xs leading-relaxed">
+                                                Admin has verified and approved the cancellation. Click the button to request Razorpay to release the full payment of <strong>${Number(ord.total || 0).toFixed(2)} USD</strong> back to customer&apos;s account.
+                                              </p>
+                                            </div>
+
+                                            {/* Dedicated Trigger Refund Button */}
+                                            <button
+                                              type="button"
+                                              disabled={isProcessingRefund === ord.orderNumber}
+                                              onClick={() => handleTriggerRefund(ord)}
+                                              className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition shrink-0 cursor-pointer disabled:opacity-50"
+                                            >
+                                              {isProcessingRefund === ord.orderNumber ? (
+                                                <>
+                                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                                  <span>Requesting Razorpay Gateway...</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Zap className="w-3.5 h-3.5 fill-white" />
+                                                  <span>⚡ Trigger Razorpay Refund (${Number(ord.total || 0).toFixed(2)})</span>
+                                                </>
+                                              )}
+                                            </button>
+                                          </div>
+                                        )}
+
+                                      {/* Alert 3: Refund Initiated Confirmation (2-7 business days SLA) */}
+                                      {ord.paymentStatus === "refund_initiated" && (
+                                        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-3.5">
+                                          <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                          </div>
+                                          <div className="space-y-1 text-xs">
+                                            <div className="font-bold text-emerald-950 text-sm flex items-center gap-2">
+                                              <span>Razorpay Refund Successfully Initiated</span>
+                                              {ord.razorpayRefundId && (
+                                                <span className="font-mono text-[11px] text-emerald-800 font-semibold px-2 py-0.5 rounded bg-emerald-100">
+                                                  ID: {ord.razorpayRefundId}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <p className="text-emerald-800 text-xs leading-relaxed">
+                                              The refund is being initiated and will be sent back to the customer&apos;s account in <strong>2–7 business days</strong>. (Amount: ${Number(ord.refundAmount || ord.total || 0).toFixed(2)} USD)
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* 3-Column Command Console Grid */}
+                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 text-xs">
+                                      {/* Column 1: Customer Destination & Items Allocation (5 cols) */}
+                                      <div className="lg:col-span-5 space-y-4">
+                                        {/* Destination Card */}
+                                        <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-2">
+                                          <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold">
+                                            DELIVERY DESTINATION & CUSTOMER
+                                          </div>
+                                          <div className="font-semibold text-zinc-900 text-sm">
                                             {ord.customer?.fullName}
                                           </div>
                                           <div className="text-zinc-600 font-mono text-[11px]">
@@ -4350,11 +4772,10 @@ export default function AdminPage() {
                                               Phone: {ord.customer.contact}
                                             </div>
                                           )}
-                                          <div className="text-zinc-600 pt-1 text-[11px] leading-relaxed">
+                                          <div className="text-zinc-600 pt-1 text-xs leading-relaxed border-t border-zinc-100 mt-2">
                                             <div>{ord.customer?.address}</div>
                                             <div>
-                                              {ord.customer?.city}, {ord.customer?.state}{" "}
-                                              {ord.customer?.zipCode}
+                                              {ord.customer?.city}, {ord.customer?.state} {ord.customer?.zipCode}
                                             </div>
                                             <div className="font-semibold text-zinc-700">
                                               {ord.customer?.country || "United States"}
@@ -4362,43 +4783,28 @@ export default function AdminPage() {
                                           </div>
                                         </div>
 
-                                        {/* 2. Itemized Cart Breakdown */}
-                                        <div className="p-4 rounded-xl bg-white border border-zinc-200 space-y-2 md:col-span-2">
+                                        {/* Items Breakdown Card */}
+                                        <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-2">
                                           <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold">
-                                            PURCHASED ITEMS & VARIANT INVENTORY ALLOCATION
+                                            ORDERED PRODUCTS & VARIANT ALLOCATION
                                           </div>
                                           <div className="divide-y divide-zinc-100">
                                             {(ord.items || []).map((it, itIdx) => (
-                                              <div
-                                                key={itIdx}
-                                                className="py-2.5 flex items-center justify-between gap-4"
-                                              >
-                                                <div className="flex items-center gap-3">
+                                              <div key={itIdx} className="py-2 flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2.5">
                                                   {it.image && (
-                                                    <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-200 relative bg-zinc-100 shrink-0">
-                                                      <Image
-                                                        src={it.image}
-                                                        alt={it.name || "Product"}
-                                                        fill
-                                                        className="object-cover"
-                                                      />
+                                                    <div className="w-8 h-8 rounded-lg overflow-hidden border border-zinc-200 relative bg-zinc-100 shrink-0">
+                                                      <Image src={it.image} alt={it.name || "Product"} fill className="object-cover" />
                                                     </div>
                                                   )}
                                                   <div>
-                                                    <div className="font-semibold text-zinc-900">
-                                                      {it.name}
-                                                    </div>
-                                                    <div className="text-[11px] text-zinc-500 flex items-center gap-2">
-                                                      <span>Variant: <strong>{it.variantName || it.variant || "Standard"}</strong></span>
-                                                      {it.componentSku && (
-                                                        <span className="font-mono text-[10px] text-zinc-400">
-                                                          SKU: {it.componentSku}
-                                                        </span>
-                                                      )}
+                                                    <div className="font-semibold text-zinc-900">{it.name}</div>
+                                                    <div className="text-[10px] text-zinc-400 font-mono">
+                                                      {it.variantName || it.variant || "Standard"}
                                                     </div>
                                                   </div>
                                                 </div>
-                                                <div className="text-right font-mono">
+                                                <div className="text-right font-mono text-xs">
                                                   <div className="font-bold text-zinc-900">
                                                     ${(Number(it.price || 0) * (Number(it.quantity) || 1)).toFixed(2)}
                                                   </div>
@@ -4410,1059 +4816,1206 @@ export default function AdminPage() {
                                             ))}
                                           </div>
 
-                                          {/* Financials & Gateway Verification */}
-                                          <div className="pt-3 border-t border-zinc-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                                            <div>
-                                              <span className="text-zinc-400">Subtotal:</span>{" "}
-                                              <strong className="font-mono text-zinc-800">
-                                                ${Number(ord.subtotal || 0).toFixed(2)}
-                                              </strong>
-                                            </div>
-                                            <div>
-                                              <span className="text-zinc-400">Shipping:</span>{" "}
-                                              <strong className="font-mono text-zinc-800">
-                                                {ord.shipping === 0 ? "Free" : `$${Number(ord.shipping || 0).toFixed(2)}`}
-                                              </strong>
-                                            </div>
-                                            <div>
-                                              <span className="text-zinc-400">Tax:</span>{" "}
-                                              <strong className="font-mono text-zinc-800">
-                                                ${Number(ord.tax || 0).toFixed(2)}
-                                              </strong>
-                                            </div>
-                                            <div>
-                                              <span className="text-zinc-400">Total Paid:</span>{" "}
-                                              <strong className="font-mono text-blue-600 font-bold">
-                                                ${Number(ord.total || 0).toFixed(2)}
-                                              </strong>
-                                            </div>
-                                          </div>
-
-                                          {/* Payment & Audit Footnote */}
-                                          <div className="pt-2 flex items-center justify-between flex-wrap gap-2 text-[10px] text-zinc-400 font-mono border-t border-zinc-100">
-                                            <span>
-                                              Gateway: <strong className="text-zinc-600">{ord.paymentMethod?.toUpperCase() || "RAZORPAY"}</strong>
-                                            </span>
-                                            {ord.razorpayPaymentId && (
-                                              <span>
-                                                Payment ID: <strong className="text-zinc-600">{ord.razorpayPaymentId}</strong>
-                                              </span>
-                                            )}
-                                            {ord.razorpayOrderId && (
-                                              <span>
-                                                Order ID: <strong className="text-zinc-600">{ord.razorpayOrderId}</strong>
-                                              </span>
-                                            )}
-                                            <span>
-                                              AWS EventBridge:{" "}
-                                              <strong className={ord.awsEventBridgeDispatched ? "text-emerald-600" : "text-amber-600"}>
-                                                {ord.awsEventBridgeDispatched ? "DISPATCHED" : "PENDING"}
-                                              </strong>
-                                            </span>
+                                          {/* Payment Reference Strip */}
+                                          <div className="pt-2 border-t border-zinc-100 space-y-1 font-mono text-[10px] text-zinc-500">
+                                            <div>Payment ID: <strong className="text-zinc-800">{ord.razorpayPaymentId || "pay_verified"}</strong></div>
+                                            <div>Order ID: <strong className="text-zinc-800">{ord.razorpayOrderId || "order_live"}</strong></div>
                                           </div>
                                         </div>
                                       </div>
-                                    </td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
 
-        {/* TAB 2: THE VARIATION ENGINE */}
-        {activeTab === "variation-engine" && (
-          <form onSubmit={handleSaveVariationEngine} className="space-y-8 animate-in fade-in duration-200">
-            {/* Master Product Header */}
-            <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
-              <div className="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-blue-600" />
-                    <h3 className="text-xl font-bold text-zinc-950 font-sans">
-                      The Variation Engine: Master Product Configuration
-                    </h3>
+                                      {/* Column 2: Orders Delivery & Logistics Controller (4 cols) */}
+                                      <div className="lg:col-span-4 space-y-4">
+                                        <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-3">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-mono tracking-wider text-blue-600 uppercase font-bold flex items-center gap-1.5">
+                                              <Truck className="w-3.5 h-3.5" />
+                                              <span>DELIVERY & LOGISTICS CONTROL</span>
+                                            </span>
+                                          </div>
+
+                                          {/* Delivery Status Select */}
+                                          <div>
+                                            <label className="block text-zinc-600 font-medium mb-1 font-mono text-[10px] uppercase">
+                                              Delivery Status
+                                            </label>
+                                            <select
+                                              value={edits.deliveryStatus || ord.deliveryStatus || "processing"}
+                                              onChange={(e) =>
+                                                setOrderDeliveryEdits((prev) => ({
+                                                  ...prev,
+                                                  [ord.orderNumber]: {
+                                                    ...prev[ord.orderNumber],
+                                                    deliveryStatus: e.target.value,
+                                                  },
+                                                }))
+                                              }
+                                              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 focus:outline-none focus:border-blue-500 font-semibold"
+                                            >
+                                              <option value="processing">Processing (Origin Facility)</option>
+                                              <option value="dispatched">Dispatched from Warehouse</option>
+                                              <option value="in_transit">In Transit (Logistics Hub)</option>
+                                              <option value="out_for_delivery">Out for Delivery (Courier Gate)</option>
+                                              <option value="delivered">Delivered to Customer</option>
+                                              <option value="cancelled">Cancelled</option>
+                                            </select>
+                                          </div>
+
+                                          {/* Transit Hub Input */}
+                                          <div>
+                                            <label className="block text-zinc-600 font-medium mb-1 font-mono text-[10px] uppercase">
+                                              Current Transit Hub / Facility
+                                            </label>
+                                            <input
+                                              type="text"
+                                              value={edits.currentHub !== undefined ? edits.currentHub : (ord.currentHub || "")}
+                                              onChange={(e) =>
+                                                setOrderDeliveryEdits((prev) => ({
+                                                  ...prev,
+                                                  [ord.orderNumber]: {
+                                                    ...prev[ord.orderNumber],
+                                                    currentHub: e.target.value,
+                                                  },
+                                                }))
+                                              }
+                                              placeholder="e.g. Portland Primary Logistics Center"
+                                              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 focus:outline-none focus:border-blue-500 font-mono"
+                                            />
+                                          </div>
+
+                                          {/* Tracking Number Input */}
+                                          <div>
+                                            <label className="block text-zinc-600 font-medium mb-1 font-mono text-[10px] uppercase">
+                                              Tracking Number
+                                            </label>
+                                            <input
+                                              type="text"
+                                              value={edits.trackingNumber !== undefined ? edits.trackingNumber : (ord.trackingNumber || "")}
+                                              onChange={(e) =>
+                                                setOrderDeliveryEdits((prev) => ({
+                                                  ...prev,
+                                                  [ord.orderNumber]: {
+                                                    ...prev[ord.orderNumber],
+                                                    trackingNumber: e.target.value,
+                                                  },
+                                                }))
+                                              }
+                                              placeholder="e.g. TRK-ANC-914820"
+                                              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 focus:outline-none focus:border-blue-500 font-mono"
+                                            />
+                                          </div>
+
+                                          {/* Status Update Note */}
+                                          <div>
+                                            <label className="block text-zinc-600 font-medium mb-1 font-mono text-[10px] uppercase">
+                                              Checkpoint Note
+                                            </label>
+                                            <input
+                                              type="text"
+                                              value={edits.note || ""}
+                                              onChange={(e) =>
+                                                setOrderDeliveryEdits((prev) => ({
+                                                  ...prev,
+                                                  [ord.orderNumber]: {
+                                                    ...prev[ord.orderNumber],
+                                                    note: e.target.value,
+                                                  },
+                                                }))
+                                              }
+                                              placeholder="e.g. Scanned at outbound ramp"
+                                              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 focus:outline-none focus:border-blue-500"
+                                            />
+                                          </div>
+
+                                          {/* Save Delivery Update Button */}
+                                          <button
+                                            type="button"
+                                            disabled={edits.isSaving}
+                                            onClick={() => handleUpdateDelivery(ord.orderNumber)}
+                                            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50 shadow-xs"
+                                          >
+                                            {edits.isSaving ? (
+                                              <>
+                                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                                <span>Saving Logistics...</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Save className="w-3.5 h-3.5" />
+                                                <span>Save Delivery Update</span>
+                                              </>
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* Column 3: Live Audit Events Timeline & Custom Note (3 cols) */}
+                                      <div className="lg:col-span-3 space-y-4">
+                                        <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-3">
+                                          <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold flex items-center justify-between">
+                                            <span>AUDIT & STATUS EVENTS ({ord.events?.length || 0})</span>
+                                          </div>
+
+                                          {/* Events Chronological Feed */}
+                                          <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                                            {Array.isArray(ord.events) && ord.events.length > 0 ? (
+                                              ord.events.map((ev, evIdx) => (
+                                                <div key={ev.id || evIdx} className="p-2.5 rounded-xl bg-zinc-50 border border-zinc-100 text-xs space-y-1">
+                                                  <div className="flex items-center justify-between text-[10px] font-mono">
+                                                    <span className="font-bold text-zinc-800">{ev.title}</span>
+                                                    <span className="text-zinc-400">
+                                                      {new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                    </span>
+                                                  </div>
+                                                  <p className="text-[11px] text-zinc-600 leading-snug">{ev.description}</p>
+                                                  {ev.actor && (
+                                                    <span className="inline-block px-1.5 py-0.2 rounded bg-zinc-200/60 text-[9px] font-mono text-zinc-600">
+                                                      By: {ev.actor}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              ))
+                                            ) : (
+                                              <div className="text-zinc-400 text-[11px] text-center py-4">No events logged yet</div>
+                                            )}
+                                          </div>
+
+                                          {/* Quick Add Event Note */}
+                                          <div className="pt-2 border-t border-zinc-100 space-y-2">
+                                            <input
+                                              type="text"
+                                              value={newEv.title || ""}
+                                              onChange={(e) =>
+                                                setOrderNewEvent((prev) => ({
+                                                  ...prev,
+                                                  [ord.orderNumber]: { ...prev[ord.orderNumber], title: e.target.value },
+                                                }))
+                                              }
+                                              placeholder="Checkpoint title..."
+                                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs bg-zinc-50 focus:bg-white focus:outline-none"
+                                            />
+                                            <input
+                                              type="text"
+                                              value={newEv.description || ""}
+                                              onChange={(e) =>
+                                                setOrderNewEvent((prev) => ({
+                                                  ...prev,
+                                                  [ord.orderNumber]: { ...prev[ord.orderNumber], description: e.target.value },
+                                                }))
+                                              }
+                                              placeholder="Checkpoint description..."
+                                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs bg-zinc-50 focus:bg-white focus:outline-none"
+                                            />
+                                            <button
+                                              type="button"
+                                              disabled={newEv.isAdding}
+                                              onClick={() => handleAddOrderEvent(ord.orderNumber)}
+                                              className="w-full py-1.5 rounded-lg bg-zinc-900 hover:bg-black text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50"
+                                            >
+                                              {newEv.isAdding ? "Logging..." : "+ Log Checkpoint Note"}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Define parent product parameters and link dynamic child variants with specialized hardware features and stock allocations.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSavingVariants}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-colors self-start sm:self-auto disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{isSavingVariants ? "Saving Engine..." : "Save Master & Child Variants"}</span>
-                </button>
+                )}
               </div>
+            );
+          })()}
 
-              {/* Master Inputs */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-700">
-                    Root Product Code (productId)
-                  </label>
-                  <input
-                    type="text"
-                    value={masterProductId}
-                    onChange={(e) => setMasterProductId(e.target.value)}
-                    placeholder="e.g. ANC-AIR-TWS"
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-zinc-900 bg-zinc-50"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-700">Product Name</label>
-                  <input
-                    type="text"
-                    value={masterName}
-                    onChange={(e) => setMasterName(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm text-zinc-900 bg-zinc-50"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-700">Audio Category Type</label>
-                  <select
-                    value={masterType}
-                    onChange={(e) => setMasterType(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50"
-                  >
-                    <option value="Over-Ear Headphones">Over-Ear Headphones</option>
-                    <option value="TWS Earbuds">TWS Earbuds</option>
-                    <option value="Wireless Earphones">Wireless Earphones</option>
-                    <option value="Studio Reference Monitors">Studio Reference Monitors</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1.5 sm:col-span-3">
-                  <label className="text-xs font-semibold text-zinc-700">Description</label>
-                  <textarea
-                    rows={2}
-                    value={masterDescription}
-                    onChange={(e) => setMasterDescription(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50"
-                  />
-                </div>
-
-                {/* Master Pricing & Dual-Currency Studio */}
-                <div className="sm:col-span-3 p-5 rounded-2xl bg-gradient-to-br from-blue-50/70 via-zinc-50 to-zinc-50 border border-blue-200/80 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-blue-100">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center text-sm font-bold font-mono shadow-xs">
-                        ₹/$
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-zinc-950 font-sans flex items-center gap-2">
-                          <span>Master Pricing & Currency Converter Studio</span>
-                          <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
-                            Live Dual-Sync
-                          </span>
-                        </h4>
-                        <p className="text-[11px] text-zinc-500">
-                          Change in USD or INR automatically syncs the other. Test micro-transactions on Razorpay by entering ₹1 or ₹5.
-                        </p>
-                      </div>
+          {/* TAB 2: THE VARIATION ENGINE */}
+          {activeTab === "variation-engine" && (
+            <form onSubmit={handleSaveVariationEngine} className="space-y-8 animate-in fade-in duration-200">
+              {/* Master Product Header */}
+              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                <div className="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-blue-600" />
+                      <h3 className="text-xl font-bold text-zinc-950 font-sans">
+                        The Variation Engine: Master Product Configuration
+                      </h3>
                     </div>
-
-                    <div className="flex items-center gap-3 self-start sm:self-auto">
-                      <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-zinc-200 shadow-2xs">
-                        <span className="text-[11px] font-semibold text-zinc-500">Rate:</span>
-                        <span className="text-xs font-mono font-bold text-zinc-800">1 USD = ₹</span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={exchangeRate}
-                          onChange={(e) => setExchangeRate(Number(e.target.value) || 83.0)}
-                          className="w-14 text-xs font-mono font-bold text-blue-700 bg-transparent focus:outline-none"
-                          title="Exchange rate"
-                        />
-                      </div>
-
-                      {/* Currency Mode Switcher */}
-                      <div className="flex items-center p-0.5 rounded-xl bg-zinc-200/70 border border-zinc-200">
-                        <button
-                          type="button"
-                          onClick={() => setAdminCurrencyMode("USD")}
-                          className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
-                            adminCurrencyMode === "USD"
-                              ? "bg-white text-zinc-900 shadow-xs"
-                              : "text-zinc-600 hover:text-zinc-900"
-                          }`}
-                        >
-                          $ USD
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAdminCurrencyMode("INR")}
-                          className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
-                            adminCurrencyMode === "INR"
-                              ? "bg-blue-600 text-white shadow-xs"
-                              : "text-zinc-600 hover:text-zinc-900"
-                          }`}
-                        >
-                          ₹ INR
-                        </button>
-                      </div>
-                    </div>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Define parent product parameters and link dynamic child variants with specialized hardware features and stock allocations.
+                    </p>
                   </div>
 
-                  {/* Dual Inputs Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* USD Price */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-700 flex items-center justify-between">
-                        <span>Base Price (USD $)</span>
-                        <span className="text-[10px] font-mono text-zinc-400">Global Storefront</span>
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">$</span>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={masterBasePrice}
-                          onChange={(e) => handleBasePriceChangeUSD(Number(e.target.value))}
-                          className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono font-bold text-zinc-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
-                        />
-                      </div>
-                    </div>
-
-                    {/* INR Price */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-700 flex items-center justify-between">
-                        <span>Base Price (INR ₹)</span>
-                        <span className="text-[10px] font-mono text-blue-600 font-bold">Razorpay Test</span>
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">₹</span>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={
-                            masterBasePrice === 0
-                              ? 0
-                              : masterBasePrice < 1
-                              ? Number((masterBasePrice * exchangeRate).toFixed(2))
-                              : Math.round(masterBasePrice * exchangeRate)
-                          }
-                          onChange={(e) => handleBasePriceChangeINR(Number(e.target.value))}
-                          className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-blue-200 text-sm font-mono font-bold text-blue-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Discount */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-700">Base Master Discount (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="90"
-                        value={masterBaseDiscount}
-                        onChange={(e) => setMasterBaseDiscount(Number(e.target.value))}
-                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono text-zinc-900 bg-white shadow-2xs"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Quick Razorpay Testing Presets & Cascade Controls */}
-                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-blue-100/70">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold mr-1">
-                        ⚡ Quick Test Presets:
-                      </span>
-                      {[1, 5, 10, 50].map((amt) => (
-                        <button
-                          key={amt}
-                          type="button"
-                          onClick={() => handleQuickRazorpayTestPreset(amt)}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-mono font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
-                          title={`Set price to ₹${amt} and cascade across all variants`}
-                        >
-                          ₹{amt} Test
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMasterBasePrice(349);
-                          setQuickPriceInput(349);
-                          handleCascadePriceToAllVariants(349, Math.round(349 * exchangeRate));
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-mono font-bold transition-all shadow-2xs cursor-pointer"
-                        title="Reset to default $349"
-                      >
-                        Reset ($349)
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-1.5 text-xs text-zinc-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={autoCascadePrice}
-                          onChange={(e) => setAutoCascadePrice(e.target.checked)}
-                          className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer"
-                        />
-                        <span>Auto-cascade to all variants</span>
-                      </label>
-
-                      <button
-                        type="button"
-                        onClick={() => handleCascadePriceToAllVariants(masterBasePrice)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                        title="Force cascade this price across all architecture and colorway variants"
-                      >
-                        <span>⚡ Cascade to All Variants</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Shared Global Specs Section */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider font-mono">
-                    Shared Global Specifications (All Variants)
-                  </h4>
                   <button
-                    type="button"
-                    onClick={handleAddSpecRow}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                    type="submit"
+                    disabled={isSavingVariants}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-colors self-start sm:self-auto disabled:opacity-50"
                   >
-                    ＋ Add Spec Attribute
+                    <Save className="w-4 h-4" />
+                    <span>{isSavingVariants ? "Saving Engine..." : "Save Master & Child Variants"}</span>
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {globalSpecsList.map((spec, idx) => (
-                    <div key={idx} className="flex gap-2 items-center bg-zinc-50 p-2 rounded-xl border border-zinc-200">
-                      <input
-                        type="text"
-                        value={spec.key}
-                        onChange={(e) => handleSpecChange(idx, e.target.value, spec.value)}
-                        placeholder="Spec Name"
-                        className="w-1/2 px-2.5 py-1.5 text-xs bg-white border border-zinc-200 rounded-lg font-medium text-zinc-800"
-                      />
-                      <input
-                        type="text"
-                        value={spec.value}
-                        onChange={(e) => handleSpecChange(idx, spec.key, e.target.value)}
-                        placeholder="Specification Value"
-                        className="w-1/2 px-2.5 py-1.5 text-xs bg-white border border-zinc-200 rounded-lg text-zinc-800"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSpecRow(idx)}
-                        className="text-zinc-400 hover:text-red-600 p-1"
+                {/* Master Inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-700">
+                      Root Product Code (productId)
+                    </label>
+                    <input
+                      type="text"
+                      value={masterProductId}
+                      onChange={(e) => setMasterProductId(e.target.value)}
+                      placeholder="e.g. ANC-AIR-TWS"
+                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-zinc-900 bg-zinc-50"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-700">Product Name</label>
+                    <input
+                      type="text"
+                      value={masterName}
+                      onChange={(e) => setMasterName(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm text-zinc-900 bg-zinc-50"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-700">Audio Category Type</label>
+                    <select
+                      value={masterType}
+                      onChange={(e) => setMasterType(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50"
+                    >
+                      <option value="Over-Ear Headphones">Over-Ear Headphones</option>
+                      <option value="TWS Earbuds">TWS Earbuds</option>
+                      <option value="Wireless Earphones">Wireless Earphones</option>
+                      <option value="Studio Reference Monitors">Studio Reference Monitors</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-3">
+                    <label className="text-xs font-semibold text-zinc-700">Description</label>
+                    <textarea
+                      rows={2}
+                      value={masterDescription}
+                      onChange={(e) => setMasterDescription(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50"
+                    />
+                  </div>
+
+                  {/* Master Pricing & Dual-Currency Studio */}
+                  <div className="sm:col-span-3 p-5 rounded-2xl bg-gradient-to-br from-blue-50/70 via-zinc-50 to-zinc-50 border border-blue-200/80 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-blue-100">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center text-sm font-bold font-mono shadow-xs">
+                          ₹/$
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-zinc-950 font-sans flex items-center gap-2">
+                            <span>Master Pricing & Currency Converter Studio</span>
+                            <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                              Live Dual-Sync
+                            </span>
+                          </h4>
+                          <p className="text-[11px] text-zinc-500">
+                            Change in USD or INR automatically syncs the other. Test micro-transactions on Razorpay by entering ₹1 or ₹5.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 self-start sm:self-auto">
+                        <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-zinc-200 shadow-2xs">
+                          <span className="text-[11px] font-semibold text-zinc-500">Rate:</span>
+                          <span className="text-xs font-mono font-bold text-zinc-800">1 USD = ₹</span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={exchangeRate}
+                            onChange={(e) => setExchangeRate(Number(e.target.value) || 83.0)}
+                            className="w-14 text-xs font-mono font-bold text-blue-700 bg-transparent focus:outline-none"
+                            title="Exchange rate"
+                          />
+                        </div>
+
+                        {/* Currency Mode Switcher */}
+                        <div className="flex items-center p-0.5 rounded-xl bg-zinc-200/70 border border-zinc-200">
+                          <button
+                            type="button"
+                            onClick={() => setAdminCurrencyMode("USD")}
+                            className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all ${adminCurrencyMode === "USD"
+                              ? "bg-white text-zinc-900 shadow-xs"
+                              : "text-zinc-600 hover:text-zinc-900"
+                              }`}
+                          >
+                            $ USD
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAdminCurrencyMode("INR")}
+                            className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all ${adminCurrencyMode === "INR"
+                              ? "bg-blue-600 text-white shadow-xs"
+                              : "text-zinc-600 hover:text-zinc-900"
+                              }`}
+                          >
+                            ₹ INR
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Dual Inputs Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {/* USD Price */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-700 flex items-center justify-between">
+                          <span>Base Price (USD $)</span>
+                          <span className="text-[10px] font-mono text-zinc-400">Global Storefront</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">$</span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={masterBasePrice}
+                            onChange={(e) => handleBasePriceChangeUSD(Number(e.target.value))}
+                            className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono font-bold text-zinc-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      {/* INR Price */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-700 flex items-center justify-between">
+                          <span>Base Price (INR ₹)</span>
+                          <span className="text-[10px] font-mono text-blue-600 font-bold">Razorpay Test</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">₹</span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={
+                              masterBasePrice === 0
+                                ? 0
+                                : masterBasePrice < 1
+                                  ? Number((masterBasePrice * exchangeRate).toFixed(2))
+                                  : Math.round(masterBasePrice * exchangeRate)
+                            }
+                            onChange={(e) => handleBasePriceChangeINR(Number(e.target.value))}
+                            className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-blue-200 text-sm font-mono font-bold text-blue-900 bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Discount */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-700">Base Master Discount (%)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="90"
+                          value={masterBaseDiscount}
+                          onChange={(e) => setMasterBaseDiscount(Number(e.target.value))}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono text-zinc-900 bg-white shadow-2xs"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Razorpay Testing Presets & Cascade Controls */}
+                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-blue-100/70">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold mr-1">
+                          ⚡ Quick Test Presets:
+                        </span>
+                        {[1, 5, 10, 50].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() => handleQuickRazorpayTestPreset(amt)}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-mono font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                            title={`Set price to ₹${amt} and cascade across all variants`}
+                          >
+                            ₹{amt} Test
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMasterBasePrice(349);
+                            setQuickPriceInput(349);
+                            handleCascadePriceToAllVariants(349, Math.round(349 * exchangeRate));
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-mono font-bold transition-all shadow-2xs cursor-pointer"
+                          title="Reset to default $349"
+                        >
+                          Reset ($349)
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-1.5 text-xs text-zinc-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={autoCascadePrice}
+                            onChange={(e) => setAutoCascadePrice(e.target.checked)}
+                            className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer"
+                          />
+                          <span>Auto-cascade to all variants</span>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCascadePriceToAllVariants(masterBasePrice)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                          title="Force cascade this price across all architecture and colorway variants"
+                        >
+                          <span>⚡ Cascade to All Variants</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Shared Global Specs Section */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider font-mono">
+                      Shared Global Specifications (All Variants)
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={handleAddSpecRow}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                    >
+                      ＋ Add Spec Attribute
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {globalSpecsList.map((spec, idx) => (
+                      <div key={idx} className="flex gap-2 items-center bg-zinc-50 p-2 rounded-xl border border-zinc-200">
+                        <input
+                          type="text"
+                          value={spec.key}
+                          onChange={(e) => handleSpecChange(idx, e.target.value, spec.value)}
+                          placeholder="Spec Name"
+                          className="w-1/2 px-2.5 py-1.5 text-xs bg-white border border-zinc-200 rounded-lg font-medium text-zinc-800"
+                        />
+                        <input
+                          type="text"
+                          value={spec.value}
+                          onChange={(e) => handleSpecChange(idx, spec.key, e.target.value)}
+                          placeholder="Specification Value"
+                          className="w-1/2 px-2.5 py-1.5 text-xs bg-white border border-zinc-200 rounded-lg text-zinc-800"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSpecRow(idx)}
+                          className="text-zinc-400 hover:text-red-600 p-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Hierarchical Variant Architecture & Colorway Studio */}
+              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-blue-600" />
+                      <span>Variant Architecture & Colorway Studio ({variantGroups.length} Architectures Active)</span>
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Model multiple variant architectures (e.g. A1 Regular Fit, A2 Streetwear Oversized Cut). Each architecture contains multiple colorways with their own stock counters, SKUs, and photography.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddArchitectureGroup}
+                    className="flex items-center gap-1.5 text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-semibold px-4 py-2 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add Variant Architecture (A{variantGroups.length + 1})</span>
+                  </button>
+                </div>
+
+                {/* Architectures Container */}
+                <div className="space-y-6">
+                  {variantGroups.map((group, gIdx) => {
+                    const groupUnits = group.colors.reduce((sum, c) => sum + (c.stock || 0), 0);
+
+                    return (
+                      <div
+                        key={group.id}
+                        className="p-5 sm:p-6 rounded-2xl bg-zinc-50/80 border border-zinc-200 space-y-5 transition-all shadow-2xs"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                        {/* Architecture Group Header Card */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200">
+                          <div className="flex items-center gap-3">
+                            <span className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xs font-bold font-mono shadow-2xs">
+                              {group.id}
+                            </span>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                                  Architecture Cut #{gIdx + 1}
+                                </span>
+                                <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                                  {group.colors.length} {group.colors.length === 1 ? "colorway" : "colorways"}
+                                </span>
+                                <span className="text-[10px] font-mono bg-zinc-200 text-zinc-800 px-2 py-0.5 rounded-full font-bold">
+                                  {groupUnits} units total
+                                </span>
+                              </div>
+                              <input
+                                type="text"
+                                value={group.name}
+                                onChange={(e) => handleUpdateArchitectureName(group.id, e.target.value)}
+                                placeholder="e.g. A1 (Regular Fit) or A2 (Oversized Cut)"
+                                className="text-sm font-bold text-zinc-900 bg-white border border-zinc-200 px-3 py-1.5 rounded-lg mt-1 w-full sm:w-80 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+                            <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded-lg px-2 py-1 shadow-2xs">
+                              <span className="text-[10px] font-bold text-zinc-400 font-mono">$</span>
+                              <input
+                                type="number"
+                                step="any"
+                                value={group.price ?? masterBasePrice}
+                                onChange={(e) => handleUpdateArchitecturePrice(group.id, Number(e.target.value))}
+                                className="w-16 text-xs font-mono font-bold text-zinc-900 bg-transparent focus:outline-none"
+                                title="Architecture Price in USD"
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-1 bg-white border border-blue-200 rounded-lg px-2 py-1 shadow-2xs">
+                              <span className="text-[10px] font-bold text-blue-600 font-mono">₹</span>
+                              <input
+                                type="number"
+                                step="any"
+                                value={
+                                  group.priceInr ??
+                                  (group.price
+                                    ? (group.price < 1 ? Number((group.price * exchangeRate).toFixed(2)) : Math.round(group.price * exchangeRate))
+                                    : (masterBasePrice < 1 ? Number((masterBasePrice * exchangeRate).toFixed(2)) : Math.round(masterBasePrice * exchangeRate)))
+                                }
+                                onChange={(e) => {
+                                  const inr = Number(e.target.value);
+                                  const usd = Number((inr / exchangeRate).toFixed(4));
+                                  handleUpdateArchitecturePrice(group.id, usd, inr);
+                                }}
+                                className="w-20 text-xs font-mono font-bold text-blue-900 bg-transparent focus:outline-none"
+                                title="Architecture Price in INR"
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveArchitectureGroup(group.id)}
+                              className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete Arch</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Colorways Nested in this Architecture */}
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-zinc-800 uppercase tracking-wider font-mono">
+                              Colorways & Stock for {group.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleAddColorToArchitecture(group.id, `Color ${group.colors.length + 1}`, 5)}
+                              className="inline-flex items-center gap-1.5 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-3 py-1.5 rounded-lg border border-blue-200 transition-colors shadow-2xs cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>+ Add Color to {group.id}</span>
+                            </button>
+                          </div>
+
+                          {group.colors.map((colorItem, cIdx) => (
+                            <div
+                              key={colorItem.sku || cIdx}
+                              className="p-4 rounded-xl bg-white border border-zinc-200 shadow-2xs space-y-4"
+                            >
+                              <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="w-4 h-4 rounded-full border border-black/20 shrink-0 shadow-2xs"
+                                    style={{ backgroundColor: colorItem.hex || "#333" }}
+                                  />
+                                  <span className="text-xs font-bold text-zinc-900">
+                                    {colorItem.color || "Untitled Color"}
+                                  </span>
+                                  <span className="text-[10px] font-mono bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-700">
+                                    {colorItem.sku}
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveColorFromArchitecture(group.id, cIdx)}
+                                  className="text-xs text-zinc-400 hover:text-red-600 flex items-center gap-1 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Remove Color</span>
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                {/* Color Name + Swatch Picker */}
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-600">Colorway Name</label>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="color"
+                                      value={colorItem.hex || "#22252A"}
+                                      onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "hex", e.target.value)}
+                                      className="w-7 h-7 rounded border border-zinc-200 p-0 cursor-pointer shrink-0"
+                                      title="Choose color hex"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={colorItem.color}
+                                      onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "color", e.target.value)}
+                                      className="w-full px-2.5 py-1.5 text-xs bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-900 font-semibold focus:bg-white"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* SKU */}
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-600">SKU (Stock Keeping Unit)</label>
+                                  <input
+                                    type="text"
+                                    value={colorItem.sku}
+                                    onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "sku", e.target.value)}
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-900 focus:bg-white"
+                                  />
+                                </div>
+
+                                {/* Price Override (USD & INR) */}
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-600 flex items-center justify-between">
+                                    <span>Color Price</span>
+                                    <span className="text-[9px] font-mono text-zinc-400">$ / ₹</span>
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    <div className="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1 focus-within:bg-white focus-within:border-blue-400">
+                                      <span className="text-[10px] font-bold text-zinc-400 font-mono">$</span>
+                                      <input
+                                        type="number"
+                                        step="any"
+                                        value={colorItem.price ?? group.price ?? masterBasePrice}
+                                        onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "price", Number(e.target.value))}
+                                        className="w-full text-xs font-mono font-bold text-zinc-900 bg-transparent focus:outline-none"
+                                        title="Color price in USD"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1 bg-zinc-50 border border-blue-200 rounded-lg px-2 py-1 focus-within:bg-white focus-within:border-blue-400">
+                                      <span className="text-[10px] font-bold text-blue-600 font-mono">₹</span>
+                                      <input
+                                        type="number"
+                                        step="any"
+                                        value={
+                                          colorItem.priceInr ??
+                                          (colorItem.price
+                                            ? (colorItem.price < 1 ? Number((colorItem.price * exchangeRate).toFixed(2)) : Math.round(colorItem.price * exchangeRate))
+                                            : (group.priceInr ?? (masterBasePrice < 1 ? Number((masterBasePrice * exchangeRate).toFixed(2)) : Math.round(masterBasePrice * exchangeRate))))
+                                        }
+                                        onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "priceInr", Number(e.target.value))}
+                                        className="w-full text-xs font-mono font-bold text-blue-900 bg-transparent focus:outline-none"
+                                        title="Color price in INR"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Real-time Inventory */}
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-600">Real-Time Units (Stock)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={colorItem.stock}
+                                    onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "stock", Number(e.target.value))}
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-blue-50/50 border border-blue-200 rounded-lg text-blue-900 focus:bg-white"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Photography & Angles for this Color */}
+                              <div className="pt-3 border-t border-zinc-100 space-y-2.5">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <Camera className="w-3.5 h-3.5 text-blue-600" />
+                                    <span className="text-[11px] font-bold text-zinc-800">
+                                      Photography ({(colorItem.images || []).length} Attached)
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <label
+                                      htmlFor={`upload-color-${group.id}-${cIdx}`}
+                                      className="cursor-pointer inline-flex items-center gap-1 text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-2.5 py-1 rounded-md border border-blue-200 transition-colors cursor-pointer"
+                                    >
+                                      <Upload className="w-3 h-3" />
+                                      <span>{uploadingColorKey === `${group.id}-${cIdx}` ? "Uploading S3..." : "Direct S3 Upload"}</span>
+                                    </label>
+                                    <input
+                                      id={`upload-color-${group.id}-${cIdx}`}
+                                      type="file"
+                                      accept="image/*"
+                                      multiple
+                                      disabled={uploadingColorKey === `${group.id}-${cIdx}`}
+                                      onChange={(e) => handleColorDirectS3Upload(group.id, cIdx, e)}
+                                      className="hidden"
+                                    />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddImageToColor(group.id, cIdx)}
+                                      className="inline-flex items-center gap-1 text-[11px] bg-white hover:bg-zinc-100 text-zinc-700 font-semibold px-2.5 py-1 rounded-md border border-zinc-200 transition-colors cursor-pointer"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span>Add Angle</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Thumbnails */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                                  {(colorItem.images && colorItem.images.length > 0 ? colorItem.images : ["/images/hero-silver.jpg"]).map(
+                                    (imgUrl, imgIdx) => (
+                                      <div
+                                        key={imgIdx}
+                                        className="p-1.5 rounded-lg bg-zinc-50 border border-zinc-200 space-y-1 relative group"
+                                      >
+                                        <div className="relative aspect-square rounded bg-white overflow-hidden flex items-center justify-center">
+                                          <img
+                                            src={imgUrl}
+                                            alt={`${colorItem.color} angle ${imgIdx + 1}`}
+                                            className="w-full h-full object-contain p-0.5"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveImageFromColor(group.id, cIdx, imgIdx)}
+                                            className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white p-1 rounded transition-colors"
+                                            title="Remove photo"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                        <input
+                                          type="text"
+                                          value={imgUrl}
+                                          onChange={(e) => handleUpdateImageInColor(group.id, cIdx, imgIdx, e.target.value)}
+                                          className="w-full px-1.5 py-0.5 text-[9px] font-mono bg-white border border-zinc-200 rounded text-zinc-600 focus:outline-none"
+                                        />
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Prominent Add Color to Architecture Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleAddColorToArchitecture(group.id, `Color ${group.colors.length + 1}`, 5)}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 text-blue-700 font-bold text-xs transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>+ Add More Colors to {group.name}</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Bottom Actions */}
+                <div className="pt-4 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={handleAddArchitectureGroup}
+                    className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl border border-zinc-300 hover:border-zinc-400 bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-xs transition-colors shadow-2xs cursor-pointer"
+                  >
+                    <Layers className="w-4 h-4 text-blue-600" />
+                    <span>+ Add New Variant Architecture (A{variantGroups.length + 1})</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingVariants}
+                    className="flex items-center justify-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs px-6 py-3 rounded-xl shadow-md transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSavingVariants ? "Persisting Changes..." : "Save All & Revalidate Edge ISR"}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {/* TAB 3: CUSTOMER REVIEWS & MEDIA PIPELINE */}
+          {activeTab === "reviews" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-zinc-950 font-sans flex items-center gap-2">
+                      <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                      <span>Customer Reviews & 5-Photo Media Pipeline</span>
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Conditional verification requires active JWT + verified order. Media uploads directly to S3 via presigned URLs.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/products/${selectedSlug}`}
+                      target="_blank"
+                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-semibold bg-blue-50 px-3.5 py-2 rounded-xl transition-colors"
+                    >
+                      <span>View on Storefront</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </Link>
+
+                    <button
+                      onClick={handleQuickDemoVerify}
+                      className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-2 rounded-xl shadow-xs transition-colors"
+                    >
+                      ＋ Grant Verified Order
+                    </button>
+                  </div>
+                </div>
+
+                {/* Reviews List */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {reviews.map((rev) => (
+                    <div
+                      key={rev.id || rev.reviewId}
+                      className="p-5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-3 flex flex-col justify-between"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1 text-amber-500">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`w-3.5 h-3.5 ${i < rev.rating
+                                  ? "fill-amber-400 text-amber-400"
+                                  : "text-zinc-300"
+                                  }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-100/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            Verified Buyer
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-zinc-800 leading-relaxed font-sans">
+                          {rev.comment}
+                        </p>
+
+                        {/* Photo Gallery (Max 5 photos) */}
+                        {rev.images && rev.images.length > 0 && (
+                          <div className="pt-2">
+                            <div className="text-[10px] font-mono text-zinc-400 mb-1 flex items-center gap-1">
+                              <Camera className="w-3 h-3" />
+                              <span>{rev.images.length} Verified Media Asset(s)</span>
+                            </div>
+                            <div className="flex gap-2 overflow-x-auto py-1">
+                              {rev.images.map((imgUrl, i) => (
+                                <div
+                                  key={i}
+                                  className="relative w-16 h-16 rounded-xl overflow-hidden bg-zinc-200 border border-zinc-300 shrink-0"
+                                >
+                                  <Image
+                                    src={imgUrl}
+                                    alt={`Review Photo ${i + 1}`}
+                                    fill
+                                    className="object-cover"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t border-zinc-200/60 flex items-center justify-between text-[11px] text-zinc-500">
+                        <div>
+                          <span className="font-bold text-zinc-900">{rev.author || rev.userName}</span>
+                          <span className="text-zinc-400"> · {rev.variant || "Form 01"}</span>
+                        </div>
+                        <span className="font-mono">{rev.createdAt || "Recent"}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Hierarchical Variant Architecture & Colorway Studio */}
-            <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-blue-600" />
-                    <span>Variant Architecture & Colorway Studio ({variantGroups.length} Architectures Active)</span>
-                  </h3>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Model multiple variant architectures (e.g. A1 Regular Fit, A2 Streetwear Oversized Cut). Each architecture contains multiple colorways with their own stock counters, SKUs, and photography.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleAddArchitectureGroup}
-                  className="flex items-center gap-1.5 text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-semibold px-4 py-2 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Add Variant Architecture (A{variantGroups.length + 1})</span>
-                </button>
-              </div>
-
-              {/* Architectures Container */}
-              <div className="space-y-6">
-                {variantGroups.map((group, gIdx) => {
-                  const groupUnits = group.colors.reduce((sum, c) => sum + (c.stock || 0), 0);
-
-                  return (
-                    <div
-                      key={group.id}
-                      className="p-5 sm:p-6 rounded-2xl bg-zinc-50/80 border border-zinc-200 space-y-5 transition-all shadow-2xs"
-                    >
-                      {/* Architecture Group Header Card */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200">
-                        <div className="flex items-center gap-3">
-                          <span className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xs font-bold font-mono shadow-2xs">
-                            {group.id}
-                          </span>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
-                                Architecture Cut #{gIdx + 1}
-                              </span>
-                              <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
-                                {group.colors.length} {group.colors.length === 1 ? "colorway" : "colorways"}
-                              </span>
-                              <span className="text-[10px] font-mono bg-zinc-200 text-zinc-800 px-2 py-0.5 rounded-full font-bold">
-                                {groupUnits} units total
-                              </span>
-                            </div>
-                            <input
-                              type="text"
-                              value={group.name}
-                              onChange={(e) => handleUpdateArchitectureName(group.id, e.target.value)}
-                              placeholder="e.g. A1 (Regular Fit) or A2 (Oversized Cut)"
-                              className="text-sm font-bold text-zinc-900 bg-white border border-zinc-200 px-3 py-1.5 rounded-lg mt-1 w-full sm:w-80 focus:outline-none"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
-                          <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded-lg px-2 py-1 shadow-2xs">
-                            <span className="text-[10px] font-bold text-zinc-400 font-mono">$</span>
-                            <input
-                              type="number"
-                              step="any"
-                              value={group.price ?? masterBasePrice}
-                              onChange={(e) => handleUpdateArchitecturePrice(group.id, Number(e.target.value))}
-                              className="w-16 text-xs font-mono font-bold text-zinc-900 bg-transparent focus:outline-none"
-                              title="Architecture Price in USD"
-                            />
-                          </div>
-
-                          <div className="flex items-center gap-1 bg-white border border-blue-200 rounded-lg px-2 py-1 shadow-2xs">
-                            <span className="text-[10px] font-bold text-blue-600 font-mono">₹</span>
-                            <input
-                              type="number"
-                              step="any"
-                              value={
-                                group.priceInr ??
-                                (group.price
-                                  ? (group.price < 1 ? Number((group.price * exchangeRate).toFixed(2)) : Math.round(group.price * exchangeRate))
-                                  : (masterBasePrice < 1 ? Number((masterBasePrice * exchangeRate).toFixed(2)) : Math.round(masterBasePrice * exchangeRate)))
-                              }
-                              onChange={(e) => {
-                                const inr = Number(e.target.value);
-                                const usd = Number((inr / exchangeRate).toFixed(4));
-                                handleUpdateArchitecturePrice(group.id, usd, inr);
-                              }}
-                              className="w-20 text-xs font-mono font-bold text-blue-900 bg-transparent focus:outline-none"
-                              title="Architecture Price in INR"
-                            />
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveArchitectureGroup(group.id)}
-                            className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Delete Arch</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Colorways Nested in this Architecture */}
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-zinc-800 uppercase tracking-wider font-mono">
-                            Colorways & Stock for {group.name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleAddColorToArchitecture(group.id, `Color ${group.colors.length + 1}`, 5)}
-                            className="inline-flex items-center gap-1.5 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-3 py-1.5 rounded-lg border border-blue-200 transition-colors shadow-2xs cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>+ Add Color to {group.id}</span>
-                          </button>
-                        </div>
-
-                        {group.colors.map((colorItem, cIdx) => (
-                          <div
-                            key={colorItem.sku || cIdx}
-                            className="p-4 rounded-xl bg-white border border-zinc-200 shadow-2xs space-y-4"
-                          >
-                            <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="w-4 h-4 rounded-full border border-black/20 shrink-0 shadow-2xs"
-                                  style={{ backgroundColor: colorItem.hex || "#333" }}
-                                />
-                                <span className="text-xs font-bold text-zinc-900">
-                                  {colorItem.color || "Untitled Color"}
-                                </span>
-                                <span className="text-[10px] font-mono bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-700">
-                                  {colorItem.sku}
-                                </span>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveColorFromArchitecture(group.id, cIdx)}
-                                className="text-xs text-zinc-400 hover:text-red-600 flex items-center gap-1 transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Remove Color</span>
-                              </button>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                              {/* Color Name + Swatch Picker */}
-                              <div className="space-y-1">
-                                <label className="text-[11px] font-semibold text-zinc-600">Colorway Name</label>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="color"
-                                    value={colorItem.hex || "#22252A"}
-                                    onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "hex", e.target.value)}
-                                    className="w-7 h-7 rounded border border-zinc-200 p-0 cursor-pointer shrink-0"
-                                    title="Choose color hex"
-                                  />
-                                  <input
-                                    type="text"
-                                    value={colorItem.color}
-                                    onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "color", e.target.value)}
-                                    className="w-full px-2.5 py-1.5 text-xs bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-900 font-semibold focus:bg-white"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* SKU */}
-                              <div className="space-y-1">
-                                <label className="text-[11px] font-semibold text-zinc-600">SKU (Stock Keeping Unit)</label>
-                                <input
-                                  type="text"
-                                  value={colorItem.sku}
-                                  onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "sku", e.target.value)}
-                                  className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-900 focus:bg-white"
-                                />
-                              </div>
-
-                              {/* Price Override (USD & INR) */}
-                              <div className="space-y-1">
-                                <label className="text-[11px] font-semibold text-zinc-600 flex items-center justify-between">
-                                  <span>Color Price</span>
-                                  <span className="text-[9px] font-mono text-zinc-400">$ / ₹</span>
-                                </label>
-                                <div className="grid grid-cols-2 gap-1.5">
-                                  <div className="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1 focus-within:bg-white focus-within:border-blue-400">
-                                    <span className="text-[10px] font-bold text-zinc-400 font-mono">$</span>
-                                    <input
-                                      type="number"
-                                      step="any"
-                                      value={colorItem.price ?? group.price ?? masterBasePrice}
-                                      onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "price", Number(e.target.value))}
-                                      className="w-full text-xs font-mono font-bold text-zinc-900 bg-transparent focus:outline-none"
-                                      title="Color price in USD"
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-1 bg-zinc-50 border border-blue-200 rounded-lg px-2 py-1 focus-within:bg-white focus-within:border-blue-400">
-                                    <span className="text-[10px] font-bold text-blue-600 font-mono">₹</span>
-                                    <input
-                                      type="number"
-                                      step="any"
-                                      value={
-                                        colorItem.priceInr ??
-                                        (colorItem.price
-                                          ? (colorItem.price < 1 ? Number((colorItem.price * exchangeRate).toFixed(2)) : Math.round(colorItem.price * exchangeRate))
-                                          : (group.priceInr ?? (masterBasePrice < 1 ? Number((masterBasePrice * exchangeRate).toFixed(2)) : Math.round(masterBasePrice * exchangeRate))))
-                                      }
-                                      onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "priceInr", Number(e.target.value))}
-                                      className="w-full text-xs font-mono font-bold text-blue-900 bg-transparent focus:outline-none"
-                                      title="Color price in INR"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Real-time Inventory */}
-                              <div className="space-y-1">
-                                <label className="text-[11px] font-semibold text-zinc-600">Real-Time Units (Stock)</label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={colorItem.stock}
-                                  onChange={(e) => handleUpdateArchitectureColor(group.id, cIdx, "stock", Number(e.target.value))}
-                                  className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-blue-50/50 border border-blue-200 rounded-lg text-blue-900 focus:bg-white"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Photography & Angles for this Color */}
-                            <div className="pt-3 border-t border-zinc-100 space-y-2.5">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5">
-                                  <Camera className="w-3.5 h-3.5 text-blue-600" />
-                                  <span className="text-[11px] font-bold text-zinc-800">
-                                    Photography ({(colorItem.images || []).length} Attached)
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  <label
-                                    htmlFor={`upload-color-${group.id}-${cIdx}`}
-                                    className="cursor-pointer inline-flex items-center gap-1 text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-2.5 py-1 rounded-md border border-blue-200 transition-colors cursor-pointer"
-                                  >
-                                    <Upload className="w-3 h-3" />
-                                    <span>{uploadingColorKey === `${group.id}-${cIdx}` ? "Uploading S3..." : "Direct S3 Upload"}</span>
-                                  </label>
-                                  <input
-                                    id={`upload-color-${group.id}-${cIdx}`}
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    disabled={uploadingColorKey === `${group.id}-${cIdx}`}
-                                    onChange={(e) => handleColorDirectS3Upload(group.id, cIdx, e)}
-                                    className="hidden"
-                                  />
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAddImageToColor(group.id, cIdx)}
-                                    className="inline-flex items-center gap-1 text-[11px] bg-white hover:bg-zinc-100 text-zinc-700 font-semibold px-2.5 py-1 rounded-md border border-zinc-200 transition-colors cursor-pointer"
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                    <span>Add Angle</span>
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Thumbnails */}
-                              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                                {(colorItem.images && colorItem.images.length > 0 ? colorItem.images : ["/images/hero-silver.jpg"]).map(
-                                  (imgUrl, imgIdx) => (
-                                    <div
-                                      key={imgIdx}
-                                      className="p-1.5 rounded-lg bg-zinc-50 border border-zinc-200 space-y-1 relative group"
-                                    >
-                                      <div className="relative aspect-square rounded bg-white overflow-hidden flex items-center justify-center">
-                                        <img
-                                          src={imgUrl}
-                                          alt={`${colorItem.color} angle ${imgIdx + 1}`}
-                                          className="w-full h-full object-contain p-0.5"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveImageFromColor(group.id, cIdx, imgIdx)}
-                                          className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white p-1 rounded transition-colors"
-                                          title="Remove photo"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                      <input
-                                        type="text"
-                                        value={imgUrl}
-                                        onChange={(e) => handleUpdateImageInColor(group.id, cIdx, imgIdx, e.target.value)}
-                                        className="w-full px-1.5 py-0.5 text-[9px] font-mono bg-white border border-zinc-200 rounded text-zinc-600 focus:outline-none"
-                                      />
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Prominent Add Color to Architecture Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleAddColorToArchitecture(group.id, `Color ${group.colors.length + 1}`, 5)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 text-blue-700 font-bold text-xs transition-colors cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>+ Add More Colors to {group.name}</span>
-                      </button>
+          {/* TAB 4: OWNER TEAM ACCESS & ROLE ASSIGNMENT */}
+          {activeTab === "team" && isOwner && (
+            <div className="space-y-6">
+              {/* Top Control Card */}
+              <div className="p-6 sm:p-8 rounded-3xl bg-linear-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/20 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 shadow-xs">
+                      <Crown className="w-6 h-6" />
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Bottom Actions */}
-              <div className="pt-4 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={handleAddArchitectureGroup}
-                  className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl border border-zinc-300 hover:border-zinc-400 bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-xs transition-colors shadow-2xs cursor-pointer"
-                >
-                  <Layers className="w-4 h-4 text-blue-600" />
-                  <span>+ Add New Variant Architecture (A{variantGroups.length + 1})</span>
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={isSavingVariants}
-                  className="flex items-center justify-center gap-2 bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs px-6 py-3 rounded-xl shadow-md transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{isSavingVariants ? "Persisting Changes..." : "Save All & Revalidate Edge ISR"}</span>
-                </button>
-              </div>
-            </div>
-          </form>
-        )}
-
-        {/* TAB 3: CUSTOMER REVIEWS & MEDIA PIPELINE */}
-        {activeTab === "reviews" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-zinc-950 font-sans flex items-center gap-2">
-                    <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-                    <span>Customer Reviews & 5-Photo Media Pipeline</span>
-                  </h3>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Conditional verification requires active JWT + verified order. Media uploads directly to S3 via presigned URLs.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={`/products/${selectedSlug}`}
-                    target="_blank"
-                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-semibold bg-blue-50 px-3.5 py-2 rounded-xl transition-colors"
-                  >
-                    <span>View on Storefront</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </Link>
-
-                  <button
-                    onClick={handleQuickDemoVerify}
-                    className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-2 rounded-xl shadow-xs transition-colors"
-                  >
-                    ＋ Grant Verified Order
-                  </button>
-                </div>
-              </div>
-
-              {/* Reviews List */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {reviews.map((rev) => (
-                  <div
-                    key={rev.id || rev.reviewId}
-                    className="p-5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-3 flex flex-col justify-between"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1 text-amber-500">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`w-3.5 h-3.5 ${
-                                i < rev.rating
-                                  ? "fill-amber-400 text-amber-400"
-                                  : "text-zinc-300"
-                              }`}
-                            />
-                          ))}
-                        </div>
-                        <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-100/60 px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          Verified Buyer
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-zinc-800 leading-relaxed font-sans">
-                        {rev.comment}
+                    <div>
+                      <h2 className="text-lg font-bold text-zinc-900 tracking-tight">
+                        Owner Operations Console · Team Access & Permissions
+                      </h2>
+                      <p className="text-xs text-zinc-600">
+                        Search employees by email and dynamically grant or revoke Admin permissions in real time.
                       </p>
-
-                      {/* Photo Gallery (Max 5 photos) */}
-                      {rev.images && rev.images.length > 0 && (
-                        <div className="pt-2">
-                          <div className="text-[10px] font-mono text-zinc-400 mb-1 flex items-center gap-1">
-                            <Camera className="w-3 h-3" />
-                            <span>{rev.images.length} Verified Media Asset(s)</span>
-                          </div>
-                          <div className="flex gap-2 overflow-x-auto py-1">
-                            {rev.images.map((imgUrl, i) => (
-                              <div
-                                key={i}
-                                className="relative w-16 h-16 rounded-xl overflow-hidden bg-zinc-200 border border-zinc-300 shrink-0"
-                              >
-                                <Image
-                                  src={imgUrl}
-                                  alt={`Review Photo ${i + 1}`}
-                                  fill
-                                  className="object-cover"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="pt-3 border-t border-zinc-200/60 flex items-center justify-between text-[11px] text-zinc-500">
-                      <div>
-                        <span className="font-bold text-zinc-900">{rev.author || rev.userName}</span>
-                        <span className="text-zinc-400"> · {rev.variant || "Form 01"}</span>
-                      </div>
-                      <span className="font-mono">{rev.createdAt || "Recent"}</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* TAB 4: OWNER TEAM ACCESS & ROLE ASSIGNMENT */}
-        {activeTab === "team" && isOwner && (
-          <div className="space-y-6">
-            {/* Top Control Card */}
-            <div className="p-6 sm:p-8 rounded-3xl bg-linear-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/20 space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 shadow-xs">
-                    <Crown className="w-6 h-6" />
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono px-3.5 py-1.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold flex items-center gap-1.5 shadow-xs">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Root Owner Authority: Active</span>
+                    </span>
                   </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-zinc-900 tracking-tight">
-                      Owner Operations Console · Team Access & Permissions
-                    </h2>
-                    <p className="text-xs text-zinc-600">
-                      Search employees by email and dynamically grant or revoke Admin permissions in real time.
+                </div>
+
+                {/* Architecture Steps Banner */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 text-xs">
+                  <div className="p-4 rounded-2xl bg-white/90 border border-amber-200/70 space-y-1.5 shadow-xs">
+                    <div className="font-bold text-zinc-900 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-mono flex items-center justify-center font-bold">
+                        1
+                      </span>
+                      <span>Employee Sign Up</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">
+                      When employees create an account on ancwave, their account is initialized with default{" "}
+                      <code className="font-mono bg-zinc-100 px-1 py-0.5 rounded text-zinc-800 font-bold">
+                        role: &quot;user&quot;
+                      </code>
+                      .
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white/90 border border-amber-200/70 space-y-1.5 shadow-xs">
+                    <div className="font-bold text-zinc-900 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-mono flex items-center justify-center font-bold">
+                        2
+                      </span>
+                      <span>Grant Admin Access</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">
+                      Search their email below and click{" "}
+                      <strong className="text-emerald-700 font-semibold">&quot;Grant Admin Access&quot;</strong>. They gain access to manage inventory, variations, and review pipelines.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white/90 border border-amber-200/70 space-y-1.5 shadow-xs">
+                    <div className="font-bold text-zinc-900 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-mono flex items-center justify-center font-bold">
+                        3
+                      </span>
+                      <span>Revoke Anytime</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">
+                      Click{" "}
+                      <strong className="text-red-700 font-semibold">&quot;Revoke Admin&quot;</strong>{" "}
+                      to instantly demote them back to user. Root Owner accounts are managed directly in MongoDB Atlas.
                     </p>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono px-3.5 py-1.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold flex items-center gap-1.5 shadow-xs">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Root Owner Authority: Active</span>
-                  </span>
-                </div>
               </div>
 
-              {/* Architecture Steps Banner */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 text-xs">
-                <div className="p-4 rounded-2xl bg-white/90 border border-amber-200/70 space-y-1.5 shadow-xs">
-                  <div className="font-bold text-zinc-900 flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-mono flex items-center justify-center font-bold">
-                      1
-                    </span>
-                    <span>Employee Sign Up</span>
-                  </div>
-                  <p className="text-[11px] text-zinc-500 leading-relaxed">
-                    When employees create an account on ancwave, their account is initialized with default{" "}
-                    <code className="font-mono bg-zinc-100 px-1 py-0.5 rounded text-zinc-800 font-bold">
-                      role: &quot;user&quot;
-                    </code>
-                    .
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-white/90 border border-amber-200/70 space-y-1.5 shadow-xs">
-                  <div className="font-bold text-zinc-900 flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-mono flex items-center justify-center font-bold">
-                      2
-                    </span>
-                    <span>Grant Admin Access</span>
-                  </div>
-                  <p className="text-[11px] text-zinc-500 leading-relaxed">
-                    Search their email below and click{" "}
-                    <strong className="text-emerald-700 font-semibold">&quot;Grant Admin Access&quot;</strong>. They gain access to manage inventory, variations, and review pipelines.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-white/90 border border-amber-200/70 space-y-1.5 shadow-xs">
-                  <div className="font-bold text-zinc-900 flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-mono flex items-center justify-center font-bold">
-                      3
-                    </span>
-                    <span>Revoke Anytime</span>
-                  </div>
-                  <p className="text-[11px] text-zinc-500 leading-relaxed">
-                    Click{" "}
-                    <strong className="text-red-700 font-semibold">&quot;Revoke Admin&quot;</strong>{" "}
-                    to instantly demote them back to user. Root Owner accounts are managed directly in MongoDB Atlas.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Search Bar & Teammates Directory */}
-            <div className="p-6 sm:p-8 rounded-3xl bg-white border border-zinc-200 shadow-xs space-y-5">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={teamSearchQuery}
-                    onChange={(e) => {
-                      setTeamSearchQuery(e.target.value);
-                      fetchTeam(e.target.value);
-                    }}
-                    placeholder="Search teammate by email (e.g. employee@ancwave.com) or full name..."
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all bg-zinc-50/50"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => fetchTeam(teamSearchQuery)}
-                    disabled={isSearchingTeam}
-                    className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors shrink-0 disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isSearchingTeam ? "animate-spin" : ""}`} />
-                    <span>Search Directory</span>
-                  </button>
-                  {teamSearchQuery && (
-                    <button
-                      onClick={() => {
-                        setTeamSearchQuery("");
-                        fetchTeam("");
+              {/* Search Bar & Teammates Directory */}
+              <div className="p-6 sm:p-8 rounded-3xl bg-white border border-zinc-200 shadow-xs space-y-5">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={teamSearchQuery}
+                      onChange={(e) => {
+                        setTeamSearchQuery(e.target.value);
+                        fetchTeam(e.target.value);
                       }}
-                      className="px-3 py-2.5 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-100 text-xs font-medium transition-colors"
+                      placeholder="Search teammate by email (e.g. employee@ancwave.com) or full name..."
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all bg-zinc-50/50"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => fetchTeam(teamSearchQuery)}
+                      disabled={isSearchingTeam}
+                      className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors shrink-0 disabled:opacity-50"
                     >
-                      Clear
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSearchingTeam ? "animate-spin" : ""}`} />
+                      <span>Search Directory</span>
                     </button>
-                  )}
+                    {teamSearchQuery && (
+                      <button
+                        onClick={() => {
+                          setTeamSearchQuery("");
+                          fetchTeam("");
+                        }}
+                        className="px-3 py-2.5 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-100 text-xs font-medium transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Teammates List Table */}
+                <div className="overflow-x-auto rounded-2xl border border-zinc-200/80">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-zinc-50/80 border-b border-zinc-200 text-zinc-500 font-mono text-[10px] uppercase">
+                        <th className="py-3 px-4">Employee / Teammate</th>
+                        <th className="py-3 px-4">User ID</th>
+                        <th className="py-3 px-4">Current Role</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 bg-white">
+                      {teamUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-12 text-center text-zinc-400">
+                            {isSearchingTeam ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <RefreshCw className="w-4 h-4 animate-spin text-amber-500" />
+                                <span>Querying accounts in database...</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                <p className="font-semibold text-zinc-700">No matching accounts found</p>
+                                <p className="text-[11px] text-zinc-400">
+                                  {teamSearchQuery
+                                    ? `No registered user matches "${teamSearchQuery}". Ask your teammate to sign up on the site first.`
+                                    : "Click 'Search Directory' to list registered accounts."}
+                                </p>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ) : (
+                        teamUsers.map((u) => {
+                          const isThisUserOwner = u.role === "owner";
+                          const isThisUserAdmin = u.role === "admin";
+                          const isBusy = isUpdatingRole === u.email;
+
+                          return (
+                            <tr key={u.id} className="hover:bg-zinc-50/80 transition-colors">
+                              <td className="py-3.5 px-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center font-bold text-zinc-700 text-xs shrink-0">
+                                    {u.name?.slice(0, 2).toUpperCase() || "EM"}
+                                  </div>
+                                  <div>
+                                    <div className="font-semibold text-zinc-900 flex items-center gap-1.5">
+                                      <span>{u.name}</span>
+                                      {u.email.toLowerCase() === user.email.toLowerCase() && (
+                                        <span className="text-[9px] font-mono px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded font-bold">
+                                          YOU
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] font-mono text-zinc-500">{u.email}</div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="py-3.5 px-4">
+                                <code className="text-[11px] font-mono text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded">
+                                  {u.id}
+                                </code>
+                              </td>
+
+                              <td className="py-3.5 px-4">
+                                {isThisUserOwner ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    <Crown className="w-3 h-3 text-amber-600" />
+                                    <span>Owner</span>
+                                  </span>
+                                ) : isThisUserAdmin ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                    <ShieldCheck className="w-3 h-3 text-blue-600" />
+                                    <span>Admin</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200">
+                                    <UserIcon className="w-3 h-3 text-zinc-400" />
+                                    <span>User</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="py-3.5 px-4 text-right">
+                                {isThisUserOwner ? (
+                                  <span className="text-[11px] font-medium text-zinc-400 italic">
+                                    Root Account (Atlas Managed)
+                                  </span>
+                                ) : isThisUserAdmin ? (
+                                  <button
+                                    onClick={() => handleUpdateUserRole(u.email, "user")}
+                                    disabled={isBusy}
+                                    className="px-3.5 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-semibold text-[11px] transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+                                  >
+                                    <UserX className="w-3 h-3" />
+                                    <span>{isBusy ? "Revoking..." : "Revoke Admin Access"}</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleUpdateUserRole(u.email, "admin")}
+                                    disabled={isBusy}
+                                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition-colors shadow-xs disabled:opacity-50 inline-flex items-center gap-1.5"
+                                  >
+                                    <UserCheck className="w-3 h-3" />
+                                    <span>{isBusy ? "Assigning..." : "Grant Admin Access"}</span>
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-
-              {/* Teammates List Table */}
-              <div className="overflow-x-auto rounded-2xl border border-zinc-200/80">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-zinc-50/80 border-b border-zinc-200 text-zinc-500 font-mono text-[10px] uppercase">
-                      <th className="py-3 px-4">Employee / Teammate</th>
-                      <th className="py-3 px-4">User ID</th>
-                      <th className="py-3 px-4">Current Role</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 bg-white">
-                    {teamUsers.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="py-12 text-center text-zinc-400">
-                          {isSearchingTeam ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <RefreshCw className="w-4 h-4 animate-spin text-amber-500" />
-                              <span>Querying accounts in database...</span>
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <p className="font-semibold text-zinc-700">No matching accounts found</p>
-                              <p className="text-[11px] text-zinc-400">
-                                {teamSearchQuery
-                                  ? `No registered user matches "${teamSearchQuery}". Ask your teammate to sign up on the site first.`
-                                  : "Click 'Search Directory' to list registered accounts."}
-                              </p>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ) : (
-                      teamUsers.map((u) => {
-                        const isThisUserOwner = u.role === "owner";
-                        const isThisUserAdmin = u.role === "admin";
-                        const isBusy = isUpdatingRole === u.email;
-
-                        return (
-                          <tr key={u.id} className="hover:bg-zinc-50/80 transition-colors">
-                            <td className="py-3.5 px-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center font-bold text-zinc-700 text-xs shrink-0">
-                                  {u.name?.slice(0, 2).toUpperCase() || "EM"}
-                                </div>
-                                <div>
-                                  <div className="font-semibold text-zinc-900 flex items-center gap-1.5">
-                                    <span>{u.name}</span>
-                                    {u.email.toLowerCase() === user.email.toLowerCase() && (
-                                      <span className="text-[9px] font-mono px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded font-bold">
-                                        YOU
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="text-[11px] font-mono text-zinc-500">{u.email}</div>
-                                </div>
-                              </div>
-                            </td>
-
-                            <td className="py-3.5 px-4">
-                              <code className="text-[11px] font-mono text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded">
-                                {u.id}
-                              </code>
-                            </td>
-
-                            <td className="py-3.5 px-4">
-                              {isThisUserOwner ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                  <Crown className="w-3 h-3 text-amber-600" />
-                                  <span>Owner</span>
-                                </span>
-                              ) : isThisUserAdmin ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                                  <ShieldCheck className="w-3 h-3 text-blue-600" />
-                                  <span>Admin</span>
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200">
-                                  <UserIcon className="w-3 h-3 text-zinc-400" />
-                                  <span>User</span>
-                                </span>
-                              )}
-                            </td>
-
-                            <td className="py-3.5 px-4 text-right">
-                              {isThisUserOwner ? (
-                                <span className="text-[11px] font-medium text-zinc-400 italic">
-                                  Root Account (Atlas Managed)
-                                </span>
-                              ) : isThisUserAdmin ? (
-                                <button
-                                  onClick={() => handleUpdateUserRole(u.email, "user")}
-                                  disabled={isBusy}
-                                  className="px-3.5 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-semibold text-[11px] transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
-                                >
-                                  <UserX className="w-3 h-3" />
-                                  <span>{isBusy ? "Revoking..." : "Revoke Admin Access"}</span>
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleUpdateUserRole(u.email, "admin")}
-                                  disabled={isBusy}
-                                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition-colors shadow-xs disabled:opacity-50 inline-flex items-center gap-1.5"
-                                >
-                                  <UserCheck className="w-3 h-3" />
-                                  <span>{isBusy ? "Assigning..." : "Grant Admin Access"}</span>
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
             </div>
-          </div>
-        )}
-      </main>
-    </div>
+          )}
+        </main>
+      </div>
 
       {/* =========================================================================
           MODAL 1: VARIANT RESTOCK POPUP MODAL
@@ -5518,14 +6071,14 @@ export default function AdminPage() {
                 const variantsList = restockTargetProduct.childVariants && restockTargetProduct.childVariants.length > 0
                   ? restockTargetProduct.childVariants
                   : (restockTargetProduct.variants || []).map((v, i) => ({
-                      sku: `${restockTargetProduct.productId || restockTargetProduct.id.toUpperCase()}-VAR-${i + 1}`,
-                      color: v.name,
-                      specOverride: "Standard Architecture",
-                      price: restockTargetProduct.price,
-                      discount: 0,
-                      stock: Math.max(1, Math.floor(restockTargetProduct.stock / Math.max(1, restockTargetProduct.variants.length))),
-                      images: [v.image],
-                    }));
+                    sku: `${restockTargetProduct.productId || restockTargetProduct.id.toUpperCase()}-VAR-${i + 1}`,
+                    color: v.name,
+                    specOverride: "Standard Architecture",
+                    price: restockTargetProduct.price,
+                    discount: 0,
+                    stock: Math.max(1, Math.floor(restockTargetProduct.stock / Math.max(1, restockTargetProduct.variants.length))),
+                    images: [v.image],
+                  }));
 
                 // Group by specOverride
                 const groups: Record<string, typeof variantsList> = {};
@@ -5572,12 +6125,12 @@ export default function AdminPage() {
                                     style={{
                                       backgroundColor:
                                         v.color.toLowerCase().includes("green") ? "#2E5339" :
-                                        v.color.toLowerCase().includes("black") ? "#1A1A1A" :
-                                        v.color.toLowerCase().includes("blue") ? "#3B6978" :
-                                        v.color.toLowerCase().includes("white") ? "#F5F5F5" :
-                                        v.color.toLowerCase().includes("silver") ? "#D1D5DB" :
-                                        v.color.toLowerCase().includes("sandstone") ? "#D4B996" :
-                                        "#4F46E5",
+                                          v.color.toLowerCase().includes("black") ? "#1A1A1A" :
+                                            v.color.toLowerCase().includes("blue") ? "#3B6978" :
+                                              v.color.toLowerCase().includes("white") ? "#F5F5F5" :
+                                                v.color.toLowerCase().includes("silver") ? "#D1D5DB" :
+                                                  v.color.toLowerCase().includes("sandstone") ? "#D4B996" :
+                                                    "#4F46E5",
                                     }}
                                   />
                                   <span className="text-xs font-bold text-zinc-900">{v.color}</span>
@@ -5661,13 +6214,12 @@ export default function AdminPage() {
                                 </div>
 
                                 <span
-                                  className={`text-[10px] font-mono px-2 py-1 rounded-md font-semibold ${
-                                    currentDraftStock === 0
-                                      ? "bg-red-100 text-red-700"
-                                      : currentDraftStock <= 5
+                                  className={`text-[10px] font-mono px-2 py-1 rounded-md font-semibold ${currentDraftStock === 0
+                                    ? "bg-red-100 text-red-700"
+                                    : currentDraftStock <= 5
                                       ? "bg-amber-100 text-amber-800"
                                       : "bg-emerald-100 text-emerald-800"
-                                  }`}
+                                    }`}
                                 >
                                   {currentDraftStock === 0 ? "SOLD OUT" : currentDraftStock <= 5 ? "LOW STOCK" : "IN STOCK"}
                                 </span>
@@ -5842,11 +6394,10 @@ export default function AdminPage() {
                         key={cat.slug}
                         type="button"
                         onClick={() => handleCategorySelect(cat.slug)}
-                        className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                          isSelected
-                            ? "bg-emerald-50 border-emerald-500 text-emerald-950 shadow-xs ring-1 ring-emerald-500"
-                            : "bg-zinc-50 border-zinc-200 hover:bg-zinc-100 text-zinc-700"
-                        }`}
+                        className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${isSelected
+                          ? "bg-emerald-50 border-emerald-500 text-emerald-950 shadow-xs ring-1 ring-emerald-500"
+                          : "bg-zinc-50 border-zinc-200 hover:bg-zinc-100 text-zinc-700"
+                          }`}
                       >
                         <span className="text-xs font-bold truncate">{cat.name}</span>
                         <span className="text-[9px] text-zinc-400 truncate mt-1">{cat.topSellingItems.split(",")[0]}</span>
