@@ -7,11 +7,53 @@ import { generateRazorpayOrderEmail } from "@/lib/email-service";
 
 function normalizeOrder(o: any): Order {
   const orderNumber = o.orderNumber || "ANC-000000";
+
+  const rawItems = (o.items || []).map((it: any) => ({
+    ...it,
+    price: Number(it.price) || 0,
+    quantity: Number(it.quantity) || 1,
+  }));
+
+  const itemsSubtotal = rawItems.reduce(
+    (sum: number, it: any) => sum + (it.price * it.quantity),
+    0
+  );
+
+  let total = Number(o.total) || (itemsSubtotal > 0 ? itemsSubtotal : Number(o.subtotal) || 0);
+  let tax = Number(o.tax) || 0;
+  let subtotal = Number(o.subtotal) || itemsSubtotal || total;
+
+  // Reconcile when subtotal and items are mismatched
+  if (itemsSubtotal > 0 && Math.abs(itemsSubtotal - subtotal) > 0.05) {
+    if (total <= itemsSubtotal + 0.05) {
+      subtotal = itemsSubtotal;
+    } else {
+      subtotal = itemsSubtotal;
+    }
+  }
+
+  // If subtotal is greater than total, subtotal was inflated
+  if (total < subtotal) {
+    subtotal = total;
+    if (rawItems.length === 1 && rawItems[0].price > total) {
+      rawItems[0].price = total / rawItems[0].quantity;
+    }
+  }
+
+  let shipping = Number(o.shipping) || 0;
+  if (total > subtotal + tax) {
+    shipping = Math.max(0, Math.round((total - subtotal - tax) * 100) / 100);
+  } else if (total === subtotal + tax) {
+    shipping = 0;
+  }
+
+  total = Math.round((subtotal + shipping + tax) * 100) / 100;
+
   const defaultEvents: OrderEvent[] = [
     {
       id: "ev-auto-1",
       title: "Order Placed & Paid",
-      description: `Order ${orderNumber} authorized via ${o.paymentMethod?.toUpperCase() || "RAZORPAY"}. Total: $${Number(o.total || 0).toFixed(2)}`,
+      description: `Order ${orderNumber} authorized via ${o.paymentMethod?.toUpperCase() || "RAZORPAY"}. Total: $${total.toFixed(2)}`,
       timestamp: o.createdAt ? new Date(o.createdAt).toISOString() : new Date().toISOString(),
       type: "payment",
       actor: "Razorpay Gateway",
@@ -38,11 +80,11 @@ function normalizeOrder(o: any): Order {
       state: "Oregon",
       zipCode: "97209",
     },
-    items: o.items || [],
-    subtotal: o.subtotal || 0,
-    shipping: o.shipping || 0,
-    tax: o.tax || 0,
-    total: o.total || 0,
+    items: rawItems,
+    subtotal,
+    shipping,
+    tax,
+    total,
     paymentMethod: o.paymentMethod || "razorpay",
     paymentStatus: o.paymentStatus || "paid",
     razorpayPaymentId: o.razorpayPaymentId,

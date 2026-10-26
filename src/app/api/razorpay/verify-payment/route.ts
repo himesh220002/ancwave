@@ -85,16 +85,26 @@ export async function POST(req: NextRequest) {
         sum + (Number(it.price) || 0) * (Number(it.quantity) || 1),
       0
     );
-    const subtotal = typeof body.subtotal === "number" ? body.subtotal : computedSubtotal;
-
-    const shippingFixtures = store.getShippingFixtures();
-    const shipping =
-      typeof body.shipping === "number"
-        ? body.shipping
-        : (shippingFixtures?.generalDeliveryPriceUsd ?? 0);
-
     const tax = typeof body.tax === "number" ? body.tax : 0.0;
-    const total = Number(amount) || subtotal + shipping + tax;
+    const total = Number(amount) > 0 ? Number(amount) : (computedSubtotal + tax);
+
+    // If order is a nominal test payment (e.g. 0.02) where item was catalog price 348
+    if (rawItems.length === 1 && rawItems[0].price > total && total > 0) {
+      rawItems[0].price = total / (rawItems[0].quantity || 1);
+    }
+
+    const reconciledItemsSubtotal = rawItems.reduce(
+      (sum: number, it: any) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 1),
+      0
+    );
+
+    const subtotal = (reconciledItemsSubtotal > 0 && reconciledItemsSubtotal <= total)
+      ? reconciledItemsSubtotal
+      : (typeof body.subtotal === "number" && body.subtotal <= total)
+        ? body.subtotal
+        : Math.max(0, total - tax);
+
+    const shipping = Math.max(0, Math.round((total - subtotal - tax) * 100) / 100);
 
     const orderNumber = "ANC-" + Math.floor(100000 + Math.random() * 900000);
 

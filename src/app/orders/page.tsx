@@ -900,7 +900,7 @@ function MyOrdersContent() {
             </div>
 
             {/* Modal Printable Bill Body */}
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 text-zinc-800 text-xs">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 sm:p-8 space-y-6 text-zinc-800 text-xs">
               {/* Company banner */}
               <div className="flex justify-between items-start border-b border-zinc-200 pb-5">
                 <div>
@@ -962,44 +962,78 @@ function MyOrdersContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
-                    {selectedOrderForInvoice.items.map((item, i) => (
-                      <tr key={i}>
-                        <td className="p-3">
-                          <strong className="text-zinc-900">{item.name}</strong>
-                          <span className="block text-[11px] text-zinc-500">
-                            {item.variantName || item.variant || "Standard"}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center font-mono">{item.quantity}</td>
-                        <td className="p-3 text-right font-mono">${item.price.toFixed(2)}</td>
-                        <td className="p-3 text-right font-mono font-bold">
-                          ${(item.price * item.quantity).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      const invTotal = Number(selectedOrderForInvoice.total) || 0;
+                      return selectedOrderForInvoice.items.map((item, i) => {
+                        const displayPrice = (selectedOrderForInvoice.items.length === 1 && item.price > invTotal && invTotal > 0)
+                          ? (invTotal / (item.quantity || 1))
+                          : item.price;
+                        const lineTotal = displayPrice * (item.quantity || 1);
+
+                        return (
+                          <tr key={i}>
+                            <td className="p-3">
+                              <strong className="text-zinc-900">{item.name}</strong>
+                              <span className="block text-[11px] text-zinc-500">
+                                {item.variantName || item.variant || "Standard"}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center font-mono">{item.quantity}</td>
+                            <td className="p-3 text-right font-mono">${displayPrice.toFixed(2)}</td>
+                            <td className="p-3 text-right font-mono font-bold">
+                              ${lineTotal.toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>
 
               {/* Totals */}
-              <div className="max-w-xs ml-auto space-y-1.5 pt-2">
-                <div className="flex justify-between text-zinc-500">
-                  <span>Subtotal:</span>
-                  <span className="font-mono text-zinc-900">${selectedOrderForInvoice.subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-zinc-500">
-                  <span>Insured Shipping:</span>
-                  <span className="font-mono text-emerald-600 font-medium">FREE</span>
-                </div>
-                <div className="flex justify-between text-zinc-500">
-                  <span>Tax (0%):</span>
-                  <span className="font-mono text-zinc-900">${(selectedOrderForInvoice.tax || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm font-bold text-zinc-900 border-t border-zinc-200 pt-2">
-                  <span>Total Paid:</span>
-                  <span className="text-blue-600">${selectedOrderForInvoice.total.toFixed(2)} USD</span>
-                </div>
-              </div>
+              {(() => {
+                const invTotal = Number(selectedOrderForInvoice.total) || 0;
+                const invTax = Number(selectedOrderForInvoice.tax) || 0;
+                const invItemsSubtotal = (selectedOrderForInvoice.items || []).reduce(
+                  (sum, it) => {
+                    const price = (selectedOrderForInvoice.items.length === 1 && it.price > invTotal && invTotal > 0)
+                      ? (invTotal / (it.quantity || 1))
+                      : it.price;
+                    return sum + price * (it.quantity || 1);
+                  },
+                  0
+                );
+                const invSubtotal = (invItemsSubtotal > 0 && invItemsSubtotal <= invTotal)
+                  ? invItemsSubtotal
+                  : (Number(selectedOrderForInvoice.subtotal) > 0 && Number(selectedOrderForInvoice.subtotal) <= invTotal)
+                    ? Number(selectedOrderForInvoice.subtotal)
+                    : Math.max(0, invTotal - invTax);
+                const invShipping = Math.max(0, Math.round((invTotal - invSubtotal - invTax) * 100) / 100);
+
+                return (
+                  <div className="max-w-xs ml-auto space-y-1.5 pt-2">
+                    <div className="flex justify-between text-zinc-500">
+                      <span>Subtotal:</span>
+                      <span className="font-mono text-zinc-900">${invSubtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-500">
+                      <span>Insured Shipping:</span>
+                      <span className={`font-mono font-medium ${invShipping === 0 ? "text-emerald-600" : "text-zinc-900"}`}>
+                        {invShipping === 0 ? "FREE" : `$${invShipping.toFixed(2)}`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-zinc-500">
+                      <span>Tax (0%):</span>
+                      <span className="font-mono text-zinc-900">${invTax.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold text-zinc-900 border-t border-zinc-200 pt-2">
+                      <span>Total Paid:</span>
+                      <span className="text-blue-600">${invTotal.toFixed(2)} USD</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="p-3 rounded-lg bg-zinc-50 text-[11px] text-zinc-500 leading-relaxed border border-zinc-200">
                 This official tax bill confirms completed online payment via Razorpay. All hardware products are backed by the ancwave 2-Year Limited Hardware Warranty and 30-Day Money-Back Trial.
@@ -1011,10 +1045,10 @@ function MyOrdersContent() {
 
       {/* Custom Razorpay Email Receipt Modal */}
       {selectedOrderForEmail && emailPreviewData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
-          <div className="relative max-w-2xl w-full max-h-[92vh] bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="relative max-w-2xl w-full h-[88vh] max-h-[92vh] bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-zinc-200 flex items-center justify-between bg-zinc-900 text-white">
+            <div className="p-4 sm:p-5 border-b border-zinc-200 flex items-center justify-between bg-zinc-900 text-white shrink-0">
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-blue-400" />
                 <div>
@@ -1050,16 +1084,17 @@ function MyOrdersContent() {
             </div>
 
             {/* Email Subject Strip */}
-            <div className="px-6 py-3 bg-zinc-50 border-b border-zinc-200 text-xs flex items-center gap-2">
+            <div className="px-6 py-3 bg-zinc-50 border-b border-zinc-200 text-xs flex items-center gap-2 shrink-0">
               <span className="font-mono text-zinc-400 uppercase text-[10px]">Subject:</span>
-              <span className="font-semibold text-zinc-800">{emailPreviewData.subject}</span>
+              <span className="font-semibold text-zinc-800 truncate">{emailPreviewData.subject}</span>
             </div>
 
             {/* Email HTML Frame Container */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-100 flex justify-center">
-              <div
-                className="bg-white rounded-xl shadow-xs overflow-hidden max-w-xl w-full text-xs"
-                dangerouslySetInnerHTML={{ __html: emailPreviewData.html }}
+            <div className="flex-1 min-h-0 w-full bg-zinc-100 flex flex-col">
+              <iframe
+                srcDoc={emailPreviewData.html}
+                className="w-full h-full flex-1 border-0 rounded-b-3xl bg-[#F8F9F8]"
+                title="Razorpay Email Receipt"
               />
             </div>
           </div>

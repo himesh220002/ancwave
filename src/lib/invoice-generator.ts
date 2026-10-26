@@ -147,7 +147,23 @@ export function generateOrderInvoicePdf(order: Order): jsPDF {
   y += 8;
   doc.setFont("helvetica", "normal");
 
-  order.items.forEach((item, index) => {
+  const total = Number(order.total) || 0;
+  const tax = Number(order.tax) || 0;
+
+  const rawItems = order.items.map((it) => {
+    let price = Number(it.price) || 0;
+    const quantity = Number(it.quantity) || 1;
+    if (order.items.length === 1 && price > total && total > 0) {
+      price = total / quantity;
+    }
+    return {
+      ...it,
+      price,
+      quantity,
+    };
+  });
+
+  rawItems.forEach((item, index) => {
     const itemTotal = item.price * item.quantity;
     const isEven = index % 2 === 0;
 
@@ -190,22 +206,33 @@ export function generateOrderInvoicePdf(order: Order): jsPDF {
   const summaryX = pageWidth - 85;
   const summaryValX = pageWidth - 20;
 
+  const itemsSubtotal = rawItems.reduce(
+    (sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 1),
+    0
+  );
+  const subtotal = (itemsSubtotal > 0 && itemsSubtotal <= total)
+    ? itemsSubtotal
+    : (Number(order.subtotal) > 0 && Number(order.subtotal) <= total)
+      ? Number(order.subtotal)
+      : Math.max(0, total - tax);
+  const shipping = Math.max(0, Math.round((total - subtotal - tax) * 100) / 100);
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...grayText);
 
   doc.text("Subtotal:", summaryX, y);
-  doc.text(`$${order.subtotal.toFixed(2)}`, summaryValX, y, { align: "right" });
+  doc.text(`$${subtotal.toFixed(2)}`, summaryValX, y, { align: "right" });
 
   y += 5;
   doc.text("Insured Shipping:", summaryX, y);
-  doc.text(order.shipping === 0 ? "FREE" : `$${order.shipping.toFixed(2)}`, summaryValX, y, {
+  doc.text(shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`, summaryValX, y, {
     align: "right",
   });
 
   y += 5;
   doc.text("Estimated Tax / GST (0%):", summaryX, y);
-  doc.text(`$${(order.tax || 0).toFixed(2)}`, summaryValX, y, { align: "right" });
+  doc.text(`$${tax.toFixed(2)}`, summaryValX, y, { align: "right" });
 
   y += 4;
   doc.setDrawColor(...primaryColor);
@@ -218,7 +245,7 @@ export function generateOrderInvoicePdf(order: Order): jsPDF {
   doc.setTextColor(...primaryColor);
   doc.text("TOTAL PAID:", summaryX, y);
   doc.setTextColor(...accentColor);
-  doc.text(`$${order.total.toFixed(2)} USD`, summaryValX, y, { align: "right" });
+  doc.text(`$${total.toFixed(2)} USD`, summaryValX, y, { align: "right" });
 
   // 7. Payment Verification Stamp & Guarantee Box
   y = 230;

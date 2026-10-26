@@ -21,11 +21,46 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
   const customerName = order.customer.fullName || "Valued Customer";
   const customerEmail = order.customer.email;
   const isIndia = order.customer.country === "India" || (order.customer.contact && order.customer.contact.startsWith("+91"));
-  const amountFormatted = isIndia
-    ? `₹${Math.round(order.total * 83).toLocaleString("en-IN")}`
-    : `$${order.total.toFixed(2)} USD`;
 
-  const itemsListString = order.items
+  const total = Number(order.total) || 0;
+  const tax = Number(order.tax) || 0;
+
+  const rawItems = (order.items || []).map((it) => {
+    let price = Number(it.price) || 0;
+    const quantity = Number(it.quantity) || 1;
+    // Reconcile nominal test payments where item was catalog price
+    if (order.items.length === 1 && price > total && total > 0) {
+      price = total / quantity;
+    }
+    return {
+      ...it,
+      price,
+      quantity,
+    };
+  });
+
+  const itemsSubtotal = rawItems.reduce(
+    (sum, it) => sum + it.price * it.quantity,
+    0
+  );
+
+  const subtotal = (itemsSubtotal > 0 && itemsSubtotal <= total)
+    ? itemsSubtotal
+    : (Number(order.subtotal) > 0 && Number(order.subtotal) <= total)
+      ? Number(order.subtotal)
+      : Math.max(0, total - tax);
+
+  const shipping = Math.max(0, Math.round((total - subtotal - tax) * 100) / 100);
+
+  const shortAmount = isIndia
+    ? `₹${Math.round(total * 83).toLocaleString("en-IN")}`
+    : `$${total.toFixed(2)} USD`;
+
+  const amountFormatted = isIndia
+    ? `₹${Math.round(total * 83).toLocaleString("en-IN")} ($${total.toFixed(2)} USD)`
+    : `$${total.toFixed(2)} USD`;
+
+  const itemsListString = rawItems
     .map((item) => `${item.name} (${item.variantName || item.variant || "Standard"}) × ${item.quantity}`)
     .join(", ");
 
@@ -38,7 +73,7 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
     minute: "2-digit",
   });
 
-  const subject = `Payment Confirmed: ${amountFormatted} paid via Razorpay for Order #${order.orderNumber} · ancwave`;
+  const subject = `Payment Confirmed: ${shortAmount} paid via Razorpay for Order #${order.orderNumber} · ancwave`;
 
   const html = `
 <!DOCTYPE html>
@@ -280,7 +315,7 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
           </tr>
         </thead>
         <tbody>
-          ${order.items
+          ${rawItems
             .map(
               (item) => `
             <tr>
@@ -303,21 +338,23 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
       </table>
 
       <!-- Price Breakdown -->
-      <div style="max-width: 280px; margin-left: auto;">
+      <div style="max-width: 300px; margin-left: auto;">
         <div class="summary-row">
           <span>Subtotal:</span>
-          <span style="font-family: monospace;">$${order.subtotal.toFixed(2)}</span>
+          <span style="font-family: monospace;">$${subtotal.toFixed(2)}</span>
         </div>
         <div class="summary-row">
-          <span>Complimentary Express Shipping:</span>
-          <span style="font-family: monospace; color: #16A34A; font-weight: 600;">FREE</span>
+          <span>Insured Shipping:</span>
+          <span style="font-family: monospace; color: ${shipping === 0 ? "#16A34A" : "#111827"}; font-weight: 600;">
+            ${shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`}
+          </span>
         </div>
         <div class="summary-row">
-          <span>Estimated Sales Tax / GST:</span>
-          <span style="font-family: monospace;">$${(order.tax || 0).toFixed(2)}</span>
+          <span>Estimated Sales Tax / GST (0%):</span>
+          <span style="font-family: monospace;">$${tax.toFixed(2)}</span>
         </div>
         <div class="summary-total">
-          <span>Amount Paid:</span>
+          <span>Total Paid:</span>
           <span style="color: #2563EB;">${amountFormatted}</span>
         </div>
       </div>
@@ -336,7 +373,7 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
       </div>
 
       <div style="text-align: center; margin-top: 10px;">
-        <a href="https://ancwave.cyphertech.online/orders?order=${order.orderNumber}" class="button-cta">
+        <a href="https://ancwave.cyphertech.online/orders?order=${order.orderNumber}" target="_blank" rel="noopener noreferrer" class="button-cta">
           View in My Orders & Download PDF Bill →
         </a>
       </div>
