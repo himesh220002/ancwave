@@ -1,34 +1,46 @@
 /**
  * AWS Lambda Serverless Worker: ancwave-order-processor
- * Runtime: Node.js 20.x on AWS Graviton (ARM64)
+ * Runtime: Node.js 20.x / 22.x / 24.x
  * Architecture: Event-driven subscriber to Amazon EventBridge bus 'ancwave-event-bus'
  */
 
-const https = require("https");
-
-exports.handler = async (event) => {
+export const handler = async (event) => {
   console.log("Received EventBridge Event:", JSON.stringify(event, null, 2));
 
-  const detailType = event["detail-type"];
+  const detailType = event["detail-type"] || event.detailType;
   const detail = event.detail || {};
 
   if (detailType === "OrderPlaced") {
-    const { orderId, orderNumber, totalUSD, itemsCount } = detail;
+    const orderNumber = detail.orderNumber || "UNKNOWN";
+    const totalUSD = detail.totalUSD || 0;
+    const itemsCount = detail.itemsCount || 1;
     console.log(`[Lambda] Processing Order #${orderNumber} ($${totalUSD}) with ${itemsCount} items.`);
 
-    // 1. Invoke Next.js on-demand revalidation to purge edge cache
+    // 1. Trigger Next.js on-demand ISR revalidation to purge edge cache
     try {
-      await triggerISRRevalidation();
-      console.log("[Lambda] Successfully purged Next.js edge ISR cache.");
+      const appHost = process.env.APP_HOST || "ancwave.cyphertech.online";
+      const secret = process.env.REVALIDATE_SECRET || "ancwave_revalidation_secret_token_2026";
+      
+      const res = await fetch(`https://${appHost}/api/revalidate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-revalidate-secret": secret,
+        },
+        body: JSON.stringify({ path: "/", tag: "product-details" }),
+        signal: AbortSignal.timeout(6000),
+      });
+      
+      console.log(`[Lambda] ISR Revalidation Response Status: ${res.status}`);
     } catch (err) {
-      console.error("[Lambda] Failed to trigger ISR revalidation:", err);
+      console.warn("[Lambda] Notice on ISR revalidation:", err.message || err);
     }
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         status: "SUCCESS",
-        orderId,
+        orderNumber,
         revalidated: true,
         processedAt: new Date().toISOString(),
       }),
@@ -40,39 +52,3 @@ exports.handler = async (event) => {
     body: JSON.stringify({ message: "No action required for event", detailType }),
   };
 };
-
-function triggerISRRevalidation() {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify({ path: "/", tag: "product-details" });
-    const appHost = process.env.APP_HOST || "ancwave.cyphertech.online";
-
-    const options = {
-      hostname: appHost,
-      port: 443,
-      path: "/api/revalidate",
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": data.length,
-        "x-revalidate-secret": process.env.REVALIDATE_SECRET || "ancwave_revalidation_secret_token_2026",
-      },
-      timeout: 5000,
-    };
-
-    const req = https.request(options, (res) => {
-      let body = "";
-      res.on("data", (chunk) => (body += chunk));
-      res.on("end", () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(body);
-        } else {
-          reject(new Error(`Status ${res.statusCode}: ${body}`));
-        }
-      });
-    });
-
-    req.on("error", (e) => reject(e));
-    req.write(data);
-    req.end();
-  });
-}

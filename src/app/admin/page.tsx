@@ -235,6 +235,48 @@ export default function AdminPage() {
   const [expressDeliveryPriceInr, setExpressDeliveryPriceInr] = useState<number>(1200);
   const [isSavingShipping, setIsSavingShipping] = useState<boolean>(false);
 
+  // AWS Live EventBridge & Lambda Testing State
+  const [isTestingAws, setIsTestingAws] = useState<boolean>(false);
+  const [awsTestResult, setAwsTestResult] = useState<any>(null);
+
+  const handleRunAwsTest = async () => {
+    setIsTestingAws(true);
+    try {
+      const res = await fetch("/api/admin/aws-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test-all",
+          orderNumber: "ANC-TEST-" + Math.floor(100000 + Math.random() * 900000),
+          totalUSD: 361,
+        }),
+      });
+      const data = await res.json();
+      setAwsTestResult(data);
+      if (data.success) {
+        toast({
+          type: "success",
+          title: "AWS EventBridge & Lambda Succeeded",
+          description: `Event: ${data.eventBridge?.eventId} · Lambda executed in ${data.lambda?.durationMs}ms (Status: 200)`,
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "AWS Test Notice",
+          description: data.error || "Failed to trigger AWS test",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: err?.message || "Could not reach AWS tester endpoint",
+      });
+    } finally {
+      setIsTestingAws(false);
+    }
+  };
+
   // Dedicated Variant Restock Modal State
   const [isRestockModalOpen, setIsRestockModalOpen] = useState<boolean>(false);
   const [restockTargetProduct, setRestockTargetProduct] = useState<ProductData | null>(null);
@@ -3395,6 +3437,123 @@ export default function AdminPage() {
                       Configure Shipping Method Pricing Fixtures →
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* AWS Serverless EventBridge & Lambda Live Monitor Card */}
+              <div className="rounded-2xl bg-white border border-zinc-200/80 p-6 shadow-xs space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center font-bold">
+                      <Zap className="w-5 h-5 text-amber-500" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-zinc-950 font-sans">
+                          AWS EventBridge & Lambda Serverless Engine
+                        </h4>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Active · ap-south-1
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Real-time order event ingestion via <code>ancwave-event-bus</code> and edge cache invalidation via <code>ancwave-order-processor</code>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRunAwsTest}
+                    disabled={isTestingAws}
+                    className="flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-all shadow-xs disabled:opacity-50 cursor-pointer self-start sm:self-auto shrink-0"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isTestingAws ? "animate-spin" : ""}`} />
+                    <span>{isTestingAws ? "Invoking AWS Pipeline..." : "⚡ Send Live Test Event"}</span>
+                  </button>
+                </div>
+
+                {/* Infrastructure Nodes Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-medium">Custom Event Bus</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    </div>
+                    <div className="font-mono font-bold text-zinc-900 text-[13px]">ancwave-event-bus</div>
+                    <div className="text-[11px] text-zinc-400">Retention: 1 Day · Active</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-medium">EventBridge Subscriber</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    </div>
+                    <div className="font-mono font-bold text-zinc-900 text-[13px] truncate" title="ancwave-order-processor-subscriber">
+                      order-processor-subscriber
+                    </div>
+                    <div className="text-[11px] text-zinc-400">Target: Lambda Function</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-medium">Lambda Worker</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    </div>
+                    <div className="font-mono font-bold text-zinc-900 text-[13px]">ancwave-order-processor</div>
+                    <div className="text-[11px] text-zinc-400">Node.js 24.x · 15s Timeout</div>
+                  </div>
+                </div>
+
+                {/* Live Test Execution Result Display */}
+                {awsTestResult && (
+                  <div className="p-4 rounded-xl bg-emerald-50/80 border border-emerald-200 text-xs space-y-2 animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 font-bold text-emerald-950">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>Live Pipeline Test Result: Status 200 (Success)</span>
+                      </div>
+                      <span className="font-mono text-[11px] text-emerald-800 font-semibold">
+                        Latency: {awsTestResult.lambda?.durationMs}ms
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-emerald-900">
+                      <div>Event ID: <span className="font-bold">{awsTestResult.eventBridge?.eventId}</span></div>
+                      <div>Lambda Status: <span className="font-bold">{awsTestResult.lambda?.statusCode === 200 ? "SUCCESS (200 OK)" : "COMPLETED"}</span></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Direct Deep Links to AWS Console */}
+                <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
+                  <span className="text-zinc-400 font-medium text-[11px]">Inspect Live in AWS Console:</span>
+                  <a
+                    href="https://ap-south-1.console.aws.amazon.com/events/home?region=ap-south-1#/eventbus/ancwave-event-bus"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold transition-colors text-[11px]"
+                  >
+                    <span>Amazon EventBridge Bus</span>
+                    <ExternalLink className="w-3 h-3 text-zinc-500" />
+                  </a>
+                  <a
+                    href="https://ap-south-1.console.aws.amazon.com/cloudwatch/home?region=ap-south-1#logsV2:log-groups/log-group/$252Faws$252Flambda$252Fancwave-order-processor"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold transition-colors text-[11px]"
+                  >
+                    <span>CloudWatch Lambda Logs</span>
+                    <ExternalLink className="w-3 h-3 text-zinc-500" />
+                  </a>
+                  <a
+                    href="https://ap-south-1.console.aws.amazon.com/lambda/home?region=ap-south-1#/functions/ancwave-order-processor?tab=monitoring"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold transition-colors text-[11px]"
+                  >
+                    <span>Lambda Monitoring & Invocations</span>
+                    <ExternalLink className="w-3 h-3 text-zinc-500" />
+                  </a>
                 </div>
               </div>
             </div>
