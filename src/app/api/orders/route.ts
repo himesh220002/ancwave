@@ -3,7 +3,13 @@ import { store } from "@/lib/store";
 import { connectDB } from "@/lib/db";
 import { OrderModel } from "@/lib/models";
 import { Order, OrderEvent, OrderCancellation } from "@/types";
-import { generateRazorpayOrderEmail, sendOrderConfirmationEmail } from "@/lib/email-service";
+import {
+  generateRazorpayOrderEmail,
+  sendOrderConfirmationEmail,
+  sendGateOtpEmail,
+  sendDeliveredEmail,
+  sendDispatchedEmail,
+} from "@/lib/email-service";
 
 function normalizeOrder(o: any): Order {
   const orderNumber = o.orderNumber || "ANC-000000";
@@ -491,6 +497,14 @@ export async function POST(req: NextRequest) {
 
       const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
 
+      // Only trigger emails for critical moments: "out_for_delivery" (with OTP) or "delivered" (warranty activated)
+      if (deliveryStatus === "out_for_delivery" && targetOrder.deliveryStatus !== "out_for_delivery") {
+        const otp = targetOrder.gateOtpSession?.otp || Math.floor(100000 + Math.random() * 900000).toString();
+        sendGateOtpEmail(updated, otp).catch((e) => console.warn("[SES OTP Warning]:", e));
+      } else if (deliveryStatus === "delivered" && targetOrder.deliveryStatus !== "delivered") {
+        sendDeliveredEmail(updated).catch((e) => console.warn("[SES Delivered Warning]:", e));
+      }
+
       return NextResponse.json({
         success: true,
         message: "Delivery status updated successfully.",
@@ -573,6 +587,11 @@ export async function POST(req: NextRequest) {
 
       const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
 
+      // Dispatch live Gate OTP email to customer via AWS SES (and soon SMS)
+      sendGateOtpEmail(updated, otp).catch((err) =>
+        console.warn("[SES Gate OTP Warning] Background email error:", err)
+      );
+
       return NextResponse.json({
         success: true,
         message: "5-minute alive OTP loop active.",
@@ -616,6 +635,11 @@ export async function POST(req: NextRequest) {
       };
 
       const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
+
+      // Dispatch live Delivery Confirmation & Warranty Activation email via AWS SES
+      sendDeliveredEmail(updated).catch((err) =>
+        console.warn("[SES Delivery Completed Warning] Background email error:", err)
+      );
 
       return NextResponse.json({
         success: true,

@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/db";
 import { OrderModel } from "@/lib/models";
 import { Order, OrderEvent } from "@/types";
 import { findOrder, saveOrder } from "@/app/api/orders/route";
+import { sendRefundEmail } from "@/lib/email-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -95,6 +96,11 @@ export async function POST(req: NextRequest) {
 
     // Safely update memory store and MongoDB
     const updatedOrder = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
+
+    // Dispatch live Razorpay Refund email advice via AWS SES
+    sendRefundEmail(updatedOrder, refundId, refundAmount).catch((err) =>
+      console.warn("[SES Refund Warning] Background email error:", err)
+    );
 
     return NextResponse.json({
       success: true,
