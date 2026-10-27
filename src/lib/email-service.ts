@@ -1,4 +1,5 @@
 import { Order } from "@/types";
+import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 
 export interface CustomRazorpayEmailData {
   subject: string;
@@ -170,7 +171,7 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
       padding-top: 14px;
       border-top: 1px solid #E2E4E2;
       font-size: 11px;
-      font-family: monospace;
+      font-family: serif;
     }
     .meta-label {
       color: #717671;
@@ -316,24 +317,23 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
         </thead>
         <tbody>
           ${rawItems
-            .map(
-              (item) => `
+      .map(
+        (item) => `
             <tr>
               <td>
                 <strong style="color: #111827;">${item.name}</strong><br />
-                <span style="color: #717671; font-size: 11px;">${
-                  item.variantName || item.variant || "Standard Edition"
-                } · ${item.fit || "Precision Fit"}</span>
+                <span style="color: #717671; font-size: 11px;">${item.variantName || item.variant || "Standard Edition"
+          } · ${item.fit || "Precision Fit"}</span>
               </td>
               <td style="text-align: center; font-family: monospace;">${item.quantity}</td>
               <td style="text-align: right; font-family: monospace;">$${item.price.toFixed(2)}</td>
               <td style="text-align: right; font-family: monospace; font-weight: 700;">$${(
-                item.price * item.quantity
-              ).toFixed(2)}</td>
+            item.price * item.quantity
+          ).toFixed(2)}</td>
             </tr>
           `
-            )
-            .join("")}
+      )
+      .join("")}
         </tbody>
       </table>
 
@@ -365,9 +365,8 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
           DISPATCH & DELIVERY DESTINATION
         </strong><br />
         <strong>Recipient:</strong> ${order.customer.fullName}<br />
-        <strong>Address:</strong> ${order.customer.address}, ${order.customer.city}, ${
-    order.customer.state
-  } ${order.customer.zipCode}, ${order.customer.country || "United States"}<br />
+        <strong>Address:</strong> ${order.customer.address}, ${order.customer.city}, ${order.customer.state
+    } ${order.customer.zipCode}, ${order.customer.country || "United States"}<br />
         <strong>Estimated Delivery:</strong> 3–5 Business Days via Express Insured Courier<br />
         <strong>Warranty:</strong> 2-Year Comprehensive Manufacturer Hardware Warranty included.
       </div>
@@ -426,7 +425,7 @@ Support: hello@ancwave.com | +1 (503) 555-0148
   return {
     subject,
     to: customerEmail,
-    from: "ancwave Orders <receipts@ancwave.com>",
+    from: "ancwave Orders <orders@cyphertech.online>",
     amountFormatted,
     orderNumber: order.orderNumber,
     paymentId: order.razorpayPaymentId || "pay_verified_razorpay",
@@ -435,4 +434,104 @@ Support: hello@ancwave.com | +1 (503) 555-0148
     html,
     text,
   };
+}
+
+export interface SendEmailResult {
+  success: boolean;
+  messageId?: string;
+  simulated?: boolean;
+  error?: string;
+}
+
+let cachedSesClient: SESClient | null = null;
+
+function getSESClient(): SESClient | null {
+  const region = process.env.AWS_SES_REGION || process.env.AWS_REGION || "ap-south-1";
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+
+  if (!accessKeyId || !secretAccessKey) {
+    return null;
+  }
+
+  if (!cachedSesClient) {
+    cachedSesClient = new SESClient({
+      region,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
+    });
+  }
+  return cachedSesClient;
+}
+
+/**
+ * Sends live order confirmation email to customer inbox via AWS SES.
+ * Automatically falls back to simulated/logging mode if AWS credentials are not set.
+ */
+export async function sendOrderConfirmationEmail(
+  order: Order,
+  recipientOverride?: string
+): Promise<SendEmailResult> {
+  const emailData = generateRazorpayOrderEmail(order);
+  const recipient = recipientOverride || emailData.to;
+
+  const fromEmail =
+    process.env.AWS_SES_FROM_EMAIL ||
+    "ancwave Orders <orders@cyphertech.online>";
+
+  const client = getSESClient();
+
+  if (!client) {
+    console.log(
+      `[SES Email Service - Simulated] Would send order email to ${recipient} for #${order.orderNumber} (AWS credentials not set)`
+    );
+    return {
+      success: true,
+      simulated: true,
+      messageId: `sim-${Date.now()}`,
+    };
+  }
+
+  try {
+    const command = new SendEmailCommand({
+      Source: fromEmail,
+      Destination: {
+        ToAddresses: [recipient],
+      },
+      Message: {
+        Subject: {
+          Data: emailData.subject,
+          Charset: "UTF-8",
+        },
+        Body: {
+          Html: {
+            Data: emailData.html,
+            Charset: "UTF-8",
+          },
+          Text: {
+            Data: emailData.text,
+            Charset: "UTF-8",
+          },
+        },
+      },
+    });
+
+    const response = await client.send(command);
+    console.log(
+      `[SES Email Service] Live email sent to ${recipient} via AWS SES. MessageId: ${response.MessageId}`
+    );
+    return {
+      success: true,
+      messageId: response.MessageId,
+      simulated: false,
+    };
+  } catch (err: any) {
+    console.error(`[SES Email Service Error] Failed to send email to ${recipient}:`, err);
+    return {
+      success: false,
+      error: err?.message || "Failed to send email via AWS SES",
+    };
+  }
 }

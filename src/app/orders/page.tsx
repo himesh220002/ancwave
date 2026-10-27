@@ -203,6 +203,12 @@ function MyOrdersContent() {
           title: "Razorpay Receipt Dispatched",
           description: `Custom confirmation email sent to ${order.customer.email}`,
         });
+      } else {
+        toast({
+          type: "error",
+          title: "Email Dispatch Notice",
+          description: data.sendResult?.error || "Email delivery pending AWS SES identity verification.",
+        });
       }
     } catch {
       toast({
@@ -297,11 +303,10 @@ function MyOrdersContent() {
                     setEmailLookup("");
                     fetchOrders("", true);
                   }}
-                  className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                    showAllOrders || !user
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${showAllOrders || !user
                       ? "bg-white text-zinc-900 shadow-2xs"
                       : "text-zinc-500 hover:text-zinc-900"
-                  }`}
+                    }`}
                 >
                   All Platform Orders ({orders.length})
                 </button>
@@ -312,11 +317,10 @@ function MyOrdersContent() {
                       setShowAllOrders(false);
                       fetchOrders(user.email);
                     }}
-                    className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                      !showAllOrders && !emailLookup
+                    className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${!showAllOrders && !emailLookup
                         ? "bg-white text-zinc-900 shadow-2xs"
                         : "text-zinc-500 hover:text-zinc-900"
-                    }`}
+                      }`}
                   >
                     My Purchases
                   </button>
@@ -714,7 +718,7 @@ function MyOrdersContent() {
                                 src={item.image || "/images/hero-silver.jpg"}
                                 alt={item.name}
                                 fill
-                                className="object-contain p-1"
+                                className="object-cover rounded-2xl"
                               />
                             </div>
                             <div className="space-y-1 min-w-0">
@@ -1265,15 +1269,14 @@ function MyOrdersContent() {
                         <div className="absolute left-4 top-8 bottom-0 w-px bg-zinc-200 -mb-5" />
                       )}
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 ${
-                          isRefund
+                        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 ${isRefund
                             ? "bg-emerald-100 text-emerald-700"
                             : isCancel
-                            ? "bg-rose-100 text-rose-700"
-                            : isDelivery
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-zinc-100 text-zinc-700"
-                        }`}
+                              ? "bg-rose-100 text-rose-700"
+                              : isDelivery
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-zinc-100 text-zinc-700"
+                          }`}
                       >
                         {isRefund ? (
                           <CheckCircle2 className="w-4 h-4" />

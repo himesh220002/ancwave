@@ -3,7 +3,7 @@ import { store } from "@/lib/store";
 import { connectDB } from "@/lib/db";
 import { OrderModel } from "@/lib/models";
 import { Order, OrderEvent, OrderCancellation } from "@/types";
-import { generateRazorpayOrderEmail } from "@/lib/email-service";
+import { generateRazorpayOrderEmail, sendOrderConfirmationEmail } from "@/lib/email-service";
 
 function normalizeOrder(o: any): Order {
   const orderNumber = o.orderNumber || "ANC-000000";
@@ -357,11 +357,22 @@ export async function POST(req: NextRequest) {
     // Action 1: Email generation / resend
     if (action === "get-email" || action === "resend-email") {
       const emailData = generateRazorpayOrderEmail(targetOrder);
+      const recipient = body.email || targetOrder.customer.email;
+
+      let sendResult = null;
+      if (action === "resend-email") {
+        sendResult = await sendOrderConfirmationEmail(targetOrder, recipient);
+      }
 
       return NextResponse.json({
-        success: true,
-        message: `Custom Razorpay payment confirmation email generated for ${targetOrder.customer.email}`,
+        success: sendResult ? sendResult.success : true,
+        message: sendResult
+          ? sendResult.simulated
+            ? `Confirmation email simulated for ${recipient} (AWS SES credentials not set)`
+            : `Live order confirmation email sent to ${recipient} via AWS SES (Message ID: ${sendResult.messageId})`
+          : `Custom Razorpay payment confirmation email generated for ${recipient}`,
         email: emailData,
+        sendResult,
       });
     }
 

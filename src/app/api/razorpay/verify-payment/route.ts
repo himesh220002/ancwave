@@ -6,7 +6,7 @@ import { OrderModel, ProductModel } from "@/lib/models";
 import { Order, OrderEvent } from "@/types";
 import { dispatchOrderPlacedEvent } from "@/lib/aws-services";
 import { revalidatePath } from "next/cache";
-import { generateRazorpayOrderEmail } from "@/lib/email-service";
+import { generateRazorpayOrderEmail, sendOrderConfirmationEmail } from "@/lib/email-service";
 import { deductOrderStock } from "@/lib/inventory-service";
 
 export async function POST(req: NextRequest) {
@@ -183,8 +183,11 @@ export async function POST(req: NextRequest) {
     // 1. Dispatch AWS EventBridge Event: OrderPlaced
     const awsLog = await dispatchOrderPlacedEvent(order);
 
-    // 2. Generate Custom Razorpay Email Receipt
+    // 2. Generate and dispatch live confirmation email via AWS SES
     const emailReceipt = generateRazorpayOrderEmail(order);
+    sendOrderConfirmationEmail(order).catch((err) =>
+      console.warn("[SES Dispatch Warning] Background email error:", err)
+    );
 
     // 3. Wipe old cache out instantly via on-demand revalidation!
     try {
