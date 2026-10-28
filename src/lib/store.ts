@@ -14,6 +14,8 @@ import {
   childVariantsToVariantGroups,
   variantGroupsToChildVariants,
   normalizeProductData,
+  IRestockProcess,
+  DEFAULT_USD_TO_INR_RATE,
 } from "@/types";
 
 export const initialProductData: ProductData = {
@@ -1268,6 +1270,11 @@ class AncWaveStore {
       razorpayOrderId: "order_demo_seed",
       deliveryStatus: "processing",
       currentHub: "Portland Primary Logistics Center",
+      currentRegion: "Oregon, US",
+      nextHub: "Frankfurt Central Air Logistics Hub",
+      nextRegion: "Frankfurt, DE",
+      transitMode: "truck",
+      vehicleNo: "OR-TRK-5555",
       trackingNumber: "TRK-ANC-914820",
       cancellation: {
         requested: false,
@@ -1368,11 +1375,11 @@ class AncWaveStore {
     if (typeof newPrice === "number") {
       p.price = newPrice;
       p.basePrice = newPrice;
-      p.priceInr = Math.round(newPrice * 83);
+      p.priceInr = Math.round(newPrice * DEFAULT_USD_TO_INR_RATE);
     } else if (typeof newBasePrice === "number") {
       p.basePrice = newBasePrice;
       p.price = newBasePrice;
-      p.priceInr = Math.round(newBasePrice * 83);
+      p.priceInr = Math.round(newBasePrice * DEFAULT_USD_TO_INR_RATE);
     }
     p.lastRevalidatedAt = new Date().toISOString();
     this.products.set(slug, p);
@@ -1405,7 +1412,7 @@ class AncWaveStore {
 
     const effBasePrice = typeof updated.basePrice === "number" ? updated.basePrice : (typeof updated.price === "number" ? updated.price : existing.basePrice || existing.price);
     const effPrice = typeof updated.price === "number" ? updated.price : effBasePrice;
-    const effPriceInr = typeof updated.priceInr === "number" ? updated.priceInr : (typeof effPrice === "number" ? Math.round(effPrice * 83) : existing.priceInr);
+    const effPriceInr = typeof updated.priceInr === "number" ? updated.priceInr : (typeof effPrice === "number" ? Math.round(effPrice * DEFAULT_USD_TO_INR_RATE) : existing.priceInr);
 
     const merged: ProductData = {
       ...existing,
@@ -1494,6 +1501,155 @@ class AncWaveStore {
       }));
     }
 
+    p.lastRevalidatedAt = new Date().toISOString();
+    this.products.set(p.slug, p);
+    return { ...p };
+  }
+
+  applyRestockProcess(
+    slug: string,
+    sku: string | undefined,
+    targetQty: number,
+    leadTimeDays: number,
+    note?: string
+  ): ProductData {
+    const p = this.products.get(slug) || this.getProduct(slug);
+    if (!p.childVariants || p.childVariants.length === 0) {
+      if (p.variantGroups && p.variantGroups.length > 0) {
+        p.childVariants = variantGroupsToChildVariants(p.variantGroups, p.basePrice || p.price);
+      }
+    }
+    const target = Math.max(1, Number(targetQty) || 1);
+    const days = Math.max(1, Number(leadTimeDays) || 1);
+    const now = new Date();
+    const expectedAt = new Date(now.getTime() + days * 86400000).toISOString();
+    const processData: IRestockProcess = {
+      id: `po-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      targetQty: target,
+      receivedQty: 0,
+      remainingQty: target,
+      leadTimeDays: days,
+      status: "in_process",
+      initiatedAt: now.toISOString(),
+      expectedAt,
+      note: note?.trim(),
+    };
+
+    if (sku) {
+      const targetSku = sku.toLowerCase();
+      if (p.childVariants) {
+        p.childVariants = p.childVariants.map((v) =>
+          v.sku.toLowerCase() === targetSku ? { ...v, restockProcess: processData } : v
+        );
+      }
+      if (p.variantGroups) {
+        p.variantGroups = p.variantGroups.map((g) => ({
+          ...g,
+          colors: g.colors.map((c) => (c.sku.toLowerCase() === targetSku ? { ...c, restockProcess: processData } : c)),
+        }));
+      }
+    } else {
+      p.restockProcess = processData;
+    }
+
+    p.lastRevalidatedAt = new Date().toISOString();
+    this.products.set(p.slug, p);
+    return { ...p };
+  }
+
+  receiveRestockStock(slug: string, sku: string | undefined, receivedQty: number): ProductData {
+    const p = this.products.get(slug) || this.getProduct(slug);
+    if (!p.childVariants || p.childVariants.length === 0) {
+      if (p.variantGroups && p.variantGroups.length > 0) {
+        p.childVariants = variantGroupsToChildVariants(p.variantGroups, p.basePrice || p.price);
+      }
+    }
+    const count = Math.max(1, Number(receivedQty) || 1);
+
+    if (sku) {
+      const targetSku = sku.toLowerCase();
+      if (p.childVariants) {
+        p.childVariants = p.childVariants.map((v) => {
+          if (v.sku.toLowerCase() === targetSku) {
+            const newStock = (v.stock || 0) + count;
+            let rp = v.restockProcess;
+            if (rp) {
+              const newReceived = (rp.receivedQty || 0) + count;
+              const newRemaining = Math.max(0, rp.targetQty - newReceived);
+              rp = {
+                ...rp,
+                receivedQty: newReceived,
+                remainingQty: newRemaining,
+                status: newRemaining <= 0 ? "completed" : "partially_fulfilled",
+              };
+            }
+            return { ...v, stock: newStock, restockProcess: rp };
+          }
+          return v;
+        });
+        p.stock = p.childVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+      }
+      if (p.variantGroups) {
+        p.variantGroups = p.variantGroups.map((g) => ({
+          ...g,
+          colors: g.colors.map((c) => {
+            if (c.sku.toLowerCase() === targetSku) {
+              const newStock = (c.stock || 0) + count;
+              let rp = c.restockProcess;
+              if (rp) {
+                const newReceived = (rp.receivedQty || 0) + count;
+                const newRemaining = Math.max(0, rp.targetQty - newReceived);
+                rp = {
+                  ...rp,
+                  receivedQty: newReceived,
+                  remainingQty: newRemaining,
+                  status: newRemaining <= 0 ? "completed" : "partially_fulfilled",
+                };
+              }
+              return { ...c, stock: newStock, restockProcess: rp };
+            }
+            return c;
+          }),
+        }));
+      }
+    } else {
+      p.stock = (p.stock || 0) + count;
+      let rp = p.restockProcess;
+      if (rp) {
+        const newReceived = (rp.receivedQty || 0) + count;
+        const newRemaining = Math.max(0, rp.targetQty - newReceived);
+        p.restockProcess = {
+          ...rp,
+          receivedQty: newReceived,
+          remainingQty: newRemaining,
+          status: newRemaining <= 0 ? "completed" : "partially_fulfilled",
+        };
+      }
+    }
+
+    p.lastRevalidatedAt = new Date().toISOString();
+    this.products.set(p.slug, p);
+    return { ...p };
+  }
+
+  cancelRestockProcess(slug: string, sku?: string): ProductData {
+    const p = this.products.get(slug) || this.getProduct(slug);
+    if (sku) {
+      const targetSku = sku.toLowerCase();
+      if (p.childVariants) {
+        p.childVariants = p.childVariants.map((v) =>
+          v.sku.toLowerCase() === targetSku ? { ...v, restockProcess: undefined } : v
+        );
+      }
+      if (p.variantGroups) {
+        p.variantGroups = p.variantGroups.map((g) => ({
+          ...g,
+          colors: g.colors.map((c) => (c.sku.toLowerCase() === targetSku ? { ...c, restockProcess: undefined } : c)),
+        }));
+      }
+    } else {
+      p.restockProcess = undefined;
+    }
     p.lastRevalidatedAt = new Date().toISOString();
     this.products.set(p.slug, p);
     return { ...p };
@@ -1902,6 +2058,7 @@ function initOrUpdateStore(): AncWaveStore {
   let inst = globalStore.__ancWaveStore;
   if (
     !inst ||
+    typeof (inst as any)?.applyRestockProcess !== "function" ||
     typeof (inst as any)?.addProduct !== "function" ||
     typeof (inst as any)?.getShippingFixtures !== "function" ||
     typeof (inst as any)?.getOrder !== "function" ||
@@ -1910,18 +2067,12 @@ function initOrUpdateStore(): AncWaveStore {
   ) {
     inst = new AncWaveStore();
     globalStore.__ancWaveStore = inst;
+  } else {
+    Object.setPrototypeOf(inst, AncWaveStore.prototype);
   }
 
   // Ensure all prototype methods exist on the existing singleton
-  if (typeof (inst as any).getOrder !== "function") {
-    (inst as any).getOrder = AncWaveStore.prototype.getOrder.bind(inst);
-  }
-  if (typeof (inst as any).updateOrder !== "function") {
-    (inst as any).updateOrder = AncWaveStore.prototype.updateOrder.bind(inst);
-  }
-  if (typeof (inst as any).addOrderEvent !== "function") {
-    (inst as any).addOrderEvent = AncWaveStore.prototype.addOrderEvent.bind(inst);
-  }
+  Object.setPrototypeOf(inst, AncWaveStore.prototype);
 
   return inst;
 }

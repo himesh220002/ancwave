@@ -1,3 +1,5 @@
+export const DEFAULT_USD_TO_INR_RATE = 95.26;
+
 export type ProductColor = "silver" | "graphite" | "sandstone" | "white" | "black" | "teal" | string;
 
 export interface ColorVariant {
@@ -80,6 +82,18 @@ export interface ProductQnA {
   date: string;
 }
 
+export interface IRestockProcess {
+  id: string;
+  targetQty: number; // Planned restock quantity e.g. 5
+  receivedQty: number; // Quantity already received e.g. 3
+  remainingQty: number; // Remaining quantity in pipeline e.g. 2
+  leadTimeDays: number; // Processing lead time in days e.g. 5
+  status: "in_process" | "partially_fulfilled" | "completed";
+  initiatedAt: string;
+  expectedAt?: string;
+  note?: string;
+}
+
 export interface IVariantColor {
   id?: string;
   sku: string;
@@ -90,6 +104,7 @@ export interface IVariantColor {
   discount?: number;
   stock: number;
   images: string[];
+  restockProcess?: IRestockProcess;
 }
 
 export interface IVariantGroup {
@@ -113,6 +128,7 @@ export interface IVariant {
   discount: number;          // Specific variant discount percentage
   stock: number;             // Real-time inventory count
   images: string[];          // S3 URLs / CloudFront Paths specific to this variant
+  restockProcess?: IRestockProcess;
 }
 
 export function variantGroupsToChildVariants(groups: IVariantGroup[], defaultPrice = 99): IVariant[] {
@@ -120,7 +136,7 @@ export function variantGroupsToChildVariants(groups: IVariantGroup[], defaultPri
   (groups || []).forEach((g) => {
     (g.colors || []).forEach((c) => {
       const effPrice = c.price ?? g.price ?? defaultPrice;
-      const effPriceInr = c.priceInr ?? g.priceInr ?? (typeof effPrice === "number" ? Math.round(effPrice * 83) : undefined);
+      const effPriceInr = c.priceInr ?? g.priceInr ?? (typeof effPrice === "number" ? Math.round(effPrice * DEFAULT_USD_TO_INR_RATE) : undefined);
       result.push({
         sku: c.sku,
         color: c.color,
@@ -131,6 +147,7 @@ export function variantGroupsToChildVariants(groups: IVariantGroup[], defaultPri
         discount: c.discount ?? g.discount ?? 0,
         stock: c.stock ?? 0,
         images: c.images && c.images.length > 0 ? c.images : ["/images/hero-silver.jpg"],
+        restockProcess: c.restockProcess,
       });
     });
   });
@@ -175,6 +192,7 @@ export function childVariantsToVariantGroups(childVariants: IVariant[], basePric
       discount: cv.discount,
       stock: cv.stock,
       images: cv.images,
+      restockProcess: cv.restockProcess,
     });
   });
   return Array.from(map.values());
@@ -268,7 +286,7 @@ export function normalizeProductData(raw: any): ProductData {
   const productId = clean.productId || `PROD-${slug.toUpperCase()}`;
   const price = Number(clean.price) || Number(clean.basePrice) || 99;
   const basePrice = Number(clean.basePrice) || price;
-  const priceInr = Number(clean.priceInr) || Math.round(price * 83);
+  const priceInr = Number(clean.priceInr) || Math.round(price * DEFAULT_USD_TO_INR_RATE);
   const originalPrice = Number(clean.originalPrice) || Math.round(price * 1.25);
 
   const rawVariants: any[] = Array.isArray(clean.variants) ? clean.variants : [];
@@ -364,7 +382,7 @@ export function normalizeProductData(raw: any): ProductData {
         : [primaryImage];
 
     const varPrice = Number(c.price) || price;
-    const varPriceInr = Number(c.priceInr) || Math.round(varPrice * 83);
+    const varPriceInr = Number(c.priceInr) || Math.round(varPrice * DEFAULT_USD_TO_INR_RATE);
     const varStock = typeof c.stock === "number" ? c.stock : 10;
 
     return {
@@ -392,12 +410,13 @@ export function normalizeProductData(raw: any): ProductData {
         specOverride: cv.specOverride || "Standard Architecture",
         variantSpecs: cv.variantSpecs,
         price: Number(cv.price) || price,
-        priceInr: Number(cv.priceInr) || Math.round((Number(cv.price) || price) * 83),
+        priceInr: Number(cv.priceInr) || Math.round((Number(cv.price) || price) * DEFAULT_USD_TO_INR_RATE),
         discount: Number(cv.discount) || 0,
         stock: typeof cv.stock === "number" ? cv.stock : 10,
         images: Array.isArray(cv.images) && cv.images.length > 0
           ? cv.images
           : [cv.image || normalizedColorVariants[idx % normalizedColorVariants.length]?.image || "/images/hero-silver.jpg"],
+        restockProcess: cv.restockProcess,
       }));
   } else if (rawVariantGroups.length > 0) {
     normalizedChildVariants = variantGroupsToChildVariants(rawVariantGroups, price);
@@ -407,7 +426,7 @@ export function normalizeProductData(raw: any): ProductData {
       color: v.name,
       specOverride: "Standard Architecture",
       price: v.price || price,
-      priceInr: v.priceInr || Math.round((v.price || price) * 83),
+      priceInr: v.priceInr || Math.round((v.price || price) * DEFAULT_USD_TO_INR_RATE),
       discount: 0,
       stock: v.stock || 10,
       images: v.images && v.images.length > 0 ? v.images : [v.image || "/images/hero-silver.jpg"],
@@ -417,7 +436,13 @@ export function normalizeProductData(raw: any): ProductData {
   // Ensure normalizedVariantGroups
   const normalizedVariantGroups: IVariantGroup[] =
     rawVariantGroups.length > 0
-      ? rawVariantGroups
+      ? rawVariantGroups.map((g: any) => ({
+        ...g,
+        colors: (g.colors || []).map((c: any) => ({
+          ...c,
+          restockProcess: c.restockProcess,
+        })),
+      }))
       : childVariantsToVariantGroups(normalizedChildVariants, basePrice);
 
   const totalCalculatedStock = normalizedChildVariants.reduce(
@@ -458,6 +483,7 @@ export function normalizeProductData(raw: any): ProductData {
     childVariants: normalizedChildVariants,
     variantGroups: normalizedVariantGroups,
     lastRevalidatedAt: clean.lastRevalidatedAt || new Date().toISOString(),
+    restockProcess: clean.restockProcess,
   };
 }
 
@@ -704,6 +730,7 @@ export interface ProductData {
     [key: string]: string | undefined;
   };
   lastRevalidatedAt: string;
+  restockProcess?: IRestockProcess;
 }
 
 export interface Review {
@@ -757,7 +784,17 @@ export interface OrderCancellation {
   adminNotes?: string;
 }
 
-export type TransportMode = "bike" | "van" | "truck" | "train" | "plane";
+export type TransportMode = "bike" | "van" | "truck" | "train" | "ship" | "plane";
+
+export interface GateOtpPodImages {
+  labelImage?: string;
+  productImage?: string;
+  labelImageName?: string;
+  productImageName?: string;
+  labelImageSize?: number;
+  productImageSize?: number;
+  uploadedAt?: string;
+}
 
 export interface GateOtpSession {
   active: boolean;
@@ -766,6 +803,85 @@ export interface GateOtpSession {
   expiresAt?: string;
   remainingSeconds?: number;
   verified?: boolean;
+  podImages?: GateOtpPodImages;
+}
+
+export type HubQueueStatus = "incoming" | "received" | "sorting" | "loading" | "outgoing" | "gate_handover" | "delivered";
+
+export type DispatchCategory = "b2b_bulk_freight" | "b2c_individual_courier";
+
+export interface RailFreightDetails {
+  parcelId?: string;
+  consignementGroupId?: string;
+  pwbNumber?: string; // Parcel Way Bill / PRR number
+  trainNumber?: string;
+  trainName?: string;
+  departureDate?: string;
+  sourceStationCode?: string;
+  sourceStationName?: string;
+  departureTime?: string;
+  destinationStationCode?: string;
+  destinationStationName?: string;
+  arrivalTime?: string;
+  freightScale?: "Scale-R" | "Scale-P" | "Scale-S"; // Rajdhani, Premier, Standard
+  spaceAllocationId?: "F-SLR" | "R-SLR" | "VPU" | "VP" | "WAGON";
+  wagonNumber?: string;
+  loadingManifestId?: string;
+}
+
+export interface AirCargoDetails {
+  awbNumber?: string; // Air Waybill (IATA 11-digit e.g. 098-84729103)
+  flightNumber?: string;
+  airline?: string;
+  flightDate?: string;
+  sourceAirportCode?: string; // IATA e.g. DEL
+  sourceAirportName?: string;
+  departureTime?: string;
+  destAirportCode?: string; // IATA e.g. CCU
+  destAirportName?: string;
+  arrivalTime?: string;
+  uldId?: string; // Unit Load Device e.g. AKE-14920-6E
+  bayLocation?: "Forward Hold (FWD-01)" | "Aft Hold (AFT-02)" | "Bulk Cargo Bay" | "Main Deck";
+  flightManifestId?: string;
+}
+
+export interface CourierServiceDetails {
+  provider: "anc_custom" | "bluedart" | "delhivery" | "shiprocket" | "shadowfax" | "indiapost" | "xpressbees" | "dtdc";
+  providerName: string;
+  serviceType: "air_express" | "surface" | "same_day" | "hyperlocal";
+  trackingAwb: string;
+  pickupManifestId?: string;
+  estimatedDeliveryDays?: number;
+  riderName?: string;
+  riderContact?: string;
+}
+
+export interface ShipmentRouteLeg {
+  sequence: number;
+  hubId: string;
+  hubCode?: string;
+  hubName: string;
+  region: string;
+  status: "pending" | "incoming" | "received" | "sorting" | "loading" | "dispatched" | "completed";
+  transportMode?: TransportMode;
+  vehicleNo?: string;
+  vehiclePlate?: string;
+  containerId?: string;
+  dispatchCategory?: DispatchCategory;
+  railFreight?: RailFreightDetails;
+  airCargo?: AirCargoDetails;
+  courierService?: CourierServiceDetails;
+  dispatchedAt?: string;
+  receivedAt?: string;
+}
+
+export interface LogisticsHub {
+  id: string;
+  code: string;
+  name: string;
+  region: string;
+  country: string;
+  type: "origin" | "air_transit" | "regional_gateway" | "local_delivery";
 }
 
 export interface Order {
@@ -794,13 +910,26 @@ export interface Order {
   razorpayRefundId?: string;
   refundAmount?: number;
   refundInitiatedAt?: string;
-  deliveryStatus?: "processing" | "dispatched" | "in_transit" | "out_for_delivery" | "delivered" | "cancelled";
+  deliveryStatus?: "order_created" | "order_packed" | "locations_arrive" | "processing" | "dispatched" | "in_transit" | "out_for_delivery" | "delivered" | "cancelled";
   currentHub?: string;
+  currentHubId?: string;
+  currentRegion?: string;
+  nextHub?: string;
+  nextHubId?: string;
+  nextRegion?: string;
+  hubQueueStatus?: HubQueueStatus;
+  containerId?: string;
+  dispatchCategory?: DispatchCategory;
+  railFreight?: RailFreightDetails;
+  airCargo?: AirCargoDetails;
+  courierService?: CourierServiceDetails;
+  route?: ShipmentRouteLeg[];
   trackingNumber?: string;
   transitMode?: TransportMode;
   vehicleNo?: string;
   manifestVerified?: boolean;
   gateOtpSession?: GateOtpSession;
+  podImages?: GateOtpPodImages;
   cancellation?: OrderCancellation;
   events?: OrderEvent[];
   createdAt: string;

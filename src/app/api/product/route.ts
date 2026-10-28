@@ -4,7 +4,7 @@ import { connectDB } from "@/lib/db";
 import { ProductModel } from "@/lib/models";
 import { revalidatePath } from "next/cache";
 import { dispatchEventBridgeEvent } from "@/lib/aws-services";
-import { IVariant, IVariantGroup, IVariantColor, variantGroupsToChildVariants, normalizeProductData } from "@/types";
+import { IVariant, IVariantGroup, IVariantColor, variantGroupsToChildVariants, normalizeProductData, DEFAULT_USD_TO_INR_RATE } from "@/types";
 
 export async function GET(req: NextRequest) {
   try {
@@ -123,8 +123,23 @@ export async function PATCH(req: NextRequest) {
     const targetSlug = slug || "form-01";
     let updatedProduct = store.getProduct(targetSlug);
 
+    // Restock Pipeline: Apply Restock Process (In-Progress PO)
+    if (action === "apply-restock-process") {
+      const targetQuantity = Number(body.targetQty) || 5;
+      const days = Number(body.leadTimeDays) || 5;
+      updatedProduct = store.applyRestockProcess(targetSlug, variantSku, targetQuantity, days, body.note);
+    }
+    // Restock Pipeline: Receive arrived stock (Partial or Complete)
+    else if (action === "receive-restock-stock") {
+      const arrivedQty = Number(body.receivedQty) || 1;
+      updatedProduct = store.receiveRestockStock(targetSlug, variantSku, arrivedQty);
+    }
+    // Restock Pipeline: Cancel Restock Process
+    else if (action === "cancel-restock-process") {
+      updatedProduct = store.cancelRestockProcess(targetSlug, variantSku);
+    }
     // 1. Direct Add Color to Variant Architecture
-    if (action === "addColor" && groupId && color) {
+    else if (action === "addColor" && groupId && color) {
       updatedProduct = store.addColorToVariantGroup(targetSlug, groupId, color);
     }
     // 2. Direct Remove Color from Architecture
@@ -143,7 +158,7 @@ export async function PATCH(req: NextRequest) {
     else if (variantGroups && Array.isArray(variantGroups)) {
       const effBasePrice = typeof basePrice === "number" ? basePrice : (typeof price === "number" ? price : updatedProduct.basePrice);
       const effPrice = typeof price === "number" ? price : effBasePrice;
-      const effPriceInr = typeof priceInr === "number" ? priceInr : (typeof effPrice === "number" ? Math.round(effPrice * 83) : updatedProduct.priceInr);
+      const effPriceInr = typeof priceInr === "number" ? priceInr : (typeof effPrice === "number" ? Math.round(effPrice * DEFAULT_USD_TO_INR_RATE) : updatedProduct.priceInr);
 
       updatedProduct = store.updateProductWithVariants({
         slug: targetSlug,
@@ -163,7 +178,7 @@ export async function PATCH(req: NextRequest) {
     else if (childVariants && Array.isArray(childVariants)) {
       const effBasePrice = typeof basePrice === "number" ? basePrice : (typeof price === "number" ? price : updatedProduct.basePrice);
       const effPrice = typeof price === "number" ? price : effBasePrice;
-      const effPriceInr = typeof priceInr === "number" ? priceInr : (typeof effPrice === "number" ? Math.round(effPrice * 83) : updatedProduct.priceInr);
+      const effPriceInr = typeof priceInr === "number" ? priceInr : (typeof effPrice === "number" ? Math.round(effPrice * DEFAULT_USD_TO_INR_RATE) : updatedProduct.priceInr);
 
       updatedProduct = store.updateProductWithVariants({
         slug: targetSlug,
@@ -235,23 +250,27 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Dispatch AWS EventBridge Event: StockUpdated
-    await dispatchEventBridgeEvent("StockUpdated", {
-      slug: targetSlug,
-      productId: updatedProduct.productId,
-      newStock: updatedProduct.stock,
-      activeDiscount: updatedProduct.activeDiscount,
-      variantUpdated: variantSku || (variantUpdates ? "batch-restock" : "all"),
-      trigger: "RealTimeInventoryAdjustment",
-    });
+    try {
+      await dispatchEventBridgeEvent("StockUpdated", {
+        slug: targetSlug,
+        productId: updatedProduct.productId,
+        newStock: updatedProduct.stock,
+        activeDiscount: updatedProduct.activeDiscount,
+        variantUpdated: variantSku || (variantUpdates ? "batch-restock" : "all"),
+        trigger: "RealTimeInventoryAdjustment",
+      });
+    } catch (e) {
+      console.warn("EventBridge event dispatch warning:", e);
+    }
 
     return NextResponse.json({
       success: true,
       product: updatedProduct,
       message: "Inventory updated instantaneously and edge cache purged.",
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in /api/product PATCH:", error);
-    return NextResponse.json({ success: false, error: "Failed to update product" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error?.message || "Failed to update product", stack: error?.stack }, { status: 500 });
   }
 }
 

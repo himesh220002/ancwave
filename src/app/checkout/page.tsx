@@ -28,7 +28,7 @@ import {
 import confetti from "canvas-confetti";
 import { useCart, CustomerCheckoutDetails } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { Order, ShippingSettings } from "@/types";
+import { Order, ShippingSettings, DEFAULT_USD_TO_INR_RATE } from "@/types";
 import { toast } from "@/components/Toaster";
 import { downloadOrderInvoicePdf } from "@/lib/invoice-generator";
 
@@ -183,11 +183,11 @@ export default function CheckoutPage() {
   const inrSubtotal = items.reduce((sum, item) => {
     const itemInr = typeof item.priceInr === "number" && item.priceInr > 0
       ? item.priceInr
-      : Math.round(item.price * 83);
+      : Math.round(item.price * DEFAULT_USD_TO_INR_RATE);
     return sum + itemInr * item.quantity;
   }, 0);
   const inrShipping = activeShippingInr;
-  const inrTax = Math.round(tax * 83);
+  const inrTax = Math.round(tax * DEFAULT_USD_TO_INR_RATE);
   const inrTotal = Math.max(1, inrSubtotal + inrShipping + inrTax);
 
   const formattedTotal = isIndia ? `₹${inrTotal.toLocaleString("en-IN")}` : `$${finalTotal.toFixed(2)}`;
@@ -938,7 +938,7 @@ export default function CheckoutPage() {
                             </h4>
                             <span className="font-semibold text-xs text-zinc-900 shrink-0">
                               {isIndia
-                                ? `₹${((item.priceInr ? item.priceInr : Math.round(item.price * 83)) * item.quantity).toLocaleString("en-IN")}`
+                                ? `₹${((item.priceInr ? item.priceInr : Math.round(item.price * DEFAULT_USD_TO_INR_RATE)) * item.quantity).toLocaleString("en-IN")}`
                                 : `$${(item.price * item.quantity).toFixed(2)}`}
                             </span>
                           </div>

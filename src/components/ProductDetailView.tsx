@@ -36,6 +36,7 @@ import {
   IReview,
   IVariant,
   MediaGalleryItem,
+  DEFAULT_USD_TO_INR_RATE,
 } from "@/types";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -188,12 +189,12 @@ export function ProductDetailView({
     ? currentTwsOption.price
     : (currentChildVariant?.price ?? currentVariant?.price ?? p.price);
   const activePriceInr = currentTwsOption
-    ? Math.round(currentTwsOption.price * 83)
+    ? Math.round(currentTwsOption.price * DEFAULT_USD_TO_INR_RATE)
     : (currentChildVariant?.priceInr ??
        currentVariant?.priceInr ??
        (activePrice < 1
-         ? Number((activePrice * 83).toFixed(2))
-         : (p.priceInr ?? Math.round(activePrice * 83))));
+         ? Number((activePrice * DEFAULT_USD_TO_INR_RATE).toFixed(2))
+         : (p.priceInr ?? Math.round(activePrice * DEFAULT_USD_TO_INR_RATE))));
   const activeOriginalPrice = currentTwsOption
     ? currentTwsOption.originalPrice
     : p.originalPrice;
@@ -1757,7 +1758,7 @@ export function ProductDetailView({
                       ${rel.price}
                     </span>
                     <span className="block text-[10px] font-mono text-zinc-400">
-                      approx. ₹{Math.round(rel.price * 83).toLocaleString("en-IN")}
+                      approx. ₹{Math.round(rel.price * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")}
                     </span>
                   </div>
 

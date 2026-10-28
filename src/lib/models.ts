@@ -181,6 +181,9 @@ const OrderSchema = new Schema(
       default: "processing",
     },
     currentHub: String,
+    currentRegion: String,
+    nextHub: String,
+    nextRegion: String,
     trackingNumber: String,
     cancellation: {
       requested: { type: Boolean, default: false },

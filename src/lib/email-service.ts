@@ -1,4 +1,4 @@
-import { Order } from "@/types";
+import { Order, DEFAULT_USD_TO_INR_RATE } from "@/types";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 
 export interface CustomRazorpayEmailData {
@@ -54,11 +54,11 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
   const shipping = Math.max(0, Math.round((total - subtotal - tax) * 100) / 100);
 
   const shortAmount = isIndia
-    ? `₹${Math.round(total * 83).toLocaleString("en-IN")}`
+    ? `₹${Math.round(total * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")}`
     : `$${total.toFixed(2)} USD`;
 
   const amountFormatted = isIndia
-    ? `₹${Math.round(total * 83).toLocaleString("en-IN")} ($${total.toFixed(2)} USD)`
+    ? `₹${Math.round(total * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")} ($${total.toFixed(2)} USD)`
     : `$${total.toFixed(2)} USD`;
 
   const itemsListString = rawItems
@@ -766,7 +766,7 @@ export function generateRefundEmail(order: Order, refundId: string, refundAmount
   const isIndia = order.customer.country === "India" || (order.customer.contact && order.customer.contact.startsWith("+91"));
   const amt = refundAmount ?? order.total;
   const refundFormatted = isIndia
-    ? `₹${Math.round(amt * 83).toLocaleString("en-IN")} ($${amt.toFixed(2)} USD)`
+    ? `₹${Math.round(amt * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")} ($${amt.toFixed(2)} USD)`
     : `$${amt.toFixed(2)} USD`;
 
   const subject = `Refund Initiated: ${refundFormatted} for Order #${order.orderNumber} · ancwave`;

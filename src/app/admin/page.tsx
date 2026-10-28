@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { STANDARD_HUBS, getHubById, getHubOperationsQueue, COURIER_PROVIDERS_CATALOG } from "@/lib/logistics-service";
 import {
   Cpu,
   RefreshCw,
@@ -61,9 +62,16 @@ import {
   Bike as Bicycle,
   Van,
   Train,
+  Ship,
   Plane,
   ArrowDownLeft,
   ArrowUpRight,
+  Navigation,
+  FileText,
+  CheckCheck,
+  AlertCircle,
+  Compass,
+  Calendar,
 } from "lucide-react";
 import {
   ProductData,
@@ -77,6 +85,10 @@ import {
   Review,
   IReview,
   ECOMMERCE_CATEGORIES,
+  RailFreightDetails,
+  AirCargoDetails,
+  CourierServiceDetails,
+  DispatchCategory,
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/components/Toaster";
@@ -148,6 +160,7 @@ export default function AdminPage() {
       vehicleNo?: string;
       note?: string;
       isSaving?: boolean;
+      savingStatus?: string;
     };
   }>({});
   const [orderNewEvent, setOrderNewEvent] = useState<{
@@ -158,21 +171,328 @@ export default function AdminPage() {
     };
   }>({});
 
+  // Multi-Hub Destination Routing & Queue Operations State
+  const [activeHubId, setActiveHubId] = useState<string>("HUB-DEL-01");
+  const [hubTab, setHubTab] = useState<"incoming" | "received" | "sorting" | "loading" | "outgoing" | "gate">("incoming");
+  const [waybillScanInput, setWaybillScanInput] = useState<string>("");
+  const [filterDestinationHub, setFilterDestinationHub] = useState<string>("all");
+  const [activeContainerId, setActiveContainerId] = useState<string>("DEL-CCU-101");
+  const [targetDestinationHubId, setTargetDestinationHubId] = useState<string>("HUB-CCU-01");
+  const [hubActionLoading, setHubActionLoading] = useState<string | null>(null);
+
   // Delivery Hub & Doorstep Gate Verification State
   const [deliverySelectedOrderId, setDeliverySelectedOrderId] = useState<string>("ANC-763954");
-  const [transitMode, setTransitMode] = useState<TransportMode>("van");
-  const [vehicleNo, setVehicleNo] = useState<string>("OR-EXP-8891");
-  const [hubName, setHubName] = useState<string>("Frankfurt Central Air Logistics Hub");
-  const [hubRegion, setHubRegion] = useState<string>("Frankfurt");
+  const [transitMode, setTransitMode] = useState<TransportMode>("truck");
+  const [vehicleNo, setVehicleNo] = useState<string>("DL-01-TRK-8812");
+  const [hubName, setHubName] = useState<string>("Delhi National Fulfillment Hub");
+  const [hubRegion, setHubRegion] = useState<string>("Delhi NCR, IN");
+  const [nextHubName, setNextHubName] = useState<string>("Kolkata Eastern Logistics Hub");
+  const [nextHubRegion, setNextHubRegion] = useState<string>("West Bengal, IN");
   const [manifestVerified, setManifestVerified] = useState<boolean>(true);
   const [isTransitLogging, setIsTransitLogging] = useState<boolean>(false);
   const [otpTriggered, setOtpTriggered] = useState<boolean>(false);
 
-  const [deliveryGateStatus, setDeliveryGateStatus] = useState<"in_transit" | "gate_reached" | "otp_sent" | "delivered">("in_transit");
+  // Train (Indian Railways PMS) Primary & Additional Fields
+  const [trainNumber, setTrainNumber] = useState<string>("12302");
+  const [trainDateTime, setTrainDateTime] = useState<string>("2026-10-28T14:05");
+  const [showRailExtraDetails, setShowRailExtraDetails] = useState<boolean>(false);
+  const [railParcelId, setRailParcelId] = useState<string>("PRC-ER-20261028-091");
+  const [railPwbNumber, setRailPwbNumber] = useState<string>("PWB-HWH-74829");
+  const [railConsignmentGroupId, setRailConsignmentGroupId] = useState<string>("GRP-KOL-ASN-001");
+  const [railSourceStation, setRailSourceStation] = useState<string>("HWH (Howrah Jn)");
+  const [railDestStation, setRailDestStation] = useState<string>("ASN (Asansol Jn)");
+  const [railArrivalTime, setRailArrivalTime] = useState<string>("17:15");
+  const [railFreightScale, setRailFreightScale] = useState<"Scale-R" | "Scale-P" | "Scale-S">("Scale-R");
+  const [railSpaceAllocation, setRailSpaceAllocation] = useState<"F-SLR" | "R-SLR" | "VPU" | "VP" | "WAGON">("F-SLR");
+  const [railLoadingManifestId, setRailLoadingManifestId] = useState<string>("LMF-HWH-ASN-4402");
+
+  // Flight (Air Cargo IATA) Primary & Additional Fields
+  const [flightNumber, setFlightNumber] = useState<string>("6E-204");
+  const [flightDateTime, setFlightDateTime] = useState<string>("2026-10-28T09:30");
+  const [showAirExtraDetails, setShowAirExtraDetails] = useState<boolean>(false);
+  const [airAwbNumber, setAirAwbNumber] = useState<string>("098-84729103");
+  const [airSourceAirport, setAirSourceAirport] = useState<string>("DEL (Delhi Cargo)");
+  const [airDestAirport, setAirDestAirport] = useState<string>("CCU (Kolkata Cargo)");
+  const [airUldId, setAirUldId] = useState<string>("AKE-14920-6E");
+  const [airBayLocation, setAirBayLocation] = useState<"Forward Hold (FWD-01)" | "Aft Hold (AFT-02)" | "Bulk Cargo Bay" | "Main Deck">("Forward Hold (FWD-01)");
+  const [airFlightManifest, setAirFlightManifest] = useState<string>("FLM-6E-DEL-CCU-88");
+
+  // In-House & Strategic Courier Partner Fields (ANC Custom Delivery at Top)
+  const [courierProvider, setCourierProvider] = useState<"anc_custom" | "bluedart" | "delhivery" | "shiprocket" | "shadowfax" | "indiapost" | "xpressbees" | "dtdc">("anc_custom");
+  const [courierTrackingAwb, setCourierTrackingAwb] = useState<string>("ANC-LOG-78294402");
+  const [showCourierExtraDetails, setShowCourierExtraDetails] = useState<boolean>(false);
+  const [courierRiderName, setCourierRiderName] = useState<string>("Rakesh Sharma (ANC Fleet)");
+  const [courierRiderContact, setCourierRiderContact] = useState<string>("+91 98301 23456");
+
+  // Architecture Comparison Reference Drawer
+  const [showFreightArchitectureRef, setShowFreightArchitectureRef] = useState<boolean>(false);
+
+  const [deliveryGateStatus, setDeliveryGateStatus] = useState<"in_transit" | "gate_reached" | "otp_sent" | "otp_verified" | "delivered">("in_transit");
   const [deliveryOtpValue, setDeliveryOtpValue] = useState<string>("");
   const [generatedOtp, setGeneratedOtp] = useState<string>("849201");
   const [deliveryOtpRemainingSeconds, setDeliveryOtpRemainingSeconds] = useState<number>(300);
-  const [deliveryPhotoProof, setDeliveryPhotoProof] = useState<string | null>(null);
+  const [labelProof, setLabelProof] = useState<{
+    file: File | null;
+    dataUrl: string | null;
+    name: string;
+    size: number;
+  } | null>(null);
+  const [productProof, setProductProof] = useState<{
+    file: File | null;
+    dataUrl: string | null;
+    name: string;
+    size: number;
+  } | null>(null);
+  const [isFinalizingPod, setIsFinalizingPod] = useState<boolean>(false);
+  const [auditWaybillModalOrder, setAuditWaybillModalOrder] = useState<Order | null>(null);
+  const [podModalImage, setPodModalImage] = useState<{
+    src: string;
+    title: string;
+    subtitle: string;
+    name?: string;
+    size?: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPodModalImage(null);
+      }
+    };
+    if (podModalImage) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [podModalImage]);
+
+  // URL & LocalStorage Persistence: Keep user on exact tab and open order on refresh
+  const [hasHydratedLocation, setHasHydratedLocation] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      setTrainDateTime(`${today}T14:05`);
+      setFlightDateTime(`${today}T09:30`);
+    } catch {
+      // client date init fallback
+    }
+
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabFromUrl = params.get("tab") as AdminTab | null;
+      const orderFromUrl = params.get("order") || params.get("orderId");
+      const slugFromUrl = params.get("slug") || params.get("product");
+      const hubFromUrl = params.get("hub");
+
+      const savedTab = localStorage.getItem("ancwave_admin_active_tab") as AdminTab | null;
+      const savedOrder = localStorage.getItem("ancwave_admin_expanded_order");
+      const savedSlug = localStorage.getItem("ancwave_admin_selected_slug");
+      const savedHub = localStorage.getItem("ancwave_admin_active_hub");
+
+      const validTabs: AdminTab[] = [
+        "dashboard",
+        "orders",
+        "delivery",
+        "inventory",
+        "variation-engine",
+        "shipping",
+        "reviews",
+        "team",
+      ];
+
+      const initialTab =
+        tabFromUrl && validTabs.includes(tabFromUrl)
+          ? tabFromUrl
+          : savedTab && validTabs.includes(savedTab)
+            ? savedTab
+            : null;
+
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
+
+      const initialOrder = orderFromUrl || savedOrder;
+      if (initialOrder) {
+        setExpandedOrderId(initialOrder);
+      }
+
+      const initialSlug = slugFromUrl || savedSlug;
+      if (initialSlug) {
+        setSelectedSlug(initialSlug);
+      }
+
+      const initialHub = hubFromUrl || savedHub;
+      if (initialHub) {
+        setActiveHubId(initialHub);
+      }
+    } catch (e) {
+      console.warn("Location hydration notice:", e);
+    } finally {
+      setHasHydratedLocation(true);
+    }
+  }, []);
+
+  // Sync activeTab to URL and localStorage
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedLocation) return;
+    try {
+      localStorage.setItem("ancwave_admin_active_tab", activeTab);
+
+      const url = new URL(window.location.href);
+      if (activeTab === "dashboard") {
+        url.searchParams.delete("tab");
+      } else {
+        url.searchParams.set("tab", activeTab);
+      }
+      window.history.replaceState(null, "", url.toString());
+    } catch (e) {
+      console.warn("Tab sync notice:", e);
+    }
+  }, [activeTab, hasHydratedLocation]);
+
+  // Sync expandedOrderId to URL and localStorage
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedLocation) return;
+    try {
+      const url = new URL(window.location.href);
+
+      if (expandedOrderId) {
+        const matchedOrder = orders.find(
+          (o) => o.id === expandedOrderId || o.orderNumber === expandedOrderId
+        );
+        const orderIdentifier = matchedOrder?.orderNumber || expandedOrderId;
+        localStorage.setItem("ancwave_admin_expanded_order", orderIdentifier);
+        url.searchParams.set("order", orderIdentifier);
+      } else {
+        localStorage.removeItem("ancwave_admin_expanded_order");
+        url.searchParams.delete("order");
+        url.searchParams.delete("orderId");
+      }
+      window.history.replaceState(null, "", url.toString());
+    } catch (e) {
+      console.warn("Order sync notice:", e);
+    }
+  }, [expandedOrderId, orders, hasHydratedLocation]);
+
+  // Sync selectedSlug to URL and localStorage
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedLocation) return;
+    try {
+      localStorage.setItem("ancwave_admin_selected_slug", selectedSlug);
+
+      const url = new URL(window.location.href);
+      if (selectedSlug && selectedSlug !== "form-01") {
+        url.searchParams.set("slug", selectedSlug);
+      } else {
+        url.searchParams.delete("slug");
+      }
+      window.history.replaceState(null, "", url.toString());
+    } catch (e) {
+      console.warn("Slug sync notice:", e);
+    }
+  }, [selectedSlug, hasHydratedLocation]);
+
+  // Sync activeHubId to URL and localStorage
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedLocation) return;
+    try {
+      localStorage.setItem("ancwave_admin_active_hub", activeHubId);
+
+      const url = new URL(window.location.href);
+      if (activeHubId && activeHubId !== "HUB-DEL-01") {
+        url.searchParams.set("hub", activeHubId);
+      } else {
+        url.searchParams.delete("hub");
+      }
+      window.history.replaceState(null, "", url.toString());
+    } catch (e) {
+      console.warn("Hub sync notice:", e);
+    }
+  }, [activeHubId, hasHydratedLocation]);
+
+  // Smooth scroll into view when restoring an open order
+  useEffect(() => {
+    if (expandedOrderId && activeTab === "orders" && orders.length > 0) {
+      const timer = setTimeout(() => {
+        const el =
+          document.getElementById(`order-console-${expandedOrderId}`) ||
+          document.getElementById(`order-row-${expandedOrderId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [expandedOrderId, activeTab, orders.length]);
+
+  // Computed Hub Queue for the active hub station
+  const hubQueue = useMemo(() => {
+    return getHubOperationsQueue(orders, activeHubId);
+  }, [orders, activeHubId]);
+
+  // Precomputed operational queue breakdown [incoming, received, sorting, loading, outgoing, gateHandover]
+  // and sum of the 5 core hub operations for every standard hub in the dropdown
+  const allHubsQueueStats = useMemo(() => {
+    return STANDARD_HUBS.map((h) => {
+      const q = getHubOperationsQueue(orders, h.id);
+      const inCount = q.totals.incoming;
+      const recCount = q.totals.received;
+      const sortCount = q.totals.sorting;
+      const loadCount = q.totals.loading;
+      const outCount = q.totals.outgoing;
+      const gateCount = q.totals.gateHandover;
+      const sum5 = inCount + recCount + sortCount + loadCount + outCount;
+      const totalAll = sum5 + gateCount;
+      const countsArray = [inCount, recCount, sortCount, loadCount, outCount, gateCount];
+      return {
+        hub: h,
+        queue: q,
+        inCount,
+        recCount,
+        sortCount,
+        loadCount,
+        outCount,
+        gateCount,
+        sum5,
+        totalAll,
+        countsArray,
+        formattedArray: `[${countsArray.join(",")}]`,
+      };
+    });
+  }, [orders]);
+
+  const activeHubStats = useMemo(() => {
+    return (
+      allHubsQueueStats.find((s) => s.hub.id === activeHubId) || {
+        hub: getHubById(activeHubId) || STANDARD_HUBS[0],
+        queue: hubQueue,
+        inCount: hubQueue.totals.incoming,
+        recCount: hubQueue.totals.received,
+        sortCount: hubQueue.totals.sorting,
+        loadCount: hubQueue.totals.loading,
+        outCount: hubQueue.totals.outgoing,
+        gateCount: hubQueue.totals.gateHandover,
+        sum5:
+          hubQueue.totals.incoming +
+          hubQueue.totals.received +
+          hubQueue.totals.sorting +
+          hubQueue.totals.loading +
+          hubQueue.totals.outgoing,
+        totalAll: hubQueue.totals.totalActive,
+        countsArray: [
+          hubQueue.totals.incoming,
+          hubQueue.totals.received,
+          hubQueue.totals.sorting,
+          hubQueue.totals.loading,
+          hubQueue.totals.outgoing,
+          hubQueue.totals.gateHandover,
+        ],
+        formattedArray: `[${hubQueue.totals.incoming},${hubQueue.totals.received},${hubQueue.totals.sorting},${hubQueue.totals.loading},${hubQueue.totals.outgoing},${hubQueue.totals.gateHandover}]`,
+      }
+    );
+  }, [allHubsQueueStats, activeHubId, hubQueue]);
 
   // Quick select items for compact button-driven control unit
   const vehicleModes = [
@@ -180,6 +500,7 @@ export default function AdminPage() {
     { id: "van" as const, label: "Van", icon: Van },
     { id: "truck" as const, label: "Truck", icon: Truck },
     { id: "train" as const, label: "Train", icon: Train },
+    { id: "ship" as const, label: "Ship", icon: Ship },
     { id: "plane" as const, label: "Plane", icon: Plane },
   ];
 
@@ -220,7 +541,7 @@ export default function AdminPage() {
   const [masterBasePrice, setMasterBasePrice] = useState<number>(349);
   const [masterBaseDiscount, setMasterBaseDiscount] = useState<number>(0);
   const [adminCurrencyMode, setAdminCurrencyMode] = useState<"USD" | "INR">("USD");
-  const [exchangeRate, setExchangeRate] = useState<number>(83.0);
+  const [exchangeRate, setExchangeRate] = useState<number>(95.26);
   const [autoCascadePrice, setAutoCascadePrice] = useState<boolean>(true);
   const [quickPriceInput, setQuickPriceInput] = useState<number>(349);
   const [globalSpecsList, setGlobalSpecsList] = useState<{ key: string; value: string }[]>([]);
@@ -282,6 +603,13 @@ export default function AdminPage() {
   const [restockTargetProduct, setRestockTargetProduct] = useState<ProductData | null>(null);
   const [variantStockDrafts, setVariantStockDrafts] = useState<Record<string, number>>({});
   const [isSubmittingRestock, setIsSubmittingRestock] = useState<boolean>(false);
+
+  // Restock Pipeline Process State (In-Progress Procurement POs)
+  const [restockPipelineOpenSku, setRestockPipelineOpenSku] = useState<string | null>(null);
+  const [restockTargetQtyInput, setRestockTargetQtyInput] = useState<Record<string, number>>({});
+  const [restockLeadDaysInput, setRestockLeadDaysInput] = useState<Record<string, number>>({});
+  const [restockReceiveQtyInput, setRestockReceiveQtyInput] = useState<Record<string, number>>({});
+  const [isProcessingRestockPipeline, setIsProcessingRestockPipeline] = useState<boolean>(false);
 
   // Dynamic Product Creator Modal State (10 Top-Selling E-Commerce Categories)
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState<boolean>(false);
@@ -1278,6 +1606,148 @@ export default function AdminPage() {
     }
   };
 
+  // Restock Pipeline: Apply Restock Process (In-Progress PO)
+  const handleApplyRestockProcess = async (sku: string) => {
+    if (!restockTargetProduct) return;
+    const targetQty = restockTargetQtyInput[sku] ?? 5;
+    const leadTimeDays = restockLeadDaysInput[sku] ?? 5;
+    setIsProcessingRestockPipeline(true);
+    try {
+      const res = await fetch("/api/product", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: restockTargetProduct.slug,
+          action: "apply-restock-process",
+          variantSku: sku,
+          targetQty,
+          leadTimeDays,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.product) {
+        setRestockTargetProduct(data.product);
+        setProduct(data.product);
+        if (data.product.variantGroups) setVariantGroups(data.product.variantGroups);
+        if (data.product.childVariants) setChildVariants(data.product.childVariants);
+        setRestockPipelineOpenSku(null);
+        toast({
+          type: "success",
+          title: "Restock Pipeline Initiated",
+          description: `Ordered ${targetQty} units for SKU ${sku} (est. ${leadTimeDays} days lead time). Restock pipeline is now active.`,
+        });
+        await fetchAdminData(restockTargetProduct.slug);
+      } else {
+        toast({
+          type: "error",
+          title: "Pipeline Failed",
+          description: data.error || "Could not start restock pipeline.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Pipeline Error",
+        description: err.message || "Failed to start restock pipeline.",
+      });
+    } finally {
+      setIsProcessingRestockPipeline(false);
+    }
+  };
+
+  // Restock Pipeline: Receive Arrived Stock (Partial or Complete)
+  const handleReceiveRestockStock = async (sku: string, maxRemaining: number) => {
+    if (!restockTargetProduct) return;
+    const receivedQty = restockReceiveQtyInput[sku] ?? Math.min(maxRemaining, 3);
+    if (receivedQty <= 0) return;
+    setIsProcessingRestockPipeline(true);
+    try {
+      const res = await fetch("/api/product", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: restockTargetProduct.slug,
+          action: "receive-restock-stock",
+          variantSku: sku,
+          receivedQty,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.product) {
+        setRestockTargetProduct(data.product);
+        setProduct(data.product);
+        if (data.product.variantGroups) setVariantGroups(data.product.variantGroups);
+        if (data.product.childVariants) setChildVariants(data.product.childVariants);
+        const matchingVariant = data.product.childVariants?.find((v: any) => v.sku === sku);
+        if (matchingVariant) {
+          setVariantStockDrafts((prev) => ({
+            ...prev,
+            [sku]: matchingVariant.stock,
+          }));
+        }
+        const remaining = matchingVariant?.restockProcess?.remainingQty ?? 0;
+        toast({
+          type: "success",
+          title: remaining === 0 ? "Restock Completed!" : "Stock Received & Added",
+          description: `+${receivedQty} units added to live stock! ${remaining > 0 ? `${remaining} units still in pipeline.` : "All units delivered."}`,
+        });
+        await fetchAdminData(restockTargetProduct.slug);
+      } else {
+        toast({
+          type: "error",
+          title: "Check-in Failed",
+          description: data.error || "Could not check in received stock.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Check-in Error",
+        description: err.message || "Failed to check in received stock.",
+      });
+    } finally {
+      setIsProcessingRestockPipeline(false);
+    }
+  };
+
+  // Restock Pipeline: Cancel Restock Process
+  const handleCancelRestockProcess = async (sku: string) => {
+    if (!restockTargetProduct) return;
+    setIsProcessingRestockPipeline(true);
+    try {
+      const res = await fetch("/api/product", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: restockTargetProduct.slug,
+          action: "cancel-restock-process",
+          variantSku: sku,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.product) {
+        setRestockTargetProduct(data.product);
+        setProduct(data.product);
+        if (data.product.variantGroups) setVariantGroups(data.product.variantGroups);
+        if (data.product.childVariants) setChildVariants(data.product.childVariants);
+        toast({
+          type: "info",
+          title: "Restock Pipeline Cancelled",
+          description: `Cancelled restock process for SKU ${sku}.`,
+        });
+        await fetchAdminData(restockTargetProduct.slug);
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Cancel Error",
+        description: err.message || "Failed to cancel restock pipeline.",
+      });
+    } finally {
+      setIsProcessingRestockPipeline(false);
+    }
+  };
+
   // Category Selector in Product Creator Modal
   const handleCategorySelect = (catSlug: string) => {
     setNewProdCategory(catSlug);
@@ -2021,6 +2491,64 @@ export default function AdminPage() {
     }
   };
 
+  // Direct Quick Delivery Status Controller (Single-Click Lifecycle Progression)
+  const handleQuickStatusUpdate = async (orderNumber: string, targetStatus: string, statusLabel: string) => {
+    setOrderDeliveryEdits((prev) => ({
+      ...prev,
+      [orderNumber]: { ...prev[orderNumber], isSaving: true, savingStatus: targetStatus },
+    }));
+
+    try {
+      const ord = orders.find((o) => o.orderNumber === orderNumber);
+      const edits = orderDeliveryEdits[orderNumber];
+      const mode = edits?.transitMode || ord?.transitMode || "van";
+      const hub = ord?.currentHub || "Main Fulfillment Facility";
+
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-delivery",
+          orderNumber,
+          deliveryStatus: targetStatus,
+          transitMode: mode,
+          currentHub: hub,
+          note: `Delivery lifecycle updated to ${statusLabel} via Quick Status Controller.`,
+          actor: user?.name || "Admin Logistics",
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        toast({
+          type: "success",
+          title: `Status: ${statusLabel}`,
+          description: `Consignment #${orderNumber} marked as ${statusLabel}.`,
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Update Failed",
+          description: data.error || "Could not update delivery status.",
+        });
+      }
+    } catch {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: "Failed to update delivery status.",
+      });
+    } finally {
+      setOrderDeliveryEdits((prev) => ({
+        ...prev,
+        [orderNumber]: { ...prev[orderNumber], isSaving: false, savingStatus: undefined },
+      }));
+    }
+  };
+
   // Add Custom Event / Audit Checkpoint Note
   const handleAddOrderEvent = async (orderNumber: string) => {
     const ev = orderNewEvent[orderNumber];
@@ -2094,11 +2622,18 @@ export default function AdminPage() {
     );
     if (selOrder) {
       if (selOrder.currentHub) setHubName(selOrder.currentHub);
+      if (selOrder.currentRegion) setHubRegion(selOrder.currentRegion);
+      if (selOrder.nextHub) setNextHubName(selOrder.nextHub);
+      if (selOrder.nextRegion) setNextHubRegion(selOrder.nextRegion);
       if (selOrder.transitMode) setTransitMode(selOrder.transitMode as TransportMode);
       if (selOrder.vehicleNo) setVehicleNo(selOrder.vehicleNo);
+      if (selOrder.containerId) setActiveContainerId(selOrder.containerId);
+      if (selOrder.nextHubId) setTargetDestinationHubId(selOrder.nextHubId);
       if (selOrder.manifestVerified !== undefined) setManifestVerified(selOrder.manifestVerified);
       if (selOrder.deliveryStatus === "delivered") {
         setDeliveryGateStatus("delivered");
+      } else if (selOrder.gateOtpSession?.verified) {
+        setDeliveryGateStatus("otp_verified");
       } else if (selOrder.gateOtpSession?.active) {
         setDeliveryGateStatus("otp_sent");
         if (selOrder.gateOtpSession.otp) setGeneratedOtp(selOrder.gateOtpSession.otp);
@@ -2109,6 +2644,169 @@ export default function AdminPage() {
       }
     }
   }, [deliverySelectedOrderId, orders]);
+
+  // Enterprise Hub Queue Transition Handler (Scan & Receive, Move to Sorting, Loading Bay, Outbound Dispatch)
+  const handleHubQueueAction = async (
+    orderNumber: string,
+    queueAction: "receive" | "to_sorting" | "to_loading" | "dispatch" | "container_dispatch",
+    customDestHubId?: string,
+    customTransitMode?: TransportMode,
+    customVehicleNo?: string,
+    customContainerId?: string
+  ) => {
+    const modeToUse = customTransitMode || transitMode;
+    const containerToUse = customContainerId !== undefined ? customContainerId : activeContainerId;
+
+    // Build payload models for Indian Railways PMS, IATA Air Cargo, or B2C Courier
+    const [trainDate, trainTime] = trainDateTime.includes("T")
+      ? trainDateTime.split("T")
+      : [trainDateTime, "14:05"];
+
+    const railFreightPayload: RailFreightDetails = {
+      trainNumber: trainNumber.trim() || "12302",
+      departureDate: trainDate || new Date().toISOString().split("T")[0],
+      departureTime: trainTime || "14:05",
+      trainName: `Train #${trainNumber.trim() || "12302"} Express`,
+      sourceStationCode: railSourceStation.split(" ")[0] || "HWH",
+      sourceStationName: railSourceStation,
+      destinationStationCode: railDestStation.split(" ")[0] || "ASN",
+      destinationStationName: railDestStation,
+      arrivalTime: railArrivalTime,
+      pwbNumber: railPwbNumber || `PWB-${trainNumber}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+      parcelId: railParcelId,
+      consignementGroupId: railConsignmentGroupId,
+      freightScale: railFreightScale,
+      spaceAllocationId: railSpaceAllocation,
+      loadingManifestId: railLoadingManifestId,
+    };
+
+    const [flightDate, flightTime] = flightDateTime.includes("T")
+      ? flightDateTime.split("T")
+      : [flightDateTime, "09:30"];
+
+    const airCargoPayload: AirCargoDetails = {
+      flightNumber: flightNumber.trim() || "6E-204",
+      flightDate: flightDate || new Date().toISOString().split("T")[0],
+      departureTime: flightTime || "09:30",
+      airline: "IndiGo Cargo",
+      sourceAirportCode: airSourceAirport.split(" ")[0] || "DEL",
+      sourceAirportName: airSourceAirport,
+      destAirportCode: airDestAirport.split(" ")[0] || "CCU",
+      destAirportName: airDestAirport,
+      awbNumber: airAwbNumber || `098-${Math.floor(10000000 + Math.random() * 90000000)}`,
+      uldId: airUldId || `AKE-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+      bayLocation: airBayLocation,
+      flightManifestId: airFlightManifest,
+    };
+
+    const courierObj = COURIER_PROVIDERS_CATALOG.find((c) => c.id === courierProvider);
+    const courierPayload: CourierServiceDetails = {
+      provider: courierProvider,
+      providerName: courierObj?.name || "ANC Custom Delivery (In-House Priority Fleet)",
+      serviceType: courierProvider === "anc_custom" ? "same_day" : "air_express",
+      trackingAwb: courierTrackingAwb || `ANC-LOG-${Math.floor(10000000 + Math.random() * 90000000)}`,
+      riderName: courierRiderName,
+      riderContact: courierRiderContact,
+      estimatedDeliveryDays: 1,
+    };
+
+    setHubActionLoading(orderNumber);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "hub-queue-action",
+          orderNumber,
+          hubId: activeHubId,
+          queueAction,
+          transitMode: modeToUse,
+          vehicleNo: modeToUse === "train" ? `IR-${trainNumber}` : modeToUse === "plane" ? `FLT-${flightNumber}` : customVehicleNo || vehicleNo,
+          containerId: modeToUse === "train" ? `TRN-${trainNumber}-${trainDate}` : modeToUse === "plane" ? airUldId : containerToUse,
+          destinationHubId: customDestHubId || targetDestinationHubId,
+          manifestVerified,
+          dispatchCategory: (modeToUse === "train" || modeToUse === "plane" || modeToUse === "ship") ? "b2b_bulk_freight" : "b2c_individual_courier",
+          railFreight: modeToUse === "train" ? railFreightPayload : undefined,
+          airCargo: modeToUse === "plane" ? airCargoPayload : undefined,
+          courierService: (modeToUse === "van" || modeToUse === "bike") ? courierPayload : undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        const actionLabels: Record<string, string> = {
+          receive: "Dock Scanned & Received",
+          to_sorting: "Staged in Sorting Dock",
+          to_loading: "Sorted & Moved to Vehicle Loading Bay",
+          dispatch: "Marked Loaded & Dispatched [On The Way]",
+          container_dispatch: "Container Dispatched",
+        };
+        toast({
+          type: "success",
+          title: actionLabels[queueAction] || "Hub Operation Complete",
+          description: `Consignment ${orderNumber} updated at ${hubQueue.hub.name}.`,
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Operation Failed",
+          description: data.error || "Could not update package status.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: err?.message || "Failed to contact logistics server.",
+      });
+    } finally {
+      setHubActionLoading(null);
+    }
+  };
+
+  const handleScanWaybill = () => {
+    const term = waybillScanInput.trim().toUpperCase();
+    if (!term) return;
+    const match = orders.find(
+      (o) =>
+        o.orderNumber.toUpperCase() === term ||
+        o.trackingNumber?.toUpperCase() === term ||
+        o.id.toUpperCase() === term
+    );
+    if (match) {
+      setDeliverySelectedOrderId(match.orderNumber);
+      toast({
+        type: "success",
+        title: "Consignment Located",
+        description: `Waybill ${match.orderNumber} located. Current location: ${match.currentHub}.`,
+      });
+      if (match.currentHubId) {
+        setActiveHubId(match.currentHubId);
+      }
+      if (match.deliveryStatus === "out_for_delivery") {
+        setHubTab("gate");
+      } else if (match.hubQueueStatus === "received") {
+        setHubTab("received");
+      } else if (match.hubQueueStatus === "sorting") {
+        setHubTab("sorting");
+      } else if (match.hubQueueStatus === "loading") {
+        setHubTab("loading");
+      } else if (match.hubQueueStatus === "outgoing") {
+        setHubTab("outgoing");
+      } else {
+        setHubTab("incoming");
+      }
+    } else {
+      toast({
+        type: "error",
+        title: "Waybill Not Found",
+        description: `No active package matches "${term}".`,
+      });
+    }
+  };
 
   // 5-Minute Alive OTP Countdown Timer
   useEffect(() => {
@@ -2175,11 +2873,9 @@ export default function AdminPage() {
     }
   };
 
-  // Doorstep Gate Arrival & 5-Min Alive OTP Trigger
+  // Doorstep Gate Arrival & 5-Min Alive OTP Trigger (No OTP leaked in popup!)
   const handleTriggerGateOtp = async () => {
     setOtpTriggered(true);
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(newOtp);
     setDeliveryGateStatus("otp_sent");
     setDeliveryOtpRemainingSeconds(300);
 
@@ -2190,7 +2886,6 @@ export default function AdminPage() {
         body: JSON.stringify({
           action: "trigger-gate-otp",
           orderNumber: deliverySelectedOrderId,
-          otp: newOtp,
           hubName,
           hubRegion,
         }),
@@ -2201,54 +2896,182 @@ export default function AdminPage() {
           prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
         );
       }
-    } catch (err) {
-      console.warn("Gate OTP sync notice:", err);
-    }
-
-    toast({
-      type: "info",
-      title: "5-Min Alive OTP Dispatched",
-      description: `[AWS SES Simulator] Revalidation code ${newOtp} dispatched to customer email. Dynamic 5-minute alive loop active.`,
-    });
-
-    setTimeout(() => setOtpTriggered(false), 4000);
-  };
-
-  // Doorstep Gate OTP Verification
-  const handleVerifyGateOtp = async () => {
-    if (deliveryOtpValue === generatedOtp || deliveryOtpValue === "123456" || deliveryOtpValue === "849201") {
-      setDeliveryGateStatus("delivered");
-      try {
-        const res = await fetch("/api/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "verify-gate-otp",
-            orderNumber: deliverySelectedOrderId,
-            otp: deliveryOtpValue,
-          }),
-        });
-        const data = await res.json();
-        if (data.success && data.order) {
-          setOrders((prev) =>
-            prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
-          );
-        }
-      } catch (err) {
-        console.warn("Verify OTP sync notice:", err);
-      }
       toast({
         type: "success",
-        title: "OTP Verified ✓",
-        description: `Customer verified parcel release at gate for ${deliverySelectedOrderId}. Proof of Delivery (PoD) unlocked.`,
+        title: "5-Min Alive OTP Dispatched",
+        description: `Secure 6-digit verification code sent to customer email. Dynamic 5-minute alive window active.`,
       });
-    } else {
+    } catch (err) {
+      console.warn("Gate OTP sync notice:", err);
       toast({
         type: "error",
-        title: "Invalid OTP",
-        description: "The entered code does not match customer OTP.",
+        title: "OTP Dispatch Error",
+        description: "Failed to dispatch OTP to customer email.",
+      });
+    } finally {
+      setTimeout(() => setOtpTriggered(false), 3000);
+    }
+  };
+
+  // Doorstep Gate OTP Verification (Authoritative API check, works globally & locally)
+  const handleVerifyGateOtp = async () => {
+    const code = deliveryOtpValue.trim();
+    if (!code || code.length !== 6) {
+      toast({
+        type: "error",
+        title: "Invalid OTP Format",
+        description: "Please enter the complete 6-digit code provided by the customer.",
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify-gate-otp",
+          orderNumber: deliverySelectedOrderId,
+          otp: code,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        setDeliveryGateStatus("otp_verified");
+        toast({
+          type: "success",
+          title: "OTP Verified ✓",
+          description: "Customer code verified. 2 mandatory Proof of Delivery photos (<10MB) required to finalize handover.",
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Invalid OTP",
+          description: data.error || "The entered code does not match customer OTP.",
+        });
+      }
+    } catch (err) {
+      console.warn("Verify OTP sync error:", err);
+      toast({
+        type: "error",
+        title: "Verification Error",
+        description: "Failed to communicate with authentication gateway.",
       });
     }
+  };
+
+  // Forceful Proof of Delivery (PoD) Image Submission (2 Images Under 10 MB)
+  const handleFinalizePod = async () => {
+    if (!labelProof?.dataUrl || !productProof?.dataUrl) {
+      toast({
+        type: "error",
+        title: "Missing Proof Images",
+        description: "Both 2 images are strictly mandatory: (1) Shipping Label sticker with name/barcode, and (2) Physical sealed box condition.",
+      });
+      return;
+    }
+
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (labelProof.size > MAX_SIZE || productProof.size > MAX_SIZE) {
+      toast({
+        type: "error",
+        title: "File Too Large",
+        description: "One or more images exceed 10 MB. Please take or choose images under 10 MB.",
+      });
+      return;
+    }
+
+    setIsFinalizingPod(true);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "finalize-doorstep-pod",
+          orderNumber: deliverySelectedOrderId,
+          labelImage: labelProof.dataUrl,
+          productImage: productProof.dataUrl,
+          labelImageName: labelProof.name,
+          productImageName: productProof.name,
+          labelImageSize: labelProof.size,
+          productImageSize: productProof.size,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        setDeliveryGateStatus("delivered");
+        toast({
+          type: "success",
+          title: "Delivery Handover Complete ✓",
+          description: `Consignment ${deliverySelectedOrderId} finalized. Proof photos archived in S3 proof vault. Warranty activated.`,
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Submission Error",
+          description: data.error || "Could not finalize doorstep proof.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: err?.message || "Failed to submit delivery proof.",
+      });
+    } finally {
+      setIsFinalizingPod(false);
+    }
+  };
+
+  const handlePoDImageSelect = (
+    type: "label" | "product",
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        type: "error",
+        title: "Image Over 10 MB",
+        description: `Selected file is ${(file.size / 1024 / 1024).toFixed(2)} MB. Must be under 10 MB limit.`,
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const payload = {
+        file,
+        dataUrl: reader.result as string,
+        name: file.name,
+        size: file.size,
+      };
+      if (type === "label") {
+        setLabelProof(payload);
+        toast({
+          type: "success",
+          title: "Shipping Label Image Added ✓",
+          description: `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB) ready for upload.`,
+        });
+      } else {
+        setProductProof(payload);
+        toast({
+          type: "success",
+          title: "Product Box Image Added ✓",
+          description: `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB) ready for upload.`,
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
   };
 
   // 1. Loading State
@@ -3165,13 +3988,13 @@ export default function AdminPage() {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-zinc-100 text-zinc-400 font-mono text-[11px]">
-                        <th className="py-2.5 font-normal">PRODUCT & MASTER SKU</th>
-                        <th className="py-2.5 font-normal">CATEGORY</th>
-                        <th className="py-2.5 font-normal">PRICE (USD / INR)</th>
-                        <th className="py-2.5 font-normal">STOCK ON HAND</th>
-                        <th className="py-2.5 font-normal">VARIANTS</th>
-                        <th className="py-2.5 font-normal">STATUS</th>
-                        <th className="py-2.5 font-normal text-right">ACTIONS</th>
+                        <th className="p-2 font-normal">PRODUCT & MASTER SKU</th>
+                        <th className="p-2 font-normal">CATEGORY</th>
+                        <th className="p-2 font-normal">PRICE (USD / INR)</th>
+                        <th className="p-2 font-normal">STOCK ON HAND</th>
+                        <th className="p-2 font-normal">VARIANTS</th>
+                        <th className="p-2 font-normal">STATUS</th>
+                        <th className="p-2 font-normal text-right">ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
@@ -3181,47 +4004,102 @@ export default function AdminPage() {
                         const isSelected = p.slug === selectedSlug;
                         const variantCount = (p.childVariants && p.childVariants.length) || 1;
 
+                        // Check for active restock pipeline on this product or any child variants
+                        const activeVariantRestocks = (p.childVariants || []).filter(
+                          (cv) => cv.restockProcess && cv.restockProcess.status !== "completed"
+                        );
+                        const rootRestock = p.restockProcess && p.restockProcess.status !== "completed" ? p.restockProcess : null;
+                        const totalRemainingRestock = activeVariantRestocks.reduce((sum, cv) => sum + (cv.restockProcess?.remainingQty || 0), 0) + (rootRestock?.remainingQty || 0);
+                        const totalTargetRestock = activeVariantRestocks.reduce((sum, cv) => sum + (cv.restockProcess?.targetQty || 0), 0) + (rootRestock?.targetQty || 0);
+                        const totalReceivedRestock = activeVariantRestocks.reduce((sum, cv) => sum + (cv.restockProcess?.receivedQty || 0), 0) + (rootRestock?.receivedQty || 0);
+                        const hasPipelineRestock = totalRemainingRestock > 0;
+
                         return (
                           <tr key={p.slug} className="hover:bg-zinc-50/70 transition-colors">
-                            <td className="py-3.5 font-sans font-bold text-zinc-900">
+                            <td className="p-2 font-sans font-bold text-zinc-900">
                               <div>{p.name}</div>
                               <div className="text-[11px] font-mono text-zinc-400 font-normal">
                                 SKU: {p.productId || p.sku || p.slug}
                               </div>
                             </td>
-                            <td className="py-3.5">
+                            <td className="p-2">
                               <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 text-[10px] font-medium">
                                 {p.category || "Audio & Wear"}
                               </span>
                             </td>
-                            <td className="py-3.5 font-mono text-zinc-800 text-xs">
+                            <td className="p-2 font-mono text-zinc-800 text-xs">
                               <div className="font-bold">${(Number(p.price) || 0).toFixed(2)}</div>
                               <div className="text-[10px] text-zinc-400">≈ ₹{Math.round((Number(p.price) || 0) * exchangeRate).toLocaleString("en-IN")}</div>
                             </td>
-                            <td className="py-3.5 min-w-[140px]">
-                              <div className="space-y-1">
-                                <div className="flex justify-between text-[11px] font-mono">
-                                  <span className={`font-bold ${stockNum <= 5 ? "text-amber-600" : "text-zinc-800"}`}>
-                                    {stockNum} units
-                                  </span>
-                                  <span className="text-zinc-400">{stockPercent}%</span>
+                            <td className="p-2 min-w-[170px]">
+                              {hasPipelineRestock ? (
+                                (() => {
+                                  const totalUnits = stockNum + totalRemainingRestock;
+                                  const greenPercent = totalUnits > 0 ? (stockNum / totalUnits) * 100 : 0;
+                                  const yellowPercent = totalUnits > 0 ? (totalRemainingRestock / totalUnits) * 100 : 0;
+
+                                  return (
+                                    <div className="space-y-1">
+                                      <div className="flex justify-between items-center text-[11px] font-mono">
+                                        <span className="font-bold text-emerald-700">
+                                          {stockNum} on-hand
+                                        </span>
+                                        <span className="font-bold text-amber-700 text-[10px]">
+                                          +{totalRemainingRestock} in process
+                                        </span>
+                                      </div>
+                                      {/* Dual Green & Yellow Track Bar */}
+                                      <div className="w-full bg-zinc-200/80 rounded-full h-2 overflow-hidden flex shadow-inner">
+                                        <div
+                                          className="h-full bg-emerald-500 rounded-l-full transition-all duration-300"
+                                          style={{ width: `${greenPercent}%` }}
+                                          title={`On-hand: ${stockNum} units (${greenPercent.toFixed(0)}%)`}
+                                        />
+                                        <div
+                                          className="h-full bg-amber-400 rounded-r-full transition-all duration-300 relative overflow-hidden"
+                                          style={{ width: `${yellowPercent}%` }}
+                                          title={`Restock in process: ${totalRemainingRestock} units (${yellowPercent.toFixed(0)}%)`}
+                                        >
+                                          <div className="absolute inset-0 bg-white/30 animate-pulse" />
+                                        </div>
+                                      </div>
+                                      <div className="text-[9px] text-zinc-400 font-mono flex items-center justify-between">
+                                        <span>Pipeline: {totalReceivedRestock}/{totalTargetRestock}</span>
+                                        <span className="text-amber-700 font-semibold">{totalTargetRestock > 0 ? Math.round((totalReceivedRestock / totalTargetRestock) * 100) : 0}%</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })()
+                              ) : (
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-[11px] font-mono">
+                                    <span className={`font-bold ${stockNum <= 5 ? "text-amber-600" : "text-zinc-800"}`}>
+                                      {stockNum} units
+                                    </span>
+                                    <span className="text-zinc-400">{stockPercent}%</span>
+                                  </div>
+                                  <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${stockNum <= 5 ? "bg-amber-500" : "bg-emerald-600"
+                                        }`}
+                                      style={{ width: `${Math.max(5, stockPercent)}%` }}
+                                    />
+                                  </div>
                                 </div>
-                                <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full ${stockNum <= 5 ? "bg-amber-500" : "bg-emerald-600"
-                                      }`}
-                                    style={{ width: `${Math.max(5, stockPercent)}%` }}
-                                  />
-                                </div>
-                              </div>
+                              )}
                             </td>
-                            <td className="py-3.5">
+                            <td className="p-2">
                               <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-mono font-semibold">
                                 {variantCount} {variantCount === 1 ? "Option" : "Variants"}
                               </span>
                             </td>
-                            <td className="py-3.5">
-                              {stockNum <= 5 ? (
+                            <td className="p-2">
+                              {hasPipelineRestock ? (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-semibold border border-amber-300 flex items-center gap-1 w-max">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping inline-block" />
+                                  Restock: {totalTargetRestock > 0 ? Math.round((totalReceivedRestock / totalTargetRestock) * 100) : 0}%
+                                </span>
+                              ) : stockNum <= 5 ? (
                                 <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-semibold border border-amber-200/60">
                                   Low Stock
                                 </span>
@@ -3231,7 +4109,7 @@ export default function AdminPage() {
                                 </span>
                               )}
                             </td>
-                            <td className="py-3.5 text-right space-x-2">
+                            <td className="p-2 text-right space-x-2">
                               <button
                                 onClick={() => openRestockModal(p)}
                                 className="text-xs px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold transition-colors cursor-pointer"
@@ -4341,301 +5219,1929 @@ export default function AdminPage() {
           {/* TAB 3: DELIVERY HUBS & DOORSTEP GATE VERIFICATION */}
           {activeTab === "delivery" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Delivery Hub Logistics & Gate Verification Console */}
-              <div className="p-6 sm:p-8 rounded-3xl bg-white border border-zinc-200/80 shadow-xs space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0">
-                      <Truck className="w-5 h-5" />
+              {/* Station Header & Hub Selector Card */}
+              <div className="p-5 sm:p-7 rounded-3xl bg-zinc-950 text-white border border-zinc-800 shadow-2xl space-y-5">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-purple-600/20 border border-purple-500/30 text-purple-400 flex items-center justify-center shrink-0">
+                      <Truck className="w-6 h-6" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans">
-                          Hub Logistics & Doorstep Gate Verification Console
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-lg sm:text-xl font-bold font-sans tracking-tight text-zinc-100">
+                          Enterprise Hub Logistics & Destination Queue Console
                         </h2>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold uppercase">
-                          AWS SES + S3 Live
+                        <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold uppercase tracking-wider">
+                          Auto-Route Engine Live
                         </span>
                       </div>
-                      <p className="text-xs text-zinc-500 mt-0.5">
-                        Orchestrate hub-to-hub transitions, field package scanning, GPS gate arrival, and 5-minute alive OTP verification.
+                      <p className="text-xs text-zinc-400 mt-1">
+                        High-scale multi-hub routing. Direct incoming dock check-ins, sorting bag consolidation, outbound fleet dispatches, and doorstep gate handovers.
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Real-Time Fleet Sync Active</span>
-                    </span>
+                  {/* Active Station Status Indicator */}
+                  <div className="flex items-center gap-2.5 bg-zinc-900/90 border border-purple-500/30 p-2.5 px-3 rounded-2xl shrink-0 backdrop-blur-sm shadow-sm">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-zinc-400">Current Station:</span>
+                      <span className="font-mono font-bold text-white bg-zinc-950 border border-zinc-700/80 px-2.5 py-1 rounded-xl">
+                        {activeHubStats.hub.code} · {activeHubStats.hub.name}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        <span>{activeHubStats.sum5} ops</span>
+                        <span className="text-zinc-600">·</span>
+                        <span className="text-zinc-300 font-mono">{activeHubStats.formattedArray}</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Order Scope Selector */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-zinc-700">Select Active Consignment:</span>
-                    <select
-                      value={deliverySelectedOrderId}
-                      onChange={(e) => setDeliverySelectedOrderId(e.target.value)}
-                      className="text-xs font-mono font-bold bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                {/* Active Hub Network Operations Table (Just Below Heading) */}
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-purple-400 shrink-0" />
+                      <h3 className="text-sm font-bold text-zinc-100 font-sans tracking-tight">
+                        Active Hub Operational Directory
+                      </h3>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">
+                        {STANDARD_HUBS.length} Stations Connected
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
+                      <span className="text-zinc-500">Click any row or button to switch active hub console</span>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-zinc-800/80 bg-zinc-950/80 shadow-inner">
+                    <table className="w-full text-left text-xs font-mono border-collapse min-w-[760px]">
+                      <thead>
+                        <tr className="border-b border-zinc-800 bg-zinc-900/70 text-[11px] text-zinc-400 uppercase tracking-wider font-semibold">
+                          <th className="py-2.5 px-3">Status</th>
+                          <th className="py-2.5 px-3">Hub</th>
+                          <th className="py-2.5 px-3">Facility Name & Region</th>
+                          <th className="py-2.5 px-3 text-center">Sum (5 Ops)</th>
+                          <th className="py-2.5 px-2.5 text-center text-blue-400">1. In</th>
+                          <th className="py-2.5 px-2.5 text-center text-emerald-400">2. Recv</th>
+                          <th className="py-2.5 px-2.5 text-center text-amber-400">3. Sort</th>
+                          <th className="py-2.5 px-2.5 text-center text-cyan-400">4. Load</th>
+                          <th className="py-2.5 px-2.5 text-center text-purple-400">5. Out</th>
+                          <th className="py-2.5 px-2.5 text-center text-pink-400">6. Gate</th>
+                          <th className="py-2.5 px-3 text-center">Vector [1-6]</th>
+                          <th className="py-2.5 px-3 text-right">Switch</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/60">
+                        {allHubsQueueStats.map(({ hub: h, sum5, inCount, recCount, sortCount, loadCount, outCount, gateCount, formattedArray }) => {
+                          const isActive = h.id === activeHubId;
+                          return (
+                            <tr
+                              key={h.id}
+                              onClick={() => setActiveHubId(h.id)}
+                              className={`transition-all cursor-pointer group ${
+                                isActive
+                                  ? "bg-purple-950/30 hover:bg-purple-950/40 border-l-4 border-l-purple-500"
+                                  : "hover:bg-zinc-900/60 border-l-4 border-l-transparent"
+                              }`}
+                            >
+                              <td className="py-2.5 px-3">
+                                {isActive ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                                    ACTIVE
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-900 text-zinc-500 border border-zinc-800">
+                                    READY
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 font-bold text-white group-hover:text-purple-300 transition-colors">
+                                {h.code}
+                              </td>
+                              <td className="py-2.5 px-3 font-sans font-medium text-zinc-200">
+                                <div className="text-xs text-zinc-100 font-semibold">{h.name}</div>
+                                <div className="text-[10px] font-mono text-zinc-400">{h.region} · {h.country}</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <span
+                                  className={`inline-flex items-center justify-center min-w-[28px] px-2.5 py-0.5 rounded-lg font-bold text-xs ${
+                                    sum5 > 0
+                                      ? "bg-purple-500/25 text-purple-200 border border-purple-500/40 shadow-sm"
+                                      : "text-zinc-500 bg-zinc-900/60 border border-zinc-800"
+                                  }`}
+                                >
+                                  {sum5} ops
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-2.5 text-center">
+                                <span className={`font-semibold ${inCount > 0 ? "text-blue-400 font-bold" : "text-zinc-600"}`}>
+                                  {inCount}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-2.5 text-center">
+                                <span className={`font-semibold ${recCount > 0 ? "text-emerald-400 font-bold" : "text-zinc-600"}`}>
+                                  {recCount}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-2.5 text-center">
+                                <span className={`font-semibold ${sortCount > 0 ? "text-amber-400 font-bold" : "text-zinc-600"}`}>
+                                  {sortCount}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-2.5 text-center">
+                                <span className={`font-semibold ${loadCount > 0 ? "text-cyan-400 font-bold" : "text-zinc-600"}`}>
+                                  {loadCount}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-2.5 text-center">
+                                <span className={`font-semibold ${outCount > 0 ? "text-purple-400 font-bold" : "text-zinc-600"}`}>
+                                  {outCount}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-2.5 text-center">
+                                <span className={`font-semibold ${gateCount > 0 ? "text-pink-400 font-bold" : "text-zinc-600"}`}>
+                                  {gateCount}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[11px] font-mono ${
+                                    sum5 > 0 || gateCount > 0
+                                      ? "bg-zinc-900 text-purple-300 border border-purple-500/30 font-bold"
+                                      : "text-zinc-600"
+                                  }`}
+                                >
+                                  {formattedArray}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                {isActive ? (
+                                  <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider px-2 py-1 bg-purple-500/10 rounded-lg border border-purple-500/30">
+                                    Current
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveHubId(h.id);
+                                    }}
+                                    className="px-2.5 py-1 text-[10px] font-bold bg-zinc-800 hover:bg-purple-600 text-zinc-300 hover:text-white rounded-lg transition-colors cursor-pointer border border-zinc-700 hover:border-purple-500"
+                                  >
+                                    Select
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Hub Operational KPI Strip: 6 Real-World Queues + Gate Delivery */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setHubTab("incoming")}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "incoming"
+                      ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
+                      : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                      }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                      <span>1. INCOMING</span>
+                      <ArrowDownLeft className="w-3.5 h-3.5 text-blue-400" />
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-white">
+                      {hubQueue.totals.incoming}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5">En route to dock</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHubTab("received")}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "received"
+                      ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
+                      : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                      }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                      <span>2. RECEIVED</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-emerald-400">
+                      {hubQueue.totals.received}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5">Scanned at dock</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHubTab("sorting")}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "sorting"
+                      ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
+                      : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                      }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                      <span>3. SORTING</span>
+                      <Boxes className="w-3.5 h-3.5 text-amber-400" />
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-amber-400">
+                      {hubQueue.totals.sorting}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5">Fleet routing bay</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHubTab("loading")}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "loading"
+                      ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
+                      : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                      }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                      <span>4. LOADING</span>
+                      <PackagePlus className="w-3.5 h-3.5 text-cyan-400" />
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-cyan-400">
+                      {hubQueue.totals.loading}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5">Vehicle bay staging</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHubTab("outgoing")}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "outgoing"
+                      ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
+                      : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                      }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                      <span>5. OUTGOING [ON WAY]</span>
+                      <ArrowUpRight className="w-3.5 h-3.5 text-purple-400" />
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-purple-400">
+                      {hubQueue.totals.outgoing}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5">Active fleet in transit</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHubTab("gate")}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "gate"
+                      ? "bg-blue-600/20 border-blue-500/50 shadow-lg shadow-blue-600/10"
+                      : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                      }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                      <span>6. GATE OTP</span>
+                      <Key className="w-3.5 h-3.5 text-blue-400" />
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-blue-400">
+                      {hubQueue.totals.gateHandover}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5">Doorstep & PoD</div>
+                  </button>
+                </div>
+
+                {/* Waybill Fast Scanner & Destination Filter Toolbar */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
+                  <div className="md:col-span-5 flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 focus-within:border-purple-500 transition">
+                    <Search className="w-4 h-4 text-zinc-400 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Scan package barcode or type waybill (e.g. ANC-763954)..."
+                      value={waybillScanInput}
+                      onChange={(e) => setWaybillScanInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleScanWaybill()}
+                      className="bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none w-full font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleScanWaybill}
+                      className="px-2.5 py-1 text-[11px] font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded-lg cursor-pointer shrink-0 transition"
                     >
-                      {orders.map((ord) => (
-                        <option key={ord.id} value={ord.orderNumber || ord.id}>
-                          {ord.orderNumber} · {ord.customer?.fullName || "Customer"} · ${Number(ord.total).toFixed(2)} ({ord.paymentStatus || "Paid"})
+                      Locate
+                    </button>
+                  </div>
+
+                  <div className="md:col-span-3 flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5">
+                    <Filter className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <select
+                      value={filterDestinationHub}
+                      onChange={(e) => setFilterDestinationHub(e.target.value)}
+                      className="bg-transparent text-xs text-zinc-300 focus:outline-none w-full cursor-pointer"
+                    >
+                      <option value="all" className="bg-zinc-900">All Destination Hubs</option>
+                      {STANDARD_HUBS.map((h) => (
+                        <option key={h.id} value={h.id} className="bg-zinc-900">
+                          To: {h.name}
                         </option>
                       ))}
-                      {orders.length === 0 && (
-                        <option value="ANC-763954">ANC-763954 · Himesh · $349.00 (Paid)</option>
-                      )}
                     </select>
                   </div>
 
-                  <div className="text-xs text-zinc-500 font-mono">
-                    Current Waybill: <strong className="text-blue-600 font-bold">{deliverySelectedOrderId}</strong>
+                  <div className="md:col-span-4 flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5">
+                    <Boxes className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span className="text-[11px] text-zinc-400 shrink-0">
+                      Container ID:
+                      {transitMode === "train" || transitMode === "ship" ? (
+                        <span className="text-amber-400 ml-1 font-bold text-[10px]">*Req (Rail/Ship)</span>
+                      ) : (
+                        <span className="text-zinc-500 ml-1 text-[10px]">(Opt)</span>
+                      )}
+                    </span>
+                    <input
+                      type="text"
+                      value={activeContainerId}
+                      onChange={(e) => setActiveContainerId(e.target.value.toUpperCase())}
+                      placeholder={transitMode === "train" || transitMode === "ship" ? "e.g. CR-CON-8801" : "Optional for Road/Air"}
+                      className="bg-transparent text-xs text-white font-mono font-bold focus:outline-none w-full uppercase placeholder:text-zinc-600"
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Ready-to-implement Responsive Transit Control Center Layout */}
-              <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-zinc-950 text-zinc-100 font-sans rounded-3xl border border-zinc-800 shadow-2xl">
-                {/* SECTION 1: CORE TRANSIT LOGGING HUB */}
-                <div className="border border-zinc-800 bg-zinc-900/50 rounded-xl p-5 shadow-2xl flex flex-col justify-between">
-                  <div>
-                    {/* Header */}
-                    <div className="flex items-center justify-between border-b border-zinc-800 pb-3 mb-4">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="text-purple-500 w-5 h-5" />
-                        <h2 className="text-sm font-semibold tracking-wide uppercase text-zinc-300">1. Transit Hub Control</h2>
-                      </div>
-                      <span className="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded">
-                        Step 1: Active Routing
-                      </span>
-                    </div>
-
-                    {/* Quick Toggle Fleet Selector */}
-                    <div className="mb-4">
-                      <label className="text-xs font-medium text-zinc-400 block mb-2">Select Active Transport Mode</label>
-                      <div className="grid grid-cols-5 gap-2">
-                        {vehicleModes.map((mode) => {
-                          const Icon = mode.icon;
-                          const isSelected = transitMode === mode.id;
-                          return (
-                            <button
-                              key={mode.id}
-                              type="button"
-                              onClick={() => setTransitMode(mode.id as TransportMode)}
-                              className={`flex flex-col items-center justify-center py-2.5 rounded-lg border text-xs font-medium transition-all ${isSelected
-                                  ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/20'
-                                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
-                                }`}
-                            >
-                              <Icon className="w-4 h-4 mb-1" />
-                              {mode.label}
-                            </button>
-                          );
-                        })}
+              {/* TAB 1: INCOMING PACKAGES QUEUE */}
+              {hubTab === "incoming" && (
+                <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-4 text-white">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+                    <div className="flex items-center gap-2.5">
+                      <ArrowDownLeft className="w-5 h-5 text-blue-400" />
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">
+                          Inbound Cargo Arriving at {hubQueue.hub.name}
+                        </h3>
+                        <p className="text-xs text-zinc-400">
+                          Packages dispatched from upstream centers heading to this dock. Scan barcodes or tap below to check in.
+                        </p>
                       </div>
                     </div>
-
-                    {/* Vehicle Number & Hub Details Row */}
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div>
-                        <label className="text-xs font-medium text-zinc-400 block mb-1">Selected Vehicle ID / Plate</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. MH-12-JW-4412"
-                          value={vehicleNo}
-                          onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
-                          className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-zinc-800 bg-zinc-900 text-white uppercase placeholder-zinc-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-zinc-400 block mb-1">Hub Security Verification</label>
-                        <button
-                          type="button"
-                          onClick={() => setManifestVerified(!manifestVerified)}
-                          className={`w-full flex items-center justify-center gap-2 px-3 py-2 text-xs rounded-lg border font-medium transition-colors ${manifestVerified
-                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                              : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                            }`}
-                        >
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          {manifestVerified ? 'Manifest Verified' : 'Unverified Hold'}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Metadata Fallbacks (Collapsible or compact inputs) */}
-                    <div className="grid grid-cols-2 gap-3 mb-6">
-                      <div>
-                        <label className="text-xs font-medium text-zinc-500 block mb-1">Current Facility</label>
-                        <input
-                          type="text"
-                          value={hubName}
-                          onChange={(e) => setHubName(e.target.value)}
-                          className="w-full bg-zinc-900/50 border border-zinc-800 px-3 py-1.5 text-xs rounded text-zinc-400 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-zinc-500 block mb-1">Region / Code</label>
-                        <input
-                          type="text"
-                          value={hubRegion}
-                          onChange={(e) => setHubRegion(e.target.value)}
-                          className="w-full bg-zinc-900/50 border border-zinc-800 px-3 py-1.5 text-xs rounded text-zinc-400 focus:outline-none"
-                        />
-                      </div>
-                    </div>
+                    <span className="text-xs font-mono text-zinc-400 bg-zinc-900 px-3 py-1 rounded-full border border-zinc-800">
+                      {hubQueue.incoming.length} consignments awaiting check-in
+                    </span>
                   </div>
 
-                  {/* Separated Dispatch and Arrival Updates Action Buttons */}
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-800/60">
-                    <button
-                      type="button"
-                      disabled={isTransitLogging}
-                      onClick={() => handleLogAction('arrival')}
-                      className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      {isTransitLogging ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownLeft className="w-4 h-4 text-emerald-400" />}
-                      Log Inbound Arrival
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isTransitLogging}
-                      onClick={() => handleLogAction('dispatch')}
-                      className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-md active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      {isTransitLogging ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpRight className="w-4 h-4 text-purple-200" />}
-                      Log Outbound Dispatch
-                    </button>
-                  </div>
-                </div>
-
-                {/* SECTION 2: ENHANCED USER END / GATE DELIVERY */}
-                <div className="border border-zinc-800 bg-zinc-900/50 rounded-xl p-5 shadow-2xl flex flex-col justify-between">
-                  <div>
-                    {/* Header */}
-                    <div className="flex items-center justify-between border-b border-zinc-800 pb-3 mb-4">
-                      <div className="flex items-center gap-2">
-                        <Key className="text-blue-500 w-5 h-5" />
-                        <h2 className="text-sm font-semibold tracking-wide uppercase text-zinc-300">2. Doorstep Gate Arrival</h2>
+                  {hubQueue.incoming.length === 0 ? (
+                    <div className="py-12 text-center space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600 mx-auto flex items-center justify-center">
+                        <CheckCircle2 className="w-6 h-6 text-zinc-500" />
                       </div>
-                      <span className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-mono">
-                        {deliveryGateStatus.toUpperCase().replace('_', ' ')}
-                      </span>
-                    </div>
-
-                    <div className="mb-4">
-                      <h3 className="text-xs font-semibold text-zinc-300 mb-1">Step A: Courier At Customer Gate</h3>
-                      <p className="text-xs text-zinc-500 leading-relaxed">
-                        When the delivery courier scans the package barcode at the customer entrance, tap below to dispatch an automated OTP email via AWS SES. This opens a dynamic 5-minute alive loop for direct edge verification.
+                      <div className="text-sm font-semibold text-zinc-300">Inbound Dock Cleared</div>
+                      <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                        All inbound consignments for {hubQueue.hub.name} have been received and verified.
                       </p>
                     </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {hubQueue.incoming
+                        .filter((ord) => filterDestinationHub === "all" || ord.nextHubId === filterDestinationHub)
+                        .map((ord) => (
+                          <div
+                            key={ord.id}
+                            className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                          >
+                            <div className="space-y-1.5 min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-xs font-bold text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded border border-blue-500/20">
+                                  {ord.orderNumber}
+                                </span>
+                                <span className="text-xs font-semibold text-zinc-200">
+                                  {ord.customer?.fullName || "Customer"} · {ord.customer?.city || "Destination"}
+                                </span>
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 uppercase">
+                                  Fleet: {ord.transitMode || "Truck"} [{ord.vehicleNo || "OR-TRK-5555"}]
+                                </span>
+                                {ord.containerId && (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
+                                    Container: {ord.containerId}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <span>
+                                  Items: <strong className="text-zinc-300">{ord.items?.[0]?.name || "Form 01"}</strong> (x{ord.items?.[0]?.quantity || 1})
+                                </span>
+                                <span>•</span>
+                                <span>
+                                  Origin: <strong className="text-zinc-300">{ord.currentHub || "Upstream Hub"}</strong>
+                                </span>
+                                <span>➔</span>
+                                <span>
+                                  Target Route: <strong className="text-purple-300">{ord.nextHub || "Regional Hub"}</strong>
+                                </span>
+                              </div>
+                            </div>
 
-                    {/* User End Side Enhancement Layout */}
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3.5 space-y-3">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-500">Live Client Channel Status:</span>
-                        <span className="flex items-center gap-1.5 font-medium text-emerald-400">
-                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                          GPS Proximity Match
-                        </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                disabled={hubActionLoading === ord.orderNumber}
+                                onClick={() => handleHubQueueAction(ord.orderNumber, "receive")}
+                                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50"
+                              >
+                                {hubActionLoading === ord.orderNumber ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <ArrowDownLeft className="w-4 h-4" />
+                                )}
+                                <span>Scan & Receive at Dock</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: RECEIVED PACKAGES QUEUE */}
+              {hubTab === "received" && (
+                <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-4 text-white">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+                    <div className="flex items-center gap-2.5">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">
+                          Received Parcels Docked at {hubQueue.hub.name}
+                        </h3>
+                        <p className="text-xs text-zinc-400">
+                          Parcels verified and physically present at this dock. Move to sorting bays for vehicle loading.
+                        </p>
                       </div>
-                      <div className="p-2.5 rounded bg-zinc-950 border border-zinc-800/80 font-mono text-[11px] text-zinc-400 space-y-1">
-                        <div>[Telemetry]: OAC Edge Handshake... OK</div>
-                        <div>[Webhook]: Revalidation Token generated (exp: 5m)</div>
-                        {deliveryGateStatus === "otp_sent" && (
-                          <div className="text-amber-400 pt-1 font-mono">
-                            [Session Active]: 6-Digit OTP: <strong>{generatedOtp}</strong> · Remaining: {Math.floor(deliveryOtpRemainingSeconds / 60)}:{(deliveryOtpRemainingSeconds % 60).toString().padStart(2, '0')}
+                    </div>
+                    <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                      {hubQueue.received.length} packages ready for sorting
+                    </span>
+                  </div>
+
+                  {hubQueue.received.length === 0 ? (
+                    <div className="py-12 text-center space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600 mx-auto flex items-center justify-center">
+                        <Boxes className="w-6 h-6 text-zinc-500" />
+                      </div>
+                      <div className="text-sm font-semibold text-zinc-300">Receiving Bay Empty</div>
+                      <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                        No packages currently resting at the dock. Check Inbound cargo tab or sorting dock.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {hubQueue.received
+                        .filter((ord) => filterDestinationHub === "all" || ord.nextHubId === filterDestinationHub)
+                        .map((ord) => (
+                          <div
+                            key={ord.id}
+                            className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                          >
+                            <div className="space-y-1.5 min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20">
+                                  {ord.orderNumber}
+                                </span>
+                                <span className="text-xs font-semibold text-zinc-200">
+                                  {ord.customer?.fullName} ({ord.customer?.city})
+                                </span>
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700 font-semibold">
+                                  Dock Scanned ✓
+                                </span>
+                              </div>
+                              <div className="text-xs text-zinc-400">
+                                Destination Gateway: <strong className="text-purple-300">{ord.nextHub || "Regional Hub"}</strong> · Items: {ord.items?.[0]?.name || "Package"} (x{ord.items?.[0]?.quantity || 1})
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                disabled={hubActionLoading === ord.orderNumber}
+                                onClick={() => handleHubQueueAction(ord.orderNumber, "to_sorting")}
+                                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50"
+                              >
+                                {hubActionLoading === ord.orderNumber ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Boxes className="w-4 h-4" />
+                                )}
+                                <span>Move to Sorting Dock</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: SORTING DOCK & OUTBOUND TRANSPORT ASSIGNMENT */}
+              {hubTab === "sorting" && (
+                <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-6 text-white">
+                  {/* Sorting Header & Fleet Controls */}
+                  <div className="space-y-4 border-b border-zinc-800 pb-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <Boxes className="w-5 h-5 text-amber-400" />
+                        <div>
+                          <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">
+                            Sorting Dock & Next Destination Assignment
+                          </h3>
+                          <p className="text-xs text-zinc-400">
+                            Assign next destination hub, select fleet transport mode, and vehicle ID. (Container ID required for Train & Ship).
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+                        {hubQueue.sorting.length} packages in sorting bays
+                      </span>
+                    </div>
+
+                    {/* Active Fleet Transport Selector & Container Staging Grid */}
+                    <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                        <div className="sm:col-span-5 space-y-1.5">
+                          <label className="text-[11px] font-semibold text-zinc-400 block">Select Transport Fleet Mode</label>
+                          <div className="grid grid-cols-6 gap-1">
+                            {vehicleModes.map((mode) => {
+                              const Icon = mode.icon;
+                              const isSelected = transitMode === mode.id;
+                              return (
+                                <button
+                                  key={mode.id}
+                                  type="button"
+                                  onClick={() => setTransitMode(mode.id as TransportMode)}
+                                  className={`py-2 flex flex-col items-center justify-center rounded-lg border text-[10px] font-semibold transition cursor-pointer ${isSelected
+                                    ? "bg-purple-600 border-purple-500 text-white shadow-md shadow-purple-600/20"
+                                    : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white"
+                                    }`}
+                                >
+                                  <Icon className="w-3.5 h-3.5 mb-0.5" />
+                                  <span>{mode.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="sm:col-span-3 space-y-1.5">
+                          <label className="text-[11px] font-semibold text-zinc-400 block">Vehicle ID / Plate</label>
+                          <input
+                            type="text"
+                            value={vehicleNo}
+                            onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
+                            placeholder="e.g. WB-19-EXP-5501"
+                            className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-950 border border-zinc-800 rounded-xl text-white uppercase focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-4 space-y-1.5">
+                          <label className="text-[11px] font-semibold text-zinc-400 block">Next Destination Hub</label>
+                          <select
+                            value={targetDestinationHubId}
+                            onChange={(e) => setTargetDestinationHubId(e.target.value)}
+                            className="w-full px-3 py-2 text-xs font-semibold bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-purple-500 cursor-pointer"
+                          >
+                            {STANDARD_HUBS.filter((h) => h.id !== activeHubId).map((h) => (
+                              <option key={h.id} value={h.id}>
+                                {h.name} ({h.region})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Mode-Specific Transit Details Specification */}
+                      <div className="pt-3 border-t border-zinc-800/80 space-y-3">
+                        {/* 1. TRAIN: Primary Train Number* + DateTime*, with optional PMS additional details */}
+                        {transitMode === "train" && (
+                          <div className="p-3.5 rounded-2xl bg-zinc-950 border border-amber-500/30 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <Train className="w-4 h-4 text-amber-400" />
+                                <span className="text-xs font-bold text-amber-300 font-mono">
+                                  Indian Railways (PMS) Train Journey
+                                </span>
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 font-semibold font-mono">
+                                  Scheduled Rake
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowRailExtraDetails(!showRailExtraDetails)}
+                                className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer transition self-start sm:self-auto"
+                              >
+                                <span>{showRailExtraDetails ? "Hide Additional Details ▲" : "+ Additional PMS Details (Optional) ▼"}</span>
+                              </button>
+                            </div>
+
+                            {/* Primary Star-Marked Inputs */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                  <span>Train Number</span>
+                                  <span className="text-rose-400 font-bold">*</span>
+                                  <span className="text-[10px] font-mono text-zinc-500">(e.g. 12302 Howrah Rajdhani)</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={trainNumber}
+                                  onChange={(e) => setTrainNumber(e.target.value.toUpperCase())}
+                                  placeholder="e.g. 12302"
+                                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-amber-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-amber-400"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                  <span>Departure Date & Time</span>
+                                  <span className="text-rose-400 font-bold">*</span>
+                                  <span className="text-[10px] font-mono text-zinc-500">(Daily running pairing)</span>
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={trainDateTime}
+                                  onChange={(e) => setTrainDateTime(e.target.value)}
+                                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-amber-500/40 rounded-xl text-white focus:outline-none focus:border-amber-400 cursor-pointer"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Additional PMS Details (Optional for Hub) */}
+                            {showRailExtraDetails && (
+                              <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2.5 animate-in fade-in duration-150">
+                                <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-400">
+                                  <span className="text-amber-300 font-mono">Optional PMS Fields (Fill as available):</span>
+                                  <span className="text-[10px] text-zinc-500 font-mono">Can be empty without issue</span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">PWB / PRR Number</label>
+                                    <input
+                                      type="text"
+                                      value={railPwbNumber}
+                                      onChange={(e) => setRailPwbNumber(e.target.value.toUpperCase())}
+                                      placeholder="PWB-HWH-74829"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Consignment Group ID</label>
+                                    <input
+                                      type="text"
+                                      value={railConsignmentGroupId}
+                                      onChange={(e) => setRailConsignmentGroupId(e.target.value.toUpperCase())}
+                                      placeholder="GRP-KOL-ASN-001"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Parcel ID</label>
+                                    <input
+                                      type="text"
+                                      value={railParcelId}
+                                      onChange={(e) => setRailParcelId(e.target.value.toUpperCase())}
+                                      placeholder="PRC-ER-20261028-091"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Source Station (Dep)</label>
+                                    <input
+                                      type="text"
+                                      value={railSourceStation}
+                                      onChange={(e) => setRailSourceStation(e.target.value)}
+                                      placeholder="HWH (Howrah Jn)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Destination Station (Arr)</label>
+                                    <input
+                                      type="text"
+                                      value={railDestStation}
+                                      onChange={(e) => setRailDestStation(e.target.value)}
+                                      placeholder="ASN (Asansol Jn)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Arrival Time</label>
+                                    <input
+                                      type="text"
+                                      value={railArrivalTime}
+                                      onChange={(e) => setRailArrivalTime(e.target.value)}
+                                      placeholder="17:15"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Space Allocation (Coach)</label>
+                                    <select
+                                      value={railSpaceAllocation}
+                                      onChange={(e) => setRailSpaceAllocation(e.target.value as any)}
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none cursor-pointer"
+                                    >
+                                      <option value="F-SLR">F-SLR (Front Brake Van / Rake)</option>
+                                      <option value="R-SLR">R-SLR (Rear Brake Van / Rake)</option>
+                                      <option value="VPU">VPU (High Capacity Parcel Van)</option>
+                                      <option value="VP">VP (Parcel Van)</option>
+                                      <option value="WAGON">WAGON (Loose Load / Freight Rake)</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Freight Scale</label>
+                                    <select
+                                      value={railFreightScale}
+                                      onChange={(e) => setRailFreightScale(e.target.value as any)}
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none cursor-pointer"
+                                    >
+                                      <option value="Scale-R">Scale-R (Rajdhani Express Priority)</option>
+                                      <option value="Scale-P">Scale-P (Premier Express Scale)</option>
+                                      <option value="Scale-S">Scale-S (Standard Goods / Mail Scale)</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Loading Manifest ID</label>
+                                    <input
+                                      type="text"
+                                      value={railLoadingManifestId}
+                                      onChange={(e) => setRailLoadingManifestId(e.target.value.toUpperCase())}
+                                      placeholder="LMF-HWH-ASN-4402"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 2. PLANE: Primary Flight Number* + DateTime*, with optional IATA additional details */}
+                        {transitMode === "plane" && (
+                          <div className="p-3.5 rounded-2xl bg-zinc-950 border border-cyan-500/30 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <Plane className="w-4 h-4 text-cyan-400" />
+                                <span className="text-xs font-bold text-cyan-300 font-mono">
+                                  Air Cargo (IATA) Flight Journey
+                                </span>
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-semibold font-mono">
+                                  Scheduled Air Waybill
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowAirExtraDetails(!showAirExtraDetails)}
+                                className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer transition self-start sm:self-auto"
+                              >
+                                <span>{showAirExtraDetails ? "Hide Additional Details ▲" : "+ Additional IATA Details (Optional) ▼"}</span>
+                              </button>
+                            </div>
+
+                            {/* Primary Star-Marked Inputs */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                  <span>Flight Number</span>
+                                  <span className="text-rose-400 font-bold">*</span>
+                                  <span className="text-[10px] font-mono text-zinc-500">(e.g. 6E-204 IndiGo Cargo)</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={flightNumber}
+                                  onChange={(e) => setFlightNumber(e.target.value.toUpperCase())}
+                                  placeholder="e.g. 6E-204"
+                                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-cyan-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                  <span>Flight Date & Time</span>
+                                  <span className="text-rose-400 font-bold">*</span>
+                                  <span className="text-[10px] font-mono text-zinc-500">(Flight departure pairing)</span>
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={flightDateTime}
+                                  onChange={(e) => setFlightDateTime(e.target.value)}
+                                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-cyan-500/40 rounded-xl text-white focus:outline-none focus:border-cyan-400 cursor-pointer"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Additional IATA Details (Optional for Hub) */}
+                            {showAirExtraDetails && (
+                              <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2.5 animate-in fade-in duration-150">
+                                <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-400">
+                                  <span className="text-cyan-300 font-mono">Optional IATA Air Cargo Fields:</span>
+                                  <span className="text-[10px] text-zinc-500 font-mono">Can be empty without issue</span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Master Air Waybill (AWB #)</label>
+                                    <input
+                                      type="text"
+                                      value={airAwbNumber}
+                                      onChange={(e) => setAirAwbNumber(e.target.value.toUpperCase())}
+                                      placeholder="098-84729103"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">ULD Container ID (Box/Pallet)</label>
+                                    <input
+                                      type="text"
+                                      value={airUldId}
+                                      onChange={(e) => setAirUldId(e.target.value.toUpperCase())}
+                                      placeholder="AKE-14920-6E"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Bay Location Inside Aircraft</label>
+                                    <select
+                                      value={airBayLocation}
+                                      onChange={(e) => setAirBayLocation(e.target.value as any)}
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none cursor-pointer"
+                                    >
+                                      <option value="Forward Hold (FWD-01)">Forward Hold (FWD-01)</option>
+                                      <option value="Aft Hold (AFT-02)">Aft Hold (AFT-02)</option>
+                                      <option value="Bulk Cargo Bay">Bulk Cargo Bay</option>
+                                      <option value="Main Deck">Main Deck Cargo</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Origin Airport</label>
+                                    <input
+                                      type="text"
+                                      value={airSourceAirport}
+                                      onChange={(e) => setAirSourceAirport(e.target.value)}
+                                      placeholder="DEL (Delhi Indira Gandhi Intl)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Destination Airport</label>
+                                    <input
+                                      type="text"
+                                      value={airDestAirport}
+                                      onChange={(e) => setAirDestAirport(e.target.value)}
+                                      placeholder="CCU (Kolkata NSCB Intl)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Flight Manifest ID</label>
+                                    <input
+                                      type="text"
+                                      value={airFlightManifest}
+                                      onChange={(e) => setAirFlightManifest(e.target.value.toUpperCase())}
+                                      placeholder="FLM-6E-DEL-CCU-88"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 3. COURIER / ROAD (Van, Bike, Truck, Ship) */}
+                        {transitMode !== "train" && transitMode !== "plane" && (
+                          <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <Truck className="w-4 h-4 text-purple-400" />
+                                <span className="text-xs font-bold text-zinc-200 font-mono">
+                                  ANC Custom Delivery & Surface Network
+                                </span>
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold uppercase tracking-wider">
+                                  Strategy Shielded
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowCourierExtraDetails(!showCourierExtraDetails)}
+                                className="text-[11px] font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer transition self-start sm:self-auto"
+                              >
+                                <span>{showCourierExtraDetails ? "Hide Details ▲" : "+ Additional Rider Details (Optional) ▼"}</span>
+                              </button>
+                            </div>
+
+                            {/* Strategic Shield Notice when In-House Delivery is Selected */}
+                            {courierProvider === "anc_custom" && (
+                              <div className="flex items-start sm:items-center gap-2 p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/30 text-[11px] text-purple-200 font-mono">
+                                <ShieldAlert className="w-4 h-4 text-purple-400 shrink-0 mt-0.5 sm:mt-0" />
+                                <div>
+                                  <span className="font-bold text-white">Proprietary Strategy Shield: </span>
+                                  <span>Consignments are routed via ANC In-House Priority Fleet. External carrier names and routing mechanics are undisclosed to protect operational strategy and supply-chain advantage.</span>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-300 block">Delivery Partner Service</label>
+                                <select
+                                  value={courierProvider}
+                                  onChange={(e) => {
+                                    const prov = e.target.value as any;
+                                    setCourierProvider(prov);
+                                    const meta = COURIER_PROVIDERS_CATALOG.find((c) => c.id === prov);
+                                    if (meta) {
+                                      setCourierTrackingAwb(`${meta.awbPrefix}${Math.floor(10000000 + Math.random() * 90000000)}`);
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 text-xs font-semibold bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-purple-500 cursor-pointer"
+                                >
+                                  {COURIER_PROVIDERS_CATALOG.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.id === "anc_custom" ? "★ " : ""}{c.name} · {c.category} ({c.defaultSla})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-300 block">Tracking AWB Number</label>
+                                <input
+                                  type="text"
+                                  value={courierTrackingAwb}
+                                  onChange={(e) => setCourierTrackingAwb(e.target.value.toUpperCase())}
+                                  placeholder="e.g. ANC-LOG-78294402"
+                                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                                />
+                              </div>
+                            </div>
+
+                            {showCourierExtraDetails && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 animate-in fade-in duration-150">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] text-zinc-400 block font-mono">Assigned Rider Name</label>
+                                  <input
+                                    type="text"
+                                    value={courierRiderName}
+                                    onChange={(e) => setCourierRiderName(e.target.value)}
+                                    placeholder="Rakesh Sharma"
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] text-zinc-400 block font-mono">Rider Contact / Phone</label>
+                                  <input
+                                    type="text"
+                                    value={courierRiderContact}
+                                    onChange={(e) => setCourierRiderContact(e.target.value)}
+                                    placeholder="+91 98301 23456"
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Direct Comparison Architectural Reference Toggle & Manifest Button */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowFreightArchitectureRef(!showFreightArchitectureRef)}
+                            className="text-xs font-mono font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1.5 cursor-pointer transition"
+                          >
+                            <Sliders className="w-3.5 h-3.5 text-purple-400" />
+                            <span>{showFreightArchitectureRef ? "Hide Architecture Comparison ▲" : "Direct Comparison: Train vs. Plane Systems Architecture ▼"}</span>
+                          </button>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setManifestVerified(!manifestVerified)}
+                              className={`py-1.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition ${manifestVerified
+                                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+                                }`}
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>{manifestVerified ? "Manifest Verified" : "Hold"}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Direct Comparison Data Entity Alignment Card */}
+                        {showFreightArchitectureRef && (
+                          <div className="p-4 rounded-2xl bg-zinc-950 border border-purple-500/30 space-y-3 animate-in fade-in duration-200">
+                            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                              <div className="flex items-center gap-2">
+                                <Zap className="w-4 h-4 text-purple-400" />
+                                <span className="text-xs font-bold font-mono text-purple-300 uppercase tracking-wide">
+                                  Direct Comparison: Train (PMS) vs. Plane (IATA) vs. Courier Systems
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-mono text-zinc-400">Core Data Entities Alignment</span>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs font-mono">
+                                <thead>
+                                  <tr className="border-b border-zinc-800 text-zinc-400 text-[11px]">
+                                    <th className="py-2 pr-3">Data Entity</th>
+                                    <th className="py-2 px-3 text-amber-300">Indian Railways (PMS)</th>
+                                    <th className="py-2 px-3 text-cyan-300">Air Cargo (IATA)</th>
+                                    <th className="py-2 pl-3 text-purple-300">B2C Courier Partners</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-900 text-zinc-300 text-[11px]">
+                                  <tr>
+                                    <td className="py-2 pr-3 font-semibold text-zinc-400">Primary Shipment ID</td>
+                                    <td className="py-2 px-3 text-amber-400 font-bold">pwb_number / prr_number</td>
+                                    <td className="py-2 px-3 text-cyan-400 font-bold">awb_number (Air Waybill)</td>
+                                    <td className="py-2 pl-3 text-purple-400 font-bold">tracking_awb (Partner AWB)</td>
+                                  </tr>
+                                  <tr>
+                                    <td className="py-2 pr-3 font-semibold text-zinc-400">Location Codes</td>
+                                    <td className="py-2 px-3">Station Codes (NDLS, HWH, ASN)</td>
+                                    <td className="py-2 px-3">IATA Airport Codes (DEL, BOM, CCU)</td>
+                                    <td className="py-2 pl-3">Pincodes / Local Hub Codes</td>
+                                  </tr>
+                                  <tr>
+                                    <td className="py-2 pr-3 font-semibold text-zinc-400">Transport Identifier</td>
+                                    <td className="py-2 px-3 text-amber-300 font-bold">train_number + departure_date*</td>
+                                    <td className="py-2 px-3 text-cyan-300 font-bold">flight_number + flight_date*</td>
+                                    <td className="py-2 pl-3 text-purple-300 font-bold">vehicle_no + dispatch_date</td>
+                                  </tr>
+                                  <tr>
+                                    <td className="py-2 pr-3 font-semibold text-zinc-400">Physical Container ID</td>
+                                    <td className="py-2 px-3">Loose load / wagon_number</td>
+                                    <td className="py-2 px-3">uld_id (e.g. AKE container box)</td>
+                                    <td className="py-2 pl-3">courier_bag_id / secure_tote</td>
+                                  </tr>
+                                  <tr>
+                                    <td className="py-2 pr-3 font-semibold text-zinc-400">Location Inside Vehicle</td>
+                                    <td className="py-2 px-3">space_allocation_id (F-SLR, R-SLR, VPU)</td>
+                                    <td className="py-2 px-3">bay_location (Forward / Aft Hold)</td>
+                                    <td className="py-2 pl-3">van_crate / saddle_bag</td>
+                                  </tr>
+                                  <tr>
+                                    <td className="py-2 pr-3 font-semibold text-zinc-400">Master Loading List</td>
+                                    <td className="py-2 px-3">loading_manifest_id</td>
+                                    <td className="py-2 px-3">flight_manifest</td>
+                                    <td className="py-2 pl-3">pickup_runsheet_manifest</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {/* 5-Min Alive Action Trigger + Verification */}
-                  <div className="space-y-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={handleTriggerGateOtp}
-                      className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg text-xs font-bold tracking-wide uppercase transition-all active:scale-95 cursor-pointer ${otpTriggered || deliveryGateStatus === 'otp_sent'
-                          ? 'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-600/20'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20'
-                        }`}
-                    >
-                      {otpTriggered || deliveryGateStatus === 'otp_sent' ? 'OTP Dispatched & Tracking Active ✓' : 'Reached Location ... Trigger 5-Min Alive OTP Email'}
-                    </button>
-
-                    {/* Step B: Doorstep verification when OTP is sent */}
-                    {deliveryGateStatus === "otp_sent" && (
-                      <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-zinc-400 font-medium">Customer Doorstep Verification:</span>
-                          <span className="text-amber-400 font-mono text-[11px]">
-                            Alive: {Math.floor(deliveryOtpRemainingSeconds / 60)}:{(deliveryOtpRemainingSeconds % 60).toString().padStart(2, '0')}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            maxLength={6}
-                            value={deliveryOtpValue}
-                            onChange={(e) => setDeliveryOtpValue(e.target.value)}
-                            placeholder="Enter 6-digit OTP"
-                            className="flex-1 px-3 py-2 text-center text-xs font-mono font-bold tracking-widest bg-zinc-950 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleVerifyGateOtp}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
-                          >
-                            Verify OTP
-                          </button>
-                        </div>
+                  {/* Packages in Sorting Queue */}
+                  {hubQueue.sorting.length === 0 ? (
+                    <div className="py-12 text-center space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600 mx-auto flex items-center justify-center">
+                        <Boxes className="w-6 h-6 text-zinc-500" />
                       </div>
-                    )}
-
-                    {/* Step C: Box Camera Photo Proof & Final Confirmation */}
-                    {deliveryGateStatus === "delivered" && (
-                      <div className="p-3.5 rounded-lg bg-emerald-950/60 border border-emerald-800 space-y-3">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-emerald-300 flex items-center gap-1.5">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                            <span>Parcel Handed Over & PoD Secured</span>
-                          </span>
-                          <span className="text-[10px] font-mono bg-emerald-900/80 px-2 py-0.5 rounded text-emerald-200">
-                            DELIVERED
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-3">
+                      <div className="text-sm font-semibold text-zinc-300">Sorting Bays Clear</div>
+                      <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                        No packages currently staged in sorting bays for {hubQueue.hub.name}.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs text-zinc-400 font-mono">
+                        <span>Assign Destination & Complete Sorting into Loading Bay</span>
+                        {hubQueue.sorting.length > 1 && (
                           <button
                             type="button"
                             onClick={() => {
-                              setDeliveryPhotoProof("/images/hero-graphite.jpg");
-                              toast({
-                                type: "success",
-                                title: "Photo Proof Captured",
-                                description: "Doorstep delivery photo uploaded to S3 proof vault.",
+                              hubQueue.sorting.forEach((ord) => {
+                                handleHubQueueAction(ord.orderNumber, "to_loading");
                               });
                             }}
-                            className="flex-1 py-2 px-3 rounded-lg border border-emerald-700 bg-zinc-900 hover:bg-zinc-800 text-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            className="text-xs font-semibold text-purple-400 hover:text-purple-300 cursor-pointer flex items-center gap-1"
                           >
-                            <Camera className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>{deliveryPhotoProof ? "Retake Photo Proof" : "Snap Box Photo Proof (S3)"}</span>
+                            <span>Batch Sort All to Loading Bay</span>
+                            <PackagePlus className="w-3.5 h-3.5" />
                           </button>
-                          {deliveryPhotoProof && (
-                            <span className="text-[11px] font-mono text-emerald-400 font-bold">
-                              ✓ S3 Uploaded
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        {hubQueue.sorting
+                          .filter((ord) => filterDestinationHub === "all" || ord.nextHubId === filterDestinationHub)
+                          .map((ord) => (
+                            <div
+                              key={ord.id}
+                              className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                            >
+                              <div className="space-y-1.5 min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/20">
+                                    {ord.orderNumber}
+                                  </span>
+                                  <span className="text-xs font-semibold text-zinc-200">
+                                    {ord.customer?.fullName} ({ord.customer?.city})
+                                  </span>
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-semibold">
+                                    Routing: {getHubById(targetDestinationHubId)?.name || ord.nextHub}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                  <span>
+                                    Assigned Mode: <strong className="text-zinc-200 uppercase">{transitMode}</strong>
+                                  </span>
+                                  <span>•</span>
+                                  {transitMode === "train" ? (
+                                    <span>
+                                      Train: <strong className="text-amber-400 font-mono font-bold">#{trainNumber} · {trainDateTime.replace("T", " ")}</strong>
+                                      {railSpaceAllocation && <span className="text-zinc-400 text-[10px] ml-1">[{railSpaceAllocation} · {railFreightScale}]</span>}
+                                    </span>
+                                  ) : transitMode === "plane" ? (
+                                    <span>
+                                      Flight: <strong className="text-cyan-400 font-mono font-bold">#{flightNumber} · {flightDateTime.replace("T", " ")}</strong>
+                                      {airBayLocation && <span className="text-zinc-400 text-[10px] ml-1">[{airBayLocation.split(" ")[0]}]</span>}
+                                    </span>
+                                  ) : (
+                                    <span>
+                                      Carrier: <strong className="text-purple-400 font-mono font-bold">{COURIER_PROVIDERS_CATALOG.find((c) => c.id === courierProvider)?.name || "Courier"}</strong> [{courierTrackingAwb}]
+                                    </span>
+                                  )}
+                                  <span>•</span>
+                                  <span>
+                                    Destination: <strong className="text-zinc-200">{ord.customer?.city}, {ord.customer?.state}</strong>
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={hubActionLoading === ord.orderNumber}
+                                  onClick={() => handleHubQueueAction(ord.orderNumber, "to_loading")}
+                                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50"
+                                >
+                                  {hubActionLoading === ord.orderNumber ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <PackagePlus className="w-4 h-4" />
+                                  )}
+                                  <span>Complete Sorting ➔ Move to Loading Bay</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 4: LOADING QUEUE (VEHICLE STAGING & BAY LOADING PLATFORM) */}
+              {hubTab === "loading" && (
+                <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-4 text-white">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+                    <div className="flex items-center gap-2.5">
+                      <PackagePlus className="w-5 h-5 text-cyan-400" />
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">
+                          Vehicle Loading Bay & Staging Platform at {hubQueue.hub.name}
+                        </h3>
+                        <p className="text-xs text-zinc-400">
+                          Consignments sorted and staged at dock bay. Verify container stowage and mark loaded & dispatched to begin active transit [On the way].
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/20">
+                      {hubQueue.loading.length} packages ready for loading
+                    </span>
+                  </div>
+
+                  {hubQueue.loading.length === 0 ? (
+                    <div className="py-12 text-center space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600 mx-auto flex items-center justify-center">
+                        <PackagePlus className="w-6 h-6 text-zinc-500" />
+                      </div>
+                      <div className="text-sm font-semibold text-zinc-300">Loading Bay Clear</div>
+                      <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                        No packages currently waiting for vehicle loading at {hubQueue.hub.name}. Complete sorting to move consignments here.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs text-zinc-400 font-mono">
+                        <span>Vehicles Staged in Bay 4 — Ready for Dispatch</span>
+                        {hubQueue.loading.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              hubQueue.loading.forEach((ord) => {
+                                handleHubQueueAction(ord.orderNumber, "dispatch");
+                              });
+                            }}
+                            className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 cursor-pointer flex items-center gap-1"
+                          >
+                            <span>Batch Load All & Dispatch Fleet [On The Way]</span>
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        {hubQueue.loading.map((ord) => (
+                          <div
+                            key={ord.id}
+                            className="p-4 rounded-2xl bg-zinc-900/80 border border-cyan-500/30 hover:border-cyan-500/60 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                          >
+                            <div className="space-y-1.5 min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-xs font-bold text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded border border-cyan-500/20">
+                                  {ord.orderNumber}
+                                </span>
+                                <span className="text-xs font-semibold text-zinc-200">
+                                  {ord.customer?.fullName} ({ord.customer?.city})
+                                </span>
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-cyan-300 border border-zinc-700 font-semibold uppercase">
+                                  Loading Bay Staged · {ord.transitMode || "Truck"}
+                                </span>
+                                {ord.transitMode === "train" ? (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
+                                    Rail: Train #{ord.railFreight?.trainNumber || ord.vehicleNo?.replace("IR-", "") || "12302"} ({ord.railFreight?.departureDate || "Daily"}) {ord.railFreight?.spaceAllocationId ? `[${ord.railFreight.spaceAllocationId}]` : ""}
+                                  </span>
+                                ) : ord.transitMode === "plane" ? (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold">
+                                    Flight: #{ord.airCargo?.flightNumber || ord.vehicleNo?.replace("FLT-", "") || "6E-204"} ({ord.airCargo?.flightDate || "Daily"}) {ord.airCargo?.uldId ? `[ULD: ${ord.airCargo.uldId}]` : ""}
+                                  </span>
+                                ) : ord.courierService ? (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold">
+                                    {ord.courierService.providerName} · AWB: {ord.courierService.trackingAwb}
+                                  </span>
+                                ) : ord.containerId ? (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
+                                    Container: {ord.containerId}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <span>
+                                  Target Hub: <strong className="text-purple-300">{ord.nextHub}</strong> ({ord.nextRegion})
+                                </span>
+                                <span>•</span>
+                                <span>
+                                  Manifest: <strong className="text-emerald-400 font-semibold">Security Check OK</strong>
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                disabled={hubActionLoading === ord.orderNumber}
+                                onClick={() => handleHubQueueAction(ord.orderNumber, "dispatch")}
+                                className="px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50"
+                              >
+                                {hubActionLoading === ord.orderNumber ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <ArrowUpRight className="w-4 h-4" />
+                                )}
+                                <span>Mark Loaded & Dispatch [On The Way]</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 5: OUTGOING DISPATCHED PACKAGES QUEUE [ON THE WAY] */}
+              {hubTab === "outgoing" && (
+                <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-4 text-white">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+                    <div className="flex items-center gap-2.5">
+                      <ArrowUpRight className="w-5 h-5 text-purple-400" />
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">
+                          Outgoing Fleet In Transit [On The Way] from {hubQueue.hub.name}
+                        </h3>
+                        <p className="text-xs text-zinc-400">
+                          Active consignments dispatched outbound en route towards next destination hubs or doorstep gate couriers.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20">
+                      {hubQueue.outgoing.length} consignments in transit
+                    </span>
+                  </div>
+
+                  {hubQueue.outgoing.length === 0 ? (
+                    <div className="py-12 text-center space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600 mx-auto flex items-center justify-center">
+                        <Truck className="w-6 h-6 text-zinc-500" />
+                      </div>
+                      <div className="text-sm font-semibold text-zinc-300">No Outgoing Active Shipments</div>
+                      <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                        No parcels currently en route leaving {hubQueue.hub.name}.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {hubQueue.outgoing.map((ord) => {
+                        const isRailOrShip = ord.transitMode === "train" || ord.transitMode === "ship";
+                        const telematicsLabel = ord.transitMode === "plane"
+                          ? "ADS-B Air Cargo Telemetry Active"
+                          : ord.transitMode === "train"
+                            ? "FOIS Rail Electronic Telemetry Active"
+                            : ord.transitMode === "ship"
+                              ? "AIS Maritime Container Telemetry Active"
+                              : "FASTag Toll & Fleet GPS Active";
+
+                        return (
+                          <div
+                            key={ord.id}
+                            className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                          >
+                            <div className="space-y-1.5 min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-xs font-bold text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded border border-purple-500/20">
+                                  {ord.orderNumber}
+                                </span>
+                                <span className="text-xs font-semibold text-zinc-200">
+                                  {ord.customer?.fullName} ({ord.customer?.city})
+                                </span>
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                                  <span>{telematicsLabel}</span>
+                                </span>
+                                {isRailOrShip && ord.containerId && (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
+                                    Container: {ord.containerId}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <span>
+                                  Fleet: <strong className="text-zinc-200 uppercase">{ord.transitMode || "Truck"}</strong> [{ord.vehicleNo || "DL-01-TRK-8812"}]
+                                </span>
+                                <span>•</span>
+                                <span>
+                                  Next Station: <strong className="text-purple-300">{ord.nextHub}</strong> ({ord.nextRegion})
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setAuditWaybillModalOrder(ord)}
+                                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold cursor-pointer transition flex items-center gap-1.5"
+                              >
+                                <Navigation className="w-3.5 h-3.5 text-purple-400" />
+                                <span>View Audit Waybill & Telematics</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 6: DOORSTEP GATE ARRIVAL & 5-MIN ALIVE OTP & 2-IMAGE POD */}
+              {hubTab === "gate" && (
+                <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-6 text-white">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+                    <div className="flex items-center gap-2.5">
+                      <Key className="w-5 h-5 text-blue-400" />
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">
+                          Final Doorstep Gate Delivery, 5-Min Alive OTP & Mandatory PoD
+                        </h3>
+                        <p className="text-xs text-zinc-400">
+                          Couriers arrive at customer entrance, trigger live OTP email via AWS SES. Enter customer OTP and capture 2 mandatory photos under 10 MB to finalize release.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
+                      {hubQueue.gateHandover.length} consignments at gate
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Consignment Selection for Handover */}
+                    <div className="space-y-4">
+                      <label className="text-xs font-semibold text-zinc-400 block">Select Consignment at Doorstep:</label>
+                      <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                        {orders.map((ord) => (
+                          <div
+                            key={ord.id}
+                            onClick={() => {
+                              setDeliverySelectedOrderId(ord.orderNumber);
+                              if (ord.deliveryStatus === "delivered") {
+                                setDeliveryGateStatus("delivered");
+                              } else if (ord.gateOtpSession?.verified) {
+                                setDeliveryGateStatus("otp_verified");
+                              } else if (ord.gateOtpSession?.active) {
+                                setDeliveryGateStatus("otp_sent");
+                              } else {
+                                setDeliveryGateStatus("gate_reached");
+                              }
+                            }}
+                            className={`p-3.5 rounded-2xl border transition cursor-pointer ${deliverySelectedOrderId === ord.orderNumber
+                              ? "bg-blue-600/20 border-blue-500/50 text-white"
+                              : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                              }`}
+                          >
+                            <div className="flex items-center justify-between text-xs font-mono font-bold mb-1">
+                              <span className="text-blue-400">{ord.orderNumber}</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 uppercase font-semibold">
+                                {ord.deliveryStatus}
+                              </span>
+                            </div>
+                            <div className="text-xs text-zinc-300">
+                              {ord.customer?.fullName} · {ord.customer?.address}, {ord.customer?.city}
+                            </div>
+                            <div className="text-[11px] text-zinc-500 mt-1 flex items-center justify-between">
+                              <span>Contact: {ord.customer?.contact || "+91 81055 42318"}</span>
+                              {ord.deliveryStatus === "delivered" && (
+                                <span className="text-emerald-400 font-bold font-mono text-[10px]">✓ PoD Vaulted</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Step B: Doorstep verification controller */}
+                    <div className="border border-zinc-800 bg-zinc-900/60 rounded-2xl p-5 space-y-4 flex flex-col justify-between">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                          <span className="text-xs font-bold text-zinc-300">Doorstep Courier Station</span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            GPS Proximity Match ✓
+                          </span>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800/80 font-mono text-[11px] text-zinc-400 space-y-1.5">
+                          <div>[Active Waybill]: <strong className="text-white">{deliverySelectedOrderId}</strong></div>
+                          <div>[Courier Terminal]: Edge Handshake Verified · Port 443 OK</div>
+                          <div>
+                            [Status]:{" "}
+                            <span className="text-purple-300 font-bold uppercase">
+                              {deliveryGateStatus.replace('_', ' ')}
                             </span>
+                          </div>
+                          {deliveryGateStatus === "otp_sent" && (
+                            <div className="text-amber-400 pt-1 font-mono flex items-center justify-between border-t border-zinc-800/80 mt-1">
+                              <span>[Security Session]: Dispatched to Customer Email</span>
+                              <span>Remaining: {Math.floor(deliveryOtpRemainingSeconds / 60)}:{(deliveryOtpRemainingSeconds % 60).toString().padStart(2, '0')}</span>
+                            </div>
                           )}
                         </div>
+
+                        {/* Trigger 5-Min Alive OTP Button */}
+                        {deliveryGateStatus !== "delivered" && deliveryGateStatus !== "otp_verified" && (
+                          <button
+                            type="button"
+                            onClick={handleTriggerGateOtp}
+                            className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold tracking-wide uppercase transition-all active:scale-95 cursor-pointer ${otpTriggered || deliveryGateStatus === 'otp_sent'
+                              ? 'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-600/20'
+                              : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20'
+                              }`}
+                          >
+                            {otpTriggered || deliveryGateStatus === 'otp_sent'
+                              ? 'OTP Dispatched via AWS SES ✓ (Resend)'
+                              : 'Reached Gate ... Trigger 5-Min Alive OTP Email'}
+                          </button>
+                        )}
+
+                        {/* Customer 6-Digit OTP Verification Field */}
+                        {deliveryGateStatus === "otp_sent" && (
+                          <div className="p-3.5 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-zinc-300 font-medium">Customer Doorstep OTP:</span>
+                              <span className="text-amber-400 font-mono text-[11px]">
+                                Window: {Math.floor(deliveryOtpRemainingSeconds / 60)}:{(deliveryOtpRemainingSeconds % 60).toString().padStart(2, '0')}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                maxLength={6}
+                                value={deliveryOtpValue}
+                                onChange={(e) => setDeliveryOtpValue(e.target.value.replace(/[^0-9]/g, ""))}
+                                placeholder="Enter 6-digit OTP from customer"
+                                className="flex-1 px-3 py-2 text-center text-xs font-mono font-bold tracking-widest bg-zinc-900 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleVerifyGateOtp}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                              >
+                                Verify OTP
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Mandatory 2-Image PoD Capture (Unlocked upon OTP verification) */}
+                        {deliveryGateStatus === "otp_verified" && (
+                          <div className="p-4 rounded-2xl bg-zinc-950 border border-purple-500/40 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-xs font-bold text-purple-300 uppercase tracking-wider">
+                                <Camera className="w-4 h-4 text-purple-400" />
+                                <span>MANDATORY PROOF OF DELIVERY (2 IMAGES &lt;10 MB)</span>
+                              </div>
+                              <span className="text-[10px] font-mono bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded font-bold">
+                                Step 2 of 2
+                              </span>
+                            </div>
+
+                            <p className="text-[11px] text-zinc-400">
+                              Both photos are strictly required before handover confirmation. Capture with camera or upload image from file system.
+                            </p>
+
+                            {/* Image 1: Shipping Label Sticker */}
+                            <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
+                              <div className="flex items-center justify-between text-xs font-semibold text-zinc-200">
+                                <span>1. Shipping Label Sticker (Name & Barcode)</span>
+                                {labelProof ? (
+                                  <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
+                                    <Check className="w-3 h-3" />
+                                    <span>{(labelProof.size / 1024 / 1024).toFixed(2)} MB ✓</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-rose-400 font-mono font-bold">*Required</span>
+                                )}
+                              </div>
+
+                              {labelProof ? (
+                                <div className="flex items-center gap-3 bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                                  <img
+                                    src={labelProof.dataUrl || ""}
+                                    alt="Label Proof"
+                                    className="w-14 h-14 object-cover rounded-md border border-zinc-700 shrink-0"
+                                  />
+                                  <div className="min-w-0 flex-1 text-xs text-zinc-300">
+                                    <div className="font-mono text-[11px] truncate">{labelProof.name}</div>
+                                    <div className="text-[10px] text-zinc-500 mt-0.5">
+                                      {(labelProof.size / 1024 / 1024).toFixed(2)} MB (Under 10 MB limit)
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setLabelProof(null)}
+                                    className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 gap-2 pt-1">
+                                  <label className="py-2 px-2.5 rounded-lg border border-purple-500/40 bg-purple-600/10 hover:bg-purple-600/20 text-purple-300 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                    <Camera className="w-3.5 h-3.5" />
+                                    <span>Capture Camera</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      capture="environment"
+                                      onChange={(e) => handlePoDImageSelect("label", e)}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  <label className="py-2 px-2.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                    <Upload className="w-3.5 h-3.5" />
+                                    <span>Upload Image</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => handlePoDImageSelect("label", e)}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Image 2: Product Box & Condition */}
+                            <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
+                              <div className="flex items-center justify-between text-xs font-semibold text-zinc-200">
+                                <span>2. Product Box & Sealed Condition</span>
+                                {productProof ? (
+                                  <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
+                                    <Check className="w-3 h-3" />
+                                    <span>{(productProof.size / 1024 / 1024).toFixed(2)} MB ✓</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-rose-400 font-mono font-bold">*Required</span>
+                                )}
+                              </div>
+
+                              {productProof ? (
+                                <div className="flex items-center gap-3 bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                                  <img
+                                    src={productProof.dataUrl || ""}
+                                    alt="Product Proof"
+                                    className="w-14 h-14 object-cover rounded-md border border-zinc-700 shrink-0"
+                                  />
+                                  <div className="min-w-0 flex-1 text-xs text-zinc-300">
+                                    <div className="font-mono text-[11px] truncate">{productProof.name}</div>
+                                    <div className="text-[10px] text-zinc-500 mt-0.5">
+                                      {(productProof.size / 1024 / 1024).toFixed(2)} MB (Under 10 MB limit)
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setProductProof(null)}
+                                    className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 gap-2 pt-1">
+                                  <label className="py-2 px-2.5 rounded-lg border border-purple-500/40 bg-purple-600/10 hover:bg-purple-600/20 text-purple-300 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                    <Camera className="w-3.5 h-3.5" />
+                                    <span>Capture Camera</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      capture="environment"
+                                      onChange={(e) => handlePoDImageSelect("product", e)}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  <label className="py-2 px-2.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                    <Upload className="w-3.5 h-3.5" />
+                                    <span>Upload Image</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => handlePoDImageSelect("product", e)}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Finalize Release Button */}
+                            <button
+                              type="button"
+                              disabled={isFinalizingPod || !labelProof || !productProof}
+                              onClick={handleFinalizePod}
+                              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                            >
+                              {isFinalizingPod ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <CheckCheck className="w-4 h-4" />
+                              )}
+                              <span>
+                                {!labelProof || !productProof
+                                  ? "Attach Both 2 Images to Finalize Handover"
+                                  : "Confirm & Finalize Doorstep Handover (Archive to S3)"}
+                              </span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Delivered Confirmation Card */}
+                        {deliveryGateStatus === "delivered" && (
+                          <div className="p-4 rounded-2xl bg-emerald-950/60 border border-emerald-800 space-y-3">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                <span>Doorstep Handover Complete & PoD Secured</span>
+                              </span>
+                              <span className="text-[10px] font-mono bg-emerald-900/80 px-2 py-0.5 rounded text-emerald-200 font-bold">
+                                DELIVERED ✓
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-300">
+                              Customer OTP was verified and 2 high-resolution proof photos (Shipping Label & Sealed Box Condition, &lt;10 MB) have been sealed into AWS S3 proof vault. Live warranty email dispatched.
+                            </p>
+                            <div className="pt-2 flex items-center gap-2 text-[11px] font-mono text-emerald-400">
+                              <ShieldCheck className="w-4 h-4" />
+                              <span>2-Point PoD Authentication Archived</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* AUDIT WAYBILL & VEHICLE TELEMATICS MODAL */}
+              {auditWaybillModalOrder && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                  <div className="w-full max-w-2xl bg-zinc-950 border border-zinc-800 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5 text-white max-h-[90vh] overflow-y-auto">
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+                      <div className="flex items-center gap-2.5">
+                        <Navigation className="w-5 h-5 text-purple-400" />
+                        <div>
+                          <h3 className="text-sm font-bold uppercase tracking-wide">
+                            Supply-Chain Audit Waybill & Telematics Console
+                          </h3>
+                          <p className="text-xs text-zinc-400">
+                            Active tracking telemetry, multi-hub routing checkpoints, and vehicle tracking integration.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAuditWaybillModalOrder(null)}
+                        className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-900 transition"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Consignment Overview Banner */}
+                    <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
+                      <div>
+                        <span className="text-zinc-500 block text-[10px]">CONSIGNMENT / WAYBILL</span>
+                        <span className="font-bold text-purple-400 text-sm">{auditWaybillModalOrder.orderNumber}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 block text-[10px]">CURRENT LOCATION</span>
+                        <span className="text-zinc-200 font-bold">{auditWaybillModalOrder.currentHub}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 block text-[10px]">NEXT DESTINATION</span>
+                        <span className="text-purple-300 font-bold">{auditWaybillModalOrder.nextHub}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 block text-[10px]">DELIVERY STATUS</span>
+                        <span className="text-emerald-400 font-bold uppercase">{auditWaybillModalOrder.deliveryStatus}</span>
+                      </div>
+                    </div>
+
+                    {/* Vehicle & Telematics Tracking Source Breakdown */}
+                    <div className="p-4 rounded-2xl bg-purple-950/20 border border-purple-500/30 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-bold text-purple-300 uppercase">
+                          <Radio className="w-4 h-4 text-purple-400 animate-pulse" />
+                          <span>Vehicle Tracking Integration (Audit Engine)</span>
+                        </div>
+                        <span className="text-[10px] font-mono bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded font-bold">
+                          LIVE TELEMETRY
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="p-3 bg-zinc-900/90 rounded-xl border border-zinc-800 space-y-1">
+                          <span className="text-[10px] font-mono text-zinc-500 uppercase">Transport Mode & Vehicle</span>
+                          <div className="font-bold text-zinc-100 flex items-center gap-1.5 uppercase">
+                            <Truck className="w-3.5 h-3.5 text-purple-400" />
+                            <span>{auditWaybillModalOrder.transitMode || "Truck"} [{auditWaybillModalOrder.vehicleNo || "DL-01-TRK-8812"}]</span>
+                          </div>
+                          {auditWaybillModalOrder.transitMode === "train" && (
+                            <div className="text-amber-400 font-mono text-[11px] pt-1 font-semibold space-y-0.5">
+                              <div>Train #{auditWaybillModalOrder.railFreight?.trainNumber || auditWaybillModalOrder.vehicleNo?.replace("IR-", "") || "12302"} ({auditWaybillModalOrder.railFreight?.departureDate || "Daily"})</div>
+                              {auditWaybillModalOrder.railFreight?.pwbNumber && (
+                                <div className="text-zinc-400 text-[10px]">PWB: {auditWaybillModalOrder.railFreight.pwbNumber} · Coach: {auditWaybillModalOrder.railFreight.spaceAllocationId || "F-SLR"} ({auditWaybillModalOrder.railFreight.freightScale || "Scale-R"})</div>
+                              )}
+                              {auditWaybillModalOrder.railFreight?.sourceStationCode && (
+                                <div className="text-zinc-500 text-[10px]">Route: {auditWaybillModalOrder.railFreight.sourceStationCode} ➔ {auditWaybillModalOrder.railFreight.destinationStationCode}</div>
+                              )}
+                            </div>
+                          )}
+                          {auditWaybillModalOrder.transitMode === "plane" && (
+                            <div className="text-cyan-400 font-mono text-[11px] pt-1 font-semibold space-y-0.5">
+                              <div>Flight #{auditWaybillModalOrder.airCargo?.flightNumber || auditWaybillModalOrder.vehicleNo?.replace("FLT-", "") || "6E-204"} ({auditWaybillModalOrder.airCargo?.flightDate || "Daily"})</div>
+                              {auditWaybillModalOrder.airCargo?.awbNumber && (
+                                <div className="text-zinc-400 text-[10px]">AWB: {auditWaybillModalOrder.airCargo.awbNumber} · ULD: {auditWaybillModalOrder.airCargo.uldId || "AKE"}</div>
+                              )}
+                            </div>
+                          )}
+                          {auditWaybillModalOrder.courierService && (
+                            <div className="text-purple-400 font-mono text-[11px] pt-1 font-semibold space-y-0.5">
+                              <div>{auditWaybillModalOrder.courierService.providerName}</div>
+                              <div className="text-zinc-400 text-[10px]">AWB: {auditWaybillModalOrder.courierService.trackingAwb}</div>
+                            </div>
+                          )}
+                          {auditWaybillModalOrder.transitMode === "ship" && auditWaybillModalOrder.containerId && (
+                            <div className="text-amber-400 font-mono text-[11px] pt-1 font-bold">
+                              Container ID: {auditWaybillModalOrder.containerId}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-3 bg-zinc-900/90 rounded-xl border border-zinc-800 space-y-1">
+                          <span className="text-[10px] font-mono text-zinc-500 uppercase">External Tracking Solution</span>
+                          <div className="font-semibold text-emerald-400 text-xs">
+                            {auditWaybillModalOrder.transitMode === "plane"
+                              ? "FlightAware ADS-B Firehose / AeroAPI"
+                              : auditWaybillModalOrder.transitMode === "train"
+                                ? "FOIS / Indian Railways Electronic Freight Rake"
+                                : auditWaybillModalOrder.transitMode === "ship"
+                                  ? "AIS Maritime Container Telemetry / MarineTraffic"
+                                  : "FASTag Toll Telemetry & Samsara IoT GPS"}
+                          </div>
+                          <div className="text-[10px] text-zinc-400">
+                            {auditWaybillModalOrder.transitMode === "truck"
+                              ? "Highway toll plaza RFID pings track truck movement without physical GPS installation."
+                              : "Multi-point carrier API integration."}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Simulated Telemetry Ping Stats */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-[11px]">
+                        <div className="p-2 rounded-lg bg-zinc-950 border border-zinc-800 text-center">
+                          <span className="text-zinc-500 text-[10px] block">COORDINATES</span>
+                          <span className="text-zinc-200 font-bold">28.6139° N, 77.2090° E</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-zinc-950 border border-zinc-800 text-center">
+                          <span className="text-zinc-500 text-[10px] block">FLEET SPEED</span>
+                          <span className="text-zinc-200 font-bold">64 km/h</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-zinc-950 border border-zinc-800 text-center">
+                          <span className="text-zinc-500 text-[10px] block">LAST TOLL/GATE PING</span>
+                          <span className="text-emerald-400 font-bold">Palsit Toll Plaza</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-zinc-950 border border-zinc-800 text-center">
+                          <span className="text-zinc-500 text-[10px] block">PING LATENCY</span>
+                          <span className="text-cyan-400 font-bold">180ms · OK</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Checkpoint Event Timeline */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-zinc-300 uppercase tracking-wide">
+                        Consignment Checkpoint Audit Trail
+                      </div>
+                      <div className="p-3 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-2.5 max-h-48 overflow-y-auto">
+                        {[...(auditWaybillModalOrder.events || [])]
+                          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                          .map((ev, i) => (
+                            <div key={ev.id || i} className="flex items-start gap-2.5 text-xs">
+                              <span className="w-2 h-2 rounded-full bg-purple-400 mt-1.5 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-zinc-200">{ev.title}</span>
+                                  {i === 0 && (
+                                    <span className="px-1.5 py-0.2 rounded bg-purple-900/60 text-purple-300 font-mono text-[9px] uppercase border border-purple-500/40 font-bold">
+                                      Latest
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-zinc-400">{ev.description}</div>
+                                <div className="text-[10px] text-zinc-500 font-mono mt-0.5 flex items-center gap-1.5">
+                                  <Clock className="w-2.5 h-2.5 text-zinc-500" />
+                                  <span>{new Date(ev.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {new Date(ev.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}</span>
+                                  <span>·</span>
+                                  <span>{ev.actor || "Logistics Terminal"}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => setAuditWaybillModalOrder(null)}
+                        className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs cursor-pointer transition"
+                      >
+                        Close Waybill Audit
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -4667,15 +7173,15 @@ export default function AdminPage() {
                   i.componentSku?.toLowerCase().includes(q)
               );
               return matchNumber || matchCustomer || matchItem;
-            });
+            }).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
             return (
-              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+              <div className="rounded-2xl sm:rounded-3xl bg-white border border-zinc-200 p-4 sm:p-6 md:p-8 shadow-xs space-y-5 sm:space-y-6">
                 {/* Section Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 gap-3 sm:gap-4">
                   <div>
                     <div className="flex items-center gap-2">
-                      <ShoppingBag className="w-5 h-5 text-blue-600" />
+                      <ShoppingBag className="w-5 h-5 text-blue-600 shrink-0" />
                       <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
                         Order Buying Details & Analytics ({orders.length})
                       </h3>
@@ -4684,7 +7190,7 @@ export default function AdminPage() {
                       Real-time order buying totals, customer records, and itemized variant sales aggregated from MongoDB Atlas.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
                     <button
                       onClick={handleQuickDemoVerify}
                       className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold px-3 py-1.5 rounded-xl transition-colors"
@@ -4695,57 +7201,57 @@ export default function AdminPage() {
                 </div>
 
                 {/* Buying Totals & Analytics Summary Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+                  <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
                     <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
                       TOTAL GROSS REVENUE
                     </span>
-                    <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
+                    <div className="text-lg sm:text-2xl font-bold font-mono text-zinc-950 truncate">
                       ${totalRevenueUsd.toFixed(2)}
                     </div>
-                    <div className="text-[11px] font-mono text-zinc-500">
+                    <div className="text-[10px] sm:text-[11px] font-mono text-zinc-500 truncate">
                       ≈ ₹{totalRevenueInr.toLocaleString("en-IN")} INR
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                  <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
                     <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
                       TOTAL UNITS BOUGHT
                     </span>
-                    <div className="text-xl sm:text-2xl font-bold font-mono text-blue-600">
+                    <div className="text-lg sm:text-2xl font-bold font-mono text-blue-600 truncate">
                       {totalUnitsBought} <span className="text-xs font-normal text-zinc-500">items</span>
                     </div>
-                    <div className="text-[11px] text-zinc-500">Across all catalog variants</div>
+                    <div className="text-[10px] sm:text-[11px] text-zinc-500 truncate">Across all catalog variants</div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                  <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
                     <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
                       CONFIRMED PAID ORDERS
                     </span>
-                    <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-600">
+                    <div className="text-lg sm:text-2xl font-bold font-mono text-emerald-600 truncate">
                       {paidOrdersCount}{" "}
-                      <span className="text-xs font-normal text-zinc-400">/ {orders.length} total</span>
+                      <span className="text-xs font-normal text-zinc-400">/ {orders.length}</span>
                     </div>
-                    <div className="text-[11px] text-zinc-500">
+                    <div className="text-[10px] sm:text-[11px] text-zinc-500 truncate">
                       {orders.length > 0 ? `${Math.round((paidOrdersCount / orders.length) * 100)}% conversion rate` : "No orders"}
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
+                  <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-1">
                     <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-bold">
                       AVG. ORDER VALUE (AOV)
                     </span>
-                    <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950">
+                    <div className="text-lg sm:text-2xl font-bold font-mono text-zinc-950 truncate">
                       ${aov.toFixed(2)}
                     </div>
-                    <div className="text-[11px] font-mono text-zinc-500">
+                    <div className="text-[10px] sm:text-[11px] font-mono text-zinc-500 truncate">
                       ≈ ₹{Math.round(aov * exchangeRate).toLocaleString("en-IN")} INR
                     </div>
                   </div>
                 </div>
 
                 {/* Filter & Search Bar */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 pt-1">
                   <div className="relative w-full sm:w-80">
                     <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
@@ -4753,7 +7259,7 @@ export default function AdminPage() {
                       value={orderSearchQuery}
                       onChange={(e) => setOrderSearchQuery(e.target.value)}
                       placeholder="Search order #, customer, email, variant..."
-                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full pl-9 pr-3 py-2.5 sm:py-2 rounded-xl border border-zinc-200 bg-zinc-50/60 text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
                   <div className="text-xs text-zinc-400 font-mono">
@@ -4771,8 +7277,8 @@ export default function AdminPage() {
                     No orders match &quot;{orderSearchQuery}&quot;.
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+                  <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+                    <table className="w-full min-w-[760px] text-left text-xs">
                       <thead>
                         <tr className="border-b border-zinc-200 text-zinc-400 font-mono text-[11px]">
                           <th className="py-3 font-medium">ORDER #</th>
@@ -4786,7 +7292,7 @@ export default function AdminPage() {
                       </thead>
                       <tbody className="divide-y divide-zinc-100">
                         {filteredOrders.map((ord) => {
-                          const isExpanded = expandedOrderId === ord.id;
+                          const isExpanded = expandedOrderId === ord.id || expandedOrderId === ord.orderNumber;
                           const edits = orderDeliveryEdits[ord.orderNumber] || {
                             deliveryStatus: ord.deliveryStatus || "processing",
                             currentHub: ord.currentHub || "Portland Primary Logistics Center",
@@ -4801,27 +7307,33 @@ export default function AdminPage() {
                           return (
                             <React.Fragment key={ord.id}>
                               <tr
+                                id={`order-row-${ord.orderNumber}`}
                                 className={`hover:bg-zinc-50/80 transition-colors ${isExpanded ? "bg-blue-50/30" : ""
                                   }`}
                               >
                                 {/* 1. Order Number & Timestamp */}
                                 <td className="py-3.5 font-mono font-bold text-zinc-900 align-top">
                                   <div className="text-blue-600 font-bold text-xs">{ord.orderNumber}</div>
-                                  <div className="text-[10px] text-zinc-400 font-normal">
-                                    {ord.createdAt
-                                      ? new Date(ord.createdAt).toLocaleDateString("en-US", {
-                                        month: "short",
-                                        day: "numeric",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })
-                                      : "Recent"}
+                                  <div className="text-[10px] text-zinc-500 font-normal flex items-center gap-1 mt-0.5">
+                                    <Calendar className="w-2.5 h-2.5 text-zinc-400 shrink-0" />
+                                    <span>
+                                      {ord.createdAt
+                                        ? `${new Date(ord.createdAt).toLocaleDateString("en-US", {
+                                          month: "short",
+                                          day: "numeric",
+                                          year: "numeric",
+                                        })} · ${new Date(ord.createdAt).toLocaleTimeString("en-US", {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}`
+                                        : "Recent"}
+                                    </span>
                                   </div>
                                   <div className="pt-1">
                                     <span
                                       className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-mono ${ord.awsEventBridgeDispatched
-                                          ? "bg-emerald-50 text-emerald-700"
-                                          : "bg-amber-50 text-amber-700"
+                                        ? "bg-emerald-50 text-emerald-700"
+                                        : "bg-amber-50 text-amber-700"
                                         }`}
                                     >
                                       AWS-EB: {ord.awsEventBridgeDispatched ? "SYNC" : "PEND"}
@@ -4914,6 +7426,28 @@ export default function AdminPage() {
                                     <div className="text-[9px] text-zinc-400 font-mono">
                                       #{ord.trackingNumber || `TRK-${ord.orderNumber}`}
                                     </div>
+                                    {Array.isArray(ord.events) && ord.events.length > 0 && (() => {
+                                      const latestEv = [...ord.events].sort(
+                                        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                                      )[0];
+                                      return (
+                                        <div className="text-[9px] text-zinc-500 font-mono flex items-center gap-1 pt-0.5">
+                                          <Clock className="w-2.5 h-2.5 text-zinc-400 shrink-0" />
+                                          <span>
+                                            {new Date(latestEv.timestamp).toLocaleDateString("en-US", {
+                                              month: "short",
+                                              day: "numeric",
+                                            })}{" "}
+                                            ·{" "}
+                                            {new Date(latestEv.timestamp).toLocaleTimeString("en-US", {
+                                              hour: "2-digit",
+                                              minute: "2-digit",
+                                              hour12: true,
+                                            })}
+                                          </span>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </td>
 
@@ -4948,11 +7482,11 @@ export default function AdminPage() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      setExpandedOrderId(isExpanded ? null : ord.id)
+                                      setExpandedOrderId(isExpanded ? null : ord.orderNumber || ord.id)
                                     }
                                     className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all cursor-pointer ${isExpanded
-                                        ? "bg-zinc-900 text-white hover:bg-black shadow-xs"
-                                        : "border border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-800"
+                                      ? "bg-zinc-900 text-white hover:bg-black shadow-xs"
+                                      : "border border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-800"
                                       }`}
                                   >
                                     <span>{isExpanded ? "Close" : "Open"}</span>
@@ -4967,22 +7501,48 @@ export default function AdminPage() {
 
                               {/* Expanded Full Order Command Console */}
                               {isExpanded && (
-                                <tr className="bg-zinc-50/95 border-b border-zinc-200">
+                                <tr
+                                  id={`order-console-${ord.orderNumber}`}
+                                  className="bg-zinc-50/95 border-b border-zinc-200"
+                                >
                                   <td colSpan={7} className="p-4 sm:p-6 space-y-5">
                                     {/* Console Header Bar */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-200 text-xs">
-                                      <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-                                        <span className="font-mono font-bold uppercase tracking-wider text-zinc-900">
+                                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-zinc-200 text-xs">
+                                      <div className="flex items-center gap-2.5 flex-wrap">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></span>
+                                        <span className="font-mono font-bold uppercase tracking-wider text-zinc-950 text-sm">
                                           Order Control Console · #{ord.orderNumber}
                                         </span>
+                                        <span className="px-2.5 py-0.5 rounded-full font-mono font-bold text-[10px] uppercase bg-zinc-900 text-white shadow-xs">
+                                          {ord.deliveryStatus?.replace(/_/g, " ") || "Processing"}
+                                        </span>
                                       </div>
-                                      <div className="flex items-center gap-3 font-mono text-[11px] text-zinc-500">
-                                        <span>Customer: <strong>{ord.customer?.fullName}</strong></span>
-                                        <span>•</span>
-                                        <span>Total: <strong>${Number(ord.total || 0).toFixed(2)} USD</strong></span>
-                                        <span>•</span>
-                                        <span>Gateway: <strong>RAZORPAY</strong></span>
+                                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-zinc-500">
+                                        <span className="flex items-center gap-1 text-zinc-700">
+                                          <Calendar className="w-3 h-3 text-zinc-400" />
+                                          <span>
+                                            Placed:{" "}
+                                            <strong className="text-zinc-900">
+                                              {ord.createdAt
+                                                ? `${new Date(ord.createdAt).toLocaleDateString("en-US", {
+                                                  month: "short",
+                                                  day: "numeric",
+                                                  year: "numeric",
+                                                })} · ${new Date(ord.createdAt).toLocaleTimeString("en-US", {
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                                  hour12: true,
+                                                })}`
+                                                : "Recent"}
+                                            </strong>
+                                          </span>
+                                        </span>
+                                        <span className="text-zinc-300">•</span>
+                                        <span>Customer: <strong className="text-zinc-800">{ord.customer?.fullName}</strong></span>
+                                        <span className="text-zinc-300">•</span>
+                                        <span>Total: <strong className="text-zinc-800">${Number(ord.total || 0).toFixed(2)} USD</strong></span>
+                                        <span className="text-zinc-300">•</span>
+                                        <span>Gateway: <strong className="text-zinc-800">RAZORPAY</strong></span>
                                       </div>
                                     </div>
 
@@ -5165,12 +7725,192 @@ export default function AdminPage() {
                                             <div>Order ID: <strong className="text-zinc-800">{ord.razorpayOrderId || "order_live"}</strong></div>
                                           </div>
                                         </div>
+
+                                        {/* Proof of Delivery (POD) Handover Verification Card */}
+                                        {(() => {
+                                          const pod = ord.podImages || ord.gateOtpSession?.podImages;
+                                          const isDelivered = ord.deliveryStatus === "delivered";
+                                          const hasPod = Boolean(pod?.labelImage || pod?.productImage);
+
+                                          return (
+                                            <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-3 shadow-xs">
+                                              <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
+                                                <div className="flex items-center gap-1.5">
+                                                  <ShieldCheck className={`w-4 h-4 ${hasPod ? "text-emerald-600" : "text-zinc-400"}`} />
+                                                  <span className="text-[10px] font-mono tracking-wider uppercase font-bold text-zinc-800">
+                                                    PROOF OF DELIVERY · HANDOVER INSPECTION
+                                                  </span>
+                                                </div>
+                                                {hasPod ? (
+                                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                                    Zero Damage Verified
+                                                  </span>
+                                                ) : isDelivered ? (
+                                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
+                                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                                    Delivered & OTP Verified
+                                                  </span>
+                                                ) : (
+                                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono text-zinc-500 bg-zinc-100 border border-zinc-200">
+                                                    Pending Doorstep Gate
+                                                  </span>
+                                                )}
+                                              </div>
+
+                                              <p className="text-[11px] text-zinc-500 leading-snug">
+                                                Delivery partner mandatory 2-photo verification captured upon handover. Inspect physical box condition to confirm intact seal and zero compromised damage.
+                                              </p>
+
+                                              {hasPod ? (
+                                                <div className="space-y-2.5">
+                                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    {/* Image 1: Shipping Label & Consignment Seal */}
+                                                    <div className="group relative rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden hover:border-blue-500 transition-all shadow-xs">
+                                                      <div
+                                                        onClick={() =>
+                                                          pod?.labelImage &&
+                                                          setPodModalImage({
+                                                            src: pod.labelImage,
+                                                            title: "Shipping Label & Barcode Inspection",
+                                                            subtitle: `Consignment #${ord.orderNumber} · Carrier Handover Record`,
+                                                            name: pod.labelImageName || "shipping-label.jpg",
+                                                            size: pod.labelImageSize,
+                                                          })
+                                                        }
+                                                        className="relative aspect-video w-full bg-zinc-900/5 cursor-pointer overflow-hidden flex items-center justify-center"
+                                                      >
+                                                        {pod?.labelImage ? (
+                                                          // eslint-disable-next-line @next/next/no-img-element
+                                                          <img
+                                                            src={pod.labelImage}
+                                                            alt="Shipping Label Proof"
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                          />
+                                                        ) : (
+                                                          <div className="text-zinc-400 text-xs flex flex-col items-center gap-1">
+                                                            <FileText className="w-5 h-5 text-zinc-400" />
+                                                            <span>No label photo</span>
+                                                          </div>
+                                                        )}
+                                                        {/* Overlay hover prompt */}
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-[11px] font-semibold">
+                                                          <Eye className="w-3.5 h-3.5" />
+                                                          <span>Click Full Size</span>
+                                                        </div>
+                                                      </div>
+                                                      <div className="p-2 bg-white space-y-0.5">
+                                                        <div className="flex items-center justify-between text-[10px] font-mono">
+                                                          <span className="font-bold text-zinc-800 truncate">1. Shipping Label Sticker</span>
+                                                          <span className="text-zinc-400">
+                                                            {pod?.labelImageSize
+                                                              ? `${(pod.labelImageSize / (1024 * 1024)).toFixed(2)} MB`
+                                                              : "Verified"}
+                                                          </span>
+                                                        </div>
+                                                        <div className="text-[9px] text-zinc-400 font-mono truncate">
+                                                          {pod?.labelImageName || "label-sticker.jpg"}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+
+                                                    {/* Image 2: Physical Sealed Box Condition (No Damage Handover) */}
+                                                    <div className="group relative rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden hover:border-blue-500 transition-all shadow-xs">
+                                                      <div
+                                                        onClick={() =>
+                                                          pod?.productImage &&
+                                                          setPodModalImage({
+                                                            src: pod.productImage,
+                                                            title: "Product Box & Physical Condition Inspection",
+                                                            subtitle: `Zero-Damage Verification · Consignment #${ord.orderNumber}`,
+                                                            name: pod.productImageName || "product-box.jpg",
+                                                            size: pod.productImageSize,
+                                                          })
+                                                        }
+                                                        className="relative aspect-video w-full bg-zinc-900/5 cursor-pointer overflow-hidden flex items-center justify-center"
+                                                      >
+                                                        {pod?.productImage ? (
+                                                          // eslint-disable-next-line @next/next/no-img-element
+                                                          <img
+                                                            src={pod.productImage}
+                                                            alt="Product Box Proof"
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                          />
+                                                        ) : (
+                                                          <div className="text-zinc-400 text-xs flex flex-col items-center gap-1">
+                                                            <Package className="w-5 h-5 text-zinc-400" />
+                                                            <span>No product photo</span>
+                                                          </div>
+                                                        )}
+                                                        {/* Overlay hover prompt */}
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-[11px] font-semibold">
+                                                          <Eye className="w-3.5 h-3.5" />
+                                                          <span>Click Full Size</span>
+                                                        </div>
+                                                      </div>
+                                                      <div className="p-2 bg-white space-y-0.5">
+                                                        <div className="flex items-center justify-between text-[10px] font-mono">
+                                                          <span className="font-bold text-zinc-800 truncate">2. Intact Box Condition</span>
+                                                          <span className="text-zinc-400">
+                                                            {pod?.productImageSize
+                                                              ? `${(pod.productImageSize / (1024 * 1024)).toFixed(2)} MB`
+                                                              : "Verified"}
+                                                          </span>
+                                                        </div>
+                                                        <div className="text-[9px] text-zinc-400 font-mono truncate">
+                                                          {pod?.productImageName || "product-box.jpg"}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+
+                                                  <div className="flex items-center justify-between pt-1.5 border-t border-zinc-100 text-[9px] font-mono text-zinc-500">
+                                                    <span className="flex items-center gap-1">
+                                                      <Check className="w-3 h-3 text-emerald-600" />
+                                                      <span>Handover authenticated with 6-digit gate OTP</span>
+                                                    </span>
+                                                    <span>
+                                                      {pod?.uploadedAt
+                                                        ? new Date(pod.uploadedAt).toLocaleString("en-US", {
+                                                          month: "short",
+                                                          day: "numeric",
+                                                          hour: "2-digit",
+                                                          minute: "2-digit",
+                                                        })
+                                                        : "Secured"}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              ) : isDelivered ? (
+                                                <div className="p-3.5 rounded-xl bg-zinc-50 border border-dashed border-zinc-200 text-center space-y-1">
+                                                  <div className="text-[11px] font-semibold text-zinc-700 flex items-center justify-center gap-1.5">
+                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                    <span>Delivery Handover Verified & Completed</span>
+                                                  </div>
+                                                  <p className="text-[10px] text-zinc-500">
+                                                    Proof records logged under Audit & Status Events timeline. Photos captured during doorstep terminal sync.
+                                                  </p>
+                                                </div>
+                                              ) : (
+                                                <div className="p-3.5 rounded-xl bg-zinc-50/70 border border-dashed border-zinc-200 text-center space-y-1">
+                                                  <div className="text-[11px] font-medium text-zinc-600 flex items-center justify-center gap-1.5">
+                                                    <Camera className="w-3.5 h-3.5 text-zinc-400" />
+                                                    <span>Awaiting Doorstep Handover Photos</span>
+                                                  </div>
+                                                  <p className="text-[10px] text-zinc-400 max-w-sm mx-auto">
+                                                    When the carrier arrives at customer address, 2 condition photos must be submitted with OTP to finalize handover.
+                                                  </p>
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
                                       </div>
 
                                       {/* Column 2: Orders Delivery & Logistics Controller (4 cols) */}
                                       <div className="lg:col-span-4 space-y-4">
                                         <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-3">
-                                          <div className="flex items-center justify-between">
+                                          <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
                                             <span className="text-[10px] font-mono tracking-wider text-purple-600 uppercase font-bold flex items-center gap-1.5">
                                               <Truck className="w-3.5 h-3.5" />
                                               <span>DELIVERY & TRANSIT CONTROL</span>
@@ -5187,294 +7927,478 @@ export default function AdminPage() {
                                             </button>
                                           </div>
 
-                                          {/* Button-Driven Transport Mode Selector */}
-                                          <div>
-                                            <label className="block text-zinc-500 font-medium mb-1.5 font-mono text-[10px] uppercase">
-                                              Active Fleet Transport Mode
-                                            </label>
-                                            <div className="grid grid-cols-5 gap-1.5">
-                                              {vehicleModes.map((mode) => {
-                                                const Icon = mode.icon;
-                                                const currentMode = edits.transitMode || ord.transitMode || "van";
-                                                const isSelected = currentMode === mode.id;
-                                                return (
-                                                  <button
-                                                    key={mode.id}
-                                                    type="button"
-                                                    onClick={() =>
-                                                      setOrderDeliveryEdits((prev) => ({
-                                                        ...prev,
-                                                        [ord.orderNumber]: {
-                                                          ...prev[ord.orderNumber],
-                                                          transitMode: mode.id,
-                                                        },
-                                                      }))
-                                                    }
-                                                    className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg border text-[10px] font-medium transition cursor-pointer ${isSelected
-                                                        ? "bg-purple-600 border-purple-500 text-white shadow-xs font-bold"
-                                                        : "bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100"
+                                          {/* 1. Origin Actions (Clicked Here) */}
+                                          {(() => {
+                                            const isPacked =
+                                              ord.deliveryStatus === "order_packed" ||
+                                              ord.deliveryStatus === "dispatched" ||
+                                              ord.deliveryStatus === "locations_arrive" ||
+                                              ord.deliveryStatus === "in_transit" ||
+                                              ord.deliveryStatus === "out_for_delivery" ||
+                                              ord.deliveryStatus === "delivered";
+
+                                            const isDispatched =
+                                              ord.deliveryStatus === "dispatched" ||
+                                              ord.deliveryStatus === "locations_arrive" ||
+                                              ord.deliveryStatus === "in_transit" ||
+                                              ord.deliveryStatus === "out_for_delivery" ||
+                                              ord.deliveryStatus === "delivered";
+
+                                            const hasHubArrived =
+                                              ord.deliveryStatus === "locations_arrive" ||
+                                              ord.deliveryStatus === "in_transit" ||
+                                              ord.deliveryStatus === "out_for_delivery" ||
+                                              ord.deliveryStatus === "delivered" ||
+                                              ord.hubQueueStatus === "received" ||
+                                              ord.hubQueueStatus === "sorting" ||
+                                              ord.hubQueueStatus === "loading" ||
+                                              ord.hubQueueStatus === "outgoing" ||
+                                              Boolean(
+                                                ord.route?.some(
+                                                  (r) =>
+                                                    r.status === "received" ||
+                                                    r.status === "sorting" ||
+                                                    r.status === "loading" ||
+                                                    r.status === "dispatched" ||
+                                                    r.status === "completed"
+                                                )
+                                              );
+
+                                            const isOnWay =
+                                              ord.deliveryStatus === "out_for_delivery" ||
+                                              ord.deliveryStatus === "delivered" ||
+                                              ord.hubQueueStatus === "outgoing" ||
+                                              Boolean(
+                                                ord.route?.some(
+                                                  (r) => r.status === "dispatched" || r.status === "completed"
+                                                )
+                                              );
+
+                                            const isDelivered = ord.deliveryStatus === "delivered";
+
+                                            const isSavingPacked = edits.isSaving && edits.savingStatus === "order_packed";
+                                            const isSavingDispatched = edits.isSaving && edits.savingStatus === "dispatched";
+
+                                            // Extract recent hub/transit events for the live log below
+                                            const hubEvents = (ord.events || [])
+                                              .filter(
+                                                (e) =>
+                                                  e.type === "delivery" ||
+                                                  e.title?.toLowerCase().includes("hub") ||
+                                                  e.title?.toLowerCase().includes("dock") ||
+                                                  e.title?.toLowerCase().includes("transit") ||
+                                                  e.title?.toLowerCase().includes("rail") ||
+                                                  e.title?.toLowerCase().includes("flight") ||
+                                                  e.title?.toLowerCase().includes("dispatched") ||
+                                                  e.title?.toLowerCase().includes("handover") ||
+                                                  e.title?.toLowerCase().includes("received")
+                                              )
+                                              .sort(
+                                                (a, b) =>
+                                                  new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                                              )
+                                              .slice(0, 3);
+
+                                            return (
+                                              <div className="space-y-3.5">
+                                                {/* Origin Warehouse Buttons (Clicked by Here) */}
+                                                <div className="space-y-1.5">
+                                                  <div className="flex items-center justify-between text-[10px] font-mono uppercase font-semibold">
+                                                    <span className="text-zinc-600 font-bold">Origin Warehouse Actions</span>
+                                                    <span className="text-purple-600 font-bold">Clicked Here</span>
+                                                  </div>
+
+                                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                    {/* Button 1: Order Packed */}
+                                                    <button
+                                                      type="button"
+                                                      disabled={edits.isSaving || isPacked}
+                                                      onClick={() => handleQuickStatusUpdate(ord.orderNumber, "order_packed", "Order Packed")}
+                                                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer disabled:cursor-default ${
+                                                        isPacked
+                                                          ? "bg-emerald-50/80 border-emerald-300 text-zinc-900 shadow-2xs"
+                                                          : "bg-purple-50/50 border-purple-200 hover:bg-purple-100/60 hover:border-purple-400 text-zinc-800"
                                                       }`}
-                                                  >
-                                                    <Icon className="w-3 h-3 mb-0.5" />
-                                                    <span>{mode.label}</span>
-                                                  </button>
-                                                );
-                                              })}
-                                            </div>
-                                          </div>
+                                                    >
+                                                      <div className="flex items-center justify-between w-full mb-1">
+                                                        <div className="flex items-center gap-1.5">
+                                                          <div
+                                                            className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${
+                                                              isPacked
+                                                                ? "bg-emerald-600 text-white"
+                                                                : "bg-purple-600 text-white"
+                                                            }`}
+                                                          >
+                                                            {isPacked ? <Check className="w-3.5 h-3.5" /> : <Boxes className="w-3.5 h-3.5" />}
+                                                          </div>
+                                                          <span className="text-xs font-bold">Order Packed</span>
+                                                        </div>
+                                                        <div>
+                                                          {isSavingPacked ? (
+                                                            <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-purple-700 animate-pulse">
+                                                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                                                              <span>Saving...</span>
+                                                            </span>
+                                                          ) : isPacked ? (
+                                                            <span className="text-[10px] font-mono font-bold text-emerald-700 flex items-center gap-0.5">
+                                                              Done ✓
+                                                            </span>
+                                                          ) : (
+                                                            <span className="text-[10px] font-mono font-bold text-purple-700 underline">
+                                                              Click to Pack →
+                                                            </span>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                      <span className="text-[10px] text-zinc-500 leading-tight">
+                                                        {isPacked
+                                                          ? "Boxed, sealed & barcoded at warehouse"
+                                                          : "Click when package is boxed and sealed"}
+                                                      </span>
+                                                    </button>
 
-                                          {/* Delivery Status Select */}
-                                          <div>
-                                            <label className="block text-zinc-600 font-medium mb-1 font-mono text-[10px] uppercase">
-                                              Delivery Status
-                                            </label>
-                                            <select
-                                              value={edits.deliveryStatus || ord.deliveryStatus || "processing"}
-                                              onChange={(e) =>
-                                                setOrderDeliveryEdits((prev) => ({
-                                                  ...prev,
-                                                  [ord.orderNumber]: {
-                                                    ...prev[ord.orderNumber],
-                                                    deliveryStatus: e.target.value,
-                                                  },
-                                                }))
-                                              }
-                                              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 focus:outline-none focus:border-blue-500 font-semibold"
-                                            >
-                                              <option value="processing">Processing (Origin Facility)</option>
-                                              <option value="dispatched">Dispatched from Warehouse</option>
-                                              <option value="in_transit">In Transit (Logistics Hub)</option>
-                                              <option value="out_for_delivery">Out for Delivery (Courier Gate)</option>
-                                              <option value="delivered">Delivered to Customer</option>
-                                              <option value="cancelled">Cancelled</option>
-                                            </select>
-                                          </div>
+                                                    {/* Button 2: Order Dispatched */}
+                                                    <button
+                                                      type="button"
+                                                      disabled={edits.isSaving || isDispatched}
+                                                      onClick={() => handleQuickStatusUpdate(ord.orderNumber, "dispatched", "Order Dispatched")}
+                                                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer disabled:cursor-default ${
+                                                        isDispatched
+                                                          ? "bg-emerald-50/80 border-emerald-300 text-zinc-900 shadow-2xs"
+                                                          : isPacked
+                                                          ? "bg-blue-50/60 border-blue-200 hover:bg-blue-100/70 hover:border-blue-400 text-zinc-800"
+                                                          : "bg-zinc-50 border-zinc-200 text-zinc-400 opacity-70"
+                                                      }`}
+                                                    >
+                                                      <div className="flex items-center justify-between w-full mb-1">
+                                                        <div className="flex items-center gap-1.5">
+                                                          <div
+                                                            className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${
+                                                              isDispatched
+                                                                ? "bg-emerald-600 text-white"
+                                                                : isPacked
+                                                                ? "bg-blue-600 text-white"
+                                                                : "bg-zinc-300 text-zinc-600"
+                                                            }`}
+                                                          >
+                                                            {isDispatched ? <Check className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
+                                                          </div>
+                                                          <span className="text-xs font-bold">Order Dispatched</span>
+                                                        </div>
+                                                        <div>
+                                                          {isSavingDispatched ? (
+                                                            <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-blue-700 animate-pulse">
+                                                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                                                              <span>Saving...</span>
+                                                            </span>
+                                                          ) : isDispatched ? (
+                                                            <span className="text-[10px] font-mono font-bold text-emerald-700 flex items-center gap-0.5">
+                                                              Done ✓
+                                                            </span>
+                                                          ) : (
+                                                            <span className="text-[10px] font-mono font-bold text-blue-700 underline">
+                                                              Click to Dispatch →
+                                                            </span>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                      <span className="text-[10px] text-zinc-500 leading-tight">
+                                                        {isDispatched
+                                                          ? "Departed origin for logistics hub network"
+                                                          : "Click when carrier takes consignment"}
+                                                      </span>
+                                                    </button>
+                                                  </div>
+                                                </div>
 
-                                          {/* Transit Hub Input */}
-                                          <div>
-                                            <label className="block text-zinc-600 font-medium mb-1 font-mono text-[10px] uppercase">
-                                              Current Transit Hub / Facility
-                                            </label>
-                                            <input
-                                              type="text"
-                                              value={edits.currentHub !== undefined ? edits.currentHub : (ord.currentHub || "")}
-                                              onChange={(e) =>
-                                                setOrderDeliveryEdits((prev) => ({
-                                                  ...prev,
-                                                  [ord.orderNumber]: {
-                                                    ...prev[ord.orderNumber],
-                                                    currentHub: e.target.value,
-                                                  },
-                                                }))
-                                              }
-                                              placeholder="e.g. Portland Primary Logistics Center"
-                                              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 focus:outline-none focus:border-blue-500 font-mono"
-                                            />
-                                          </div>
+                                                {/* 2. Hub, On-Way & Delivered Milestones (Auto-Updated by Full Hub Controls) */}
+                                                <div className="space-y-2 pt-2 border-t border-zinc-100">
+                                                  <div className="flex items-center justify-between text-[10px] font-mono uppercase font-semibold">
+                                                    <span className="text-zinc-600 font-bold flex items-center gap-1">
+                                                      <Sparkles className="w-3 h-3 text-purple-600" />
+                                                      <span>Hub & Transit Controls</span>
+                                                    </span>
+                                                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-bold">
+                                                      Auto-Updated by Full Hub Controls
+                                                    </span>
+                                                  </div>
 
-                                          {/* Tracking Number Input */}
-                                          <div>
-                                            <label className="block text-zinc-600 font-medium mb-1 font-mono text-[10px] uppercase">
-                                              Tracking Number
-                                            </label>
-                                            <input
-                                              type="text"
-                                              value={edits.trackingNumber !== undefined ? edits.trackingNumber : (ord.trackingNumber || "")}
-                                              onChange={(e) =>
-                                                setOrderDeliveryEdits((prev) => ({
-                                                  ...prev,
-                                                  [ord.orderNumber]: {
-                                                    ...prev[ord.orderNumber],
-                                                    trackingNumber: e.target.value,
-                                                  },
-                                                }))
-                                              }
-                                              placeholder="e.g. TRK-ANC-914820"
-                                              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 focus:outline-none focus:border-blue-500 font-mono"
-                                            />
-                                          </div>
+                                                  <div className="flex flex-col gap-1.5">
+                                                    {/* Milestone 1: Marked Locations Arrive */}
+                                                    <div
+                                                      className={`p-2.5 rounded-xl border flex items-center justify-between transition-colors ${
+                                                        hasHubArrived
+                                                          ? "bg-teal-50/70 border-teal-200 text-zinc-900"
+                                                          : "bg-zinc-50/80 border-zinc-200/80 text-zinc-500"
+                                                      }`}
+                                                    >
+                                                      <div className="flex items-center gap-2.5 min-w-0">
+                                                        <div
+                                                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                                            hasHubArrived
+                                                              ? "bg-teal-600 text-white"
+                                                              : "bg-zinc-200 text-zinc-400"
+                                                          }`}
+                                                        >
+                                                          {hasHubArrived ? <Check className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                          <div className="flex items-center gap-1.5">
+                                                            <span className="text-xs font-bold text-zinc-900">Marked Locations Arrive</span>
+                                                            {hasHubArrived && (
+                                                              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 font-bold">
+                                                                Hub Docked
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                          <div className="text-[10px] text-zinc-500 truncate">
+                                                            {hasHubArrived
+                                                              ? `Dock scanned at ${ord.currentHub || "Regional Fulfillment Hub"}`
+                                                              : "Auto-updates when scanned at hub dock in Hub Console"}
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                      <div className="shrink-0 pl-2">
+                                                        {hasHubArrived ? (
+                                                          <span className="text-[10px] font-mono text-teal-700 font-semibold">Arrived ✓</span>
+                                                        ) : (
+                                                          <span className="text-[10px] font-mono text-zinc-400">Auto-Pending</span>
+                                                        )}
+                                                      </div>
+                                                    </div>
 
-                                          {/* Status Update Note */}
-                                          <div>
-                                            <label className="block text-zinc-600 font-medium mb-1 font-mono text-[10px] uppercase">
-                                              Checkpoint Note
-                                            </label>
-                                            <input
-                                              type="text"
-                                              value={edits.note || ""}
-                                              onChange={(e) =>
-                                                setOrderDeliveryEdits((prev) => ({
-                                                  ...prev,
-                                                  [ord.orderNumber]: {
-                                                    ...prev[ord.orderNumber],
-                                                    note: e.target.value,
-                                                  },
-                                                }))
-                                              }
-                                              placeholder="e.g. Scanned at outbound ramp"
-                                              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/50 text-xs text-zinc-900 focus:outline-none focus:border-blue-500"
-                                            />
-                                          </div>
+                                                    {/* Milestone 2: On Way (In-Transit) */}
+                                                    <div
+                                                      className={`p-2.5 rounded-xl border flex items-center justify-between transition-colors ${
+                                                        isOnWay
+                                                          ? "bg-indigo-50/70 border-indigo-200 text-zinc-900"
+                                                          : "bg-zinc-50/80 border-zinc-200/80 text-zinc-500"
+                                                      }`}
+                                                    >
+                                                      <div className="flex items-center gap-2.5 min-w-0">
+                                                        <div
+                                                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                                            isOnWay
+                                                              ? "bg-indigo-600 text-white"
+                                                              : "bg-zinc-200 text-zinc-400"
+                                                          }`}
+                                                        >
+                                                          {isOnWay ? <Truck className="w-3.5 h-3.5" /> : <Truck className="w-3.5 h-3.5" />}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                          <div className="flex items-center gap-1.5">
+                                                            <span className="text-xs font-bold text-zinc-900">On The Way</span>
+                                                            {isOnWay && (
+                                                              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 font-bold">
+                                                                Line-Haul Active
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                          <div className="text-[10px] text-zinc-500 truncate">
+                                                            {isOnWay
+                                                              ? `En route via ${ord.transitMode?.toUpperCase() || "CARRIER"} [${ord.vehicleNo || "Transit Fleet"}]`
+                                                              : "Auto-updates when hub dispatches vehicle/train/flight in Hub Console"}
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                      <div className="shrink-0 pl-2">
+                                                        {isOnWay ? (
+                                                          <span className="text-[10px] font-mono text-indigo-700 font-semibold">On Way 🚀</span>
+                                                        ) : (
+                                                          <span className="text-[10px] font-mono text-zinc-400">Auto-Pending</span>
+                                                        )}
+                                                      </div>
+                                                    </div>
 
-                                          {/* Split Inbound & Outbound Quick Action Triggers */}
-                                          <div className="grid grid-cols-2 gap-2 pt-1">
-                                            <button
-                                              type="button"
-                                              disabled={edits.isSaving}
-                                              onClick={async () => {
-                                                setOrderDeliveryEdits((prev) => ({
-                                                  ...prev,
-                                                  [ord.orderNumber]: { ...prev[ord.orderNumber], isSaving: true },
-                                                }));
-                                                try {
-                                                  const hub = edits.currentHub !== undefined ? edits.currentHub : (ord.currentHub || "Frankfurt Central Air Logistics Hub");
-                                                  const mode = edits.transitMode || ord.transitMode || "van";
-                                                  const vPlate = edits.vehicleNo || ord.vehicleNo || "OR-EXP-8891";
-                                                  const res = await fetch("/api/orders", {
-                                                    method: "POST",
-                                                    headers: { "Content-Type": "application/json" },
-                                                    body: JSON.stringify({
-                                                      action: "log-transit-action",
-                                                      orderNumber: ord.orderNumber,
-                                                      type: "arrival",
-                                                      transitMode: mode,
-                                                      vehicleNo: vPlate,
-                                                      hubName: hub,
-                                                      hubRegion: "Main Logistics Hub",
-                                                      manifestVerified: true,
-                                                    }),
-                                                  });
-                                                  const data = await res.json();
-                                                  if (data.order) {
-                                                    setOrders((prev) =>
-                                                      prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
-                                                    );
-                                                  }
-                                                  toast({
-                                                    type: "success",
-                                                    title: "Inbound Arrival Logged",
-                                                    description: `Consignment #${ord.orderNumber} arrived at ${hub} via ${mode.toUpperCase()} [${vPlate}].`,
-                                                  });
-                                                } catch {
-                                                  toast({ type: "error", title: "Action Failed", description: "Could not log inbound arrival." });
-                                                } finally {
-                                                  setOrderDeliveryEdits((prev) => ({
-                                                    ...prev,
-                                                    [ord.orderNumber]: { ...prev[ord.orderNumber], isSaving: false },
-                                                  }));
-                                                }
-                                              }}
-                                              className="py-2 px-2.5 rounded-lg text-[11px] font-semibold bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-                                            >
-                                              <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600" />
-                                              <span>Inbound Arrival</span>
-                                            </button>
+                                                    {/* Milestone 3: Delivered (Doorstep Handover) */}
+                                                    <div
+                                                      className={`p-2.5 rounded-xl border flex items-center justify-between transition-colors ${
+                                                        isDelivered
+                                                          ? "bg-emerald-50 border-emerald-300 text-zinc-900"
+                                                          : "bg-zinc-50/80 border-zinc-200/80 text-zinc-500"
+                                                      }`}
+                                                    >
+                                                      <div className="flex items-center gap-2.5 min-w-0">
+                                                        <div
+                                                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                                            isDelivered
+                                                              ? "bg-emerald-600 text-white"
+                                                              : "bg-zinc-200 text-zinc-400"
+                                                          }`}
+                                                        >
+                                                          {isDelivered ? <Check className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                          <div className="flex items-center gap-1.5">
+                                                            <span className="text-xs font-bold text-zinc-900">Delivered</span>
+                                                            {isDelivered && (
+                                                              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
+                                                                Doorstep Verified
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                          <div className="text-[10px] text-zinc-500 truncate">
+                                                            {isDelivered
+                                                              ? "Verified doorstep handover completed with OTP"
+                                                              : "Auto-updates upon doorstep Gate OTP verification in Hub Console"}
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                      <div className="shrink-0 pl-2">
+                                                        {isDelivered ? (
+                                                          <span className="text-[10px] font-mono text-emerald-700 font-semibold">Delivered ✓</span>
+                                                        ) : (
+                                                          <span className="text-[10px] font-mono text-zinc-400">Auto-Pending</span>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                </div>
 
-                                            <button
-                                              type="button"
-                                              disabled={edits.isSaving}
-                                              onClick={async () => {
-                                                setOrderDeliveryEdits((prev) => ({
-                                                  ...prev,
-                                                  [ord.orderNumber]: { ...prev[ord.orderNumber], isSaving: true },
-                                                }));
-                                                try {
-                                                  const hub = edits.currentHub !== undefined ? edits.currentHub : (ord.currentHub || "Frankfurt Central Air Logistics Hub");
-                                                  const mode = edits.transitMode || ord.transitMode || "van";
-                                                  const vPlate = edits.vehicleNo || ord.vehicleNo || "OR-EXP-8891";
-                                                  const res = await fetch("/api/orders", {
-                                                    method: "POST",
-                                                    headers: { "Content-Type": "application/json" },
-                                                    body: JSON.stringify({
-                                                      action: "log-transit-action",
-                                                      orderNumber: ord.orderNumber,
-                                                      type: "dispatch",
-                                                      transitMode: mode,
-                                                      vehicleNo: vPlate,
-                                                      hubName: hub,
-                                                      hubRegion: "Main Logistics Hub",
-                                                      manifestVerified: true,
-                                                    }),
-                                                  });
-                                                  const data = await res.json();
-                                                  if (data.order) {
-                                                    setOrders((prev) =>
-                                                      prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
-                                                    );
-                                                  }
-                                                  toast({
-                                                    type: "success",
-                                                    title: "Outbound Dispatch Logged",
-                                                    description: `Consignment #${ord.orderNumber} dispatched from ${hub} via ${mode.toUpperCase()} [${vPlate}].`,
-                                                  });
-                                                } catch {
-                                                  toast({ type: "error", title: "Action Failed", description: "Could not log outbound dispatch." });
-                                                } finally {
-                                                  setOrderDeliveryEdits((prev) => ({
-                                                    ...prev,
-                                                    [ord.orderNumber]: { ...prev[ord.orderNumber], isSaving: false },
-                                                  }));
-                                                }
-                                              }}
-                                              className="py-2 px-2.5 rounded-lg text-[11px] font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-                                            >
-                                              <ArrowUpRight className="w-3.5 h-3.5 text-purple-200" />
-                                              <span>Outbound Dispatch</span>
-                                            </button>
-                                          </div>
+                                                {/* 3. Telemetry Log Stream Below ("and those are just logged here below") */}
+                                                <div className="pt-2 border-t border-zinc-100 space-y-1.5">
+                                                  <div className="flex items-center justify-between text-[10px] font-mono uppercase text-zinc-500 font-semibold">
+                                                    <span className="flex items-center gap-1 text-zinc-600 font-bold">
+                                                      <Clock className="w-3 h-3 text-zinc-400" />
+                                                      <span>Hub Telemetry & Transit Logs</span>
+                                                    </span>
+                                                    <span className="text-[9px] text-zinc-400">Live Stream</span>
+                                                  </div>
 
-                                          {/* Save Delivery Update Button */}
-                                          <button
-                                            type="button"
-                                            disabled={edits.isSaving}
-                                            onClick={() => handleUpdateDelivery(ord.orderNumber)}
-                                            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50 shadow-xs"
-                                          >
-                                            {edits.isSaving ? (
-                                              <>
-                                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                                <span>Saving Logistics...</span>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <Save className="w-3.5 h-3.5" />
-                                                <span>Save Delivery Update</span>
-                                              </>
-                                            )}
-                                          </button>
+                                                  {hubEvents.length > 0 ? (
+                                                    <div className="space-y-1 bg-zinc-50/70 p-2 rounded-xl border border-zinc-100">
+                                                      {hubEvents.map((ev, i) => (
+                                                        <div key={i} className="flex items-start justify-between gap-2 text-[10px] font-mono">
+                                                          <div className="flex items-start gap-1.5 min-w-0">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0 mt-1" />
+                                                            <div className="min-w-0">
+                                                              <div className="font-semibold text-zinc-800 truncate">{ev.title}</div>
+                                                              <div className="text-[9px] text-zinc-400 truncate">{ev.description}</div>
+                                                            </div>
+                                                          </div>
+                                                          <span className="text-[9px] text-zinc-400 shrink-0">
+                                                            {new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                          </span>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  ) : (
+                                                    <div className="text-[10px] text-zinc-400 font-mono bg-zinc-50/50 p-2 rounded-xl border border-dashed border-zinc-200 text-center">
+                                                      No hub checkpoints logged yet. Check-ins in Full Hub Console will appear here automatically.
+                                                    </div>
+                                                  )}
+
+                                                  <div className="pt-1 flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+                                                    <span className="flex items-center gap-1">
+                                                      <MapPin className="w-3 h-3 text-purple-500" />
+                                                      <span>Station: {ord.currentHub || "Main Logistics Facility"}</span>
+                                                    </span>
+                                                    <span className="font-semibold text-zinc-600">TRK: #{ord.trackingNumber || `TRK-${ord.orderNumber}`}</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
                                         </div>
                                       </div>
 
                                       {/* Column 3: Live Audit Events Timeline & Custom Note (3 cols) */}
                                       <div className="lg:col-span-3 space-y-4">
                                         <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-3">
-                                          <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold flex items-center justify-between">
-                                            <span>AUDIT & STATUS EVENTS ({ord.events?.length || 0})</span>
-                                          </div>
+                                          {(() => {
+                                            const sortedEvents = [...(ord.events || [])].sort(
+                                              (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                                            );
 
-                                          {/* Events Chronological Feed */}
-                                          <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                                            {Array.isArray(ord.events) && ord.events.length > 0 ? (
-                                              ord.events.map((ev, evIdx) => (
-                                                <div key={ev.id || evIdx} className="p-2.5 rounded-xl bg-zinc-50 border border-zinc-100 text-xs space-y-1">
-                                                  <div className="flex items-center justify-between text-[10px] font-mono">
-                                                    <span className="font-bold text-zinc-800">{ev.title}</span>
-                                                    <span className="text-zinc-400">
-                                                      {new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                                    </span>
+                                            return (
+                                              <>
+                                                <div className="text-[10px] font-mono tracking-wider text-zinc-500 uppercase font-bold flex items-center justify-between pb-1 border-b border-zinc-100">
+                                                  <div className="flex items-center gap-1.5">
+                                                    <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                                                    <span>AUDIT & STATUS EVENTS ({sortedEvents.length})</span>
                                                   </div>
-                                                  <p className="text-[11px] text-zinc-600 leading-snug">{ev.description}</p>
-                                                  {ev.actor && (
-                                                    <span className="inline-block px-1.5 py-0.2 rounded bg-zinc-200/60 text-[9px] font-mono text-zinc-600">
-                                                      By: {ev.actor}
-                                                    </span>
+                                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-blue-50 text-blue-700 font-semibold border border-blue-200">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+                                                    Latest on top
+                                                  </span>
+                                                </div>
+
+                                                {/* Events Chronological Feed (Newest on top) */}
+                                                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                                                  {sortedEvents.length > 0 ? (
+                                                    sortedEvents.map((ev, evIdx) => {
+                                                      const isLatest = evIdx === 0;
+                                                      const evDate = new Date(ev.timestamp);
+                                                      const formattedDate = evDate.toLocaleDateString("en-US", {
+                                                        month: "short",
+                                                        day: "numeric",
+                                                        year: "numeric",
+                                                      });
+                                                      const formattedTime = evDate.toLocaleTimeString("en-US", {
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                        second: "2-digit",
+                                                        hour12: true,
+                                                      });
+
+                                                      return (
+                                                        <div
+                                                          key={ev.id || `${ev.timestamp}-${evIdx}`}
+                                                          className={`p-2.5 rounded-xl border text-xs space-y-1.5 transition-all ${isLatest
+                                                            ? "bg-blue-50/70 border-blue-200 shadow-xs ring-1 ring-blue-500/10"
+                                                            : "bg-zinc-50 hover:bg-white border-zinc-100"
+                                                            }`}
+                                                        >
+                                                          <div className="flex items-start justify-between gap-1.5">
+                                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                              {isLatest && (
+                                                                <span className="px-1.5 py-0.2 rounded bg-blue-600 text-white font-mono font-bold text-[8px] uppercase tracking-wider shrink-0">
+                                                                  LATEST
+                                                                </span>
+                                                              )}
+                                                              <span className={`font-bold truncate text-[11px] ${isLatest ? "text-blue-950 font-sans" : "text-zinc-900"}`}>
+                                                                {ev.title}
+                                                              </span>
+                                                            </div>
+                                                            <div className="text-right shrink-0">
+                                                              <div className="text-[10px] font-mono font-semibold text-zinc-800 flex items-center gap-1 justify-end">
+                                                                <Clock className="w-2.5 h-2.5 text-zinc-400" />
+                                                                <span>{formattedTime}</span>
+                                                              </div>
+                                                              <div className="text-[9px] font-mono text-zinc-400">
+                                                                {formattedDate}
+                                                              </div>
+                                                            </div>
+                                                          </div>
+
+                                                          <p className="text-[11px] text-zinc-600 leading-snug">{ev.description}</p>
+
+                                                          <div className="flex items-center justify-between pt-1 text-[9px] font-mono text-zinc-500">
+                                                            {ev.actor ? (
+                                                              <span className="inline-block px-1.5 py-0.2 rounded bg-zinc-200/70 text-zinc-700">
+                                                                By: {ev.actor}
+                                                              </span>
+                                                            ) : (
+                                                              <span className="inline-block px-1.5 py-0.2 rounded bg-zinc-200/70 text-zinc-700">
+                                                                By: System
+                                                              </span>
+                                                            )}
+                                                            {ev.type && (
+                                                              <span className="uppercase tracking-wider text-[8px] px-1 py-0.2 rounded border border-zinc-200 text-zinc-400">
+                                                                {ev.type}
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                        </div>
+                                                      );
+                                                    })
+                                                  ) : (
+                                                    <div className="text-zinc-400 text-[11px] text-center py-4">No events logged yet</div>
                                                   )}
                                                 </div>
-                                              ))
-                                            ) : (
-                                              <div className="text-zinc-400 text-[11px] text-center py-4">No events logged yet</div>
-                                            )}
-                                          </div>
+                                              </>
+                                            );
+                                          })()}
 
                                           {/* Quick Add Event Note */}
                                           <div className="pt-2 border-t border-zinc-100 space-y-2">
@@ -5631,10 +8555,10 @@ export default function AdminPage() {
                           <span className="text-xs font-mono font-bold text-zinc-800">1 USD = ₹</span>
                           <input
                             type="number"
-                            step="0.1"
+                            step="0.01"
                             value={exchangeRate}
-                            onChange={(e) => setExchangeRate(Number(e.target.value) || 83.0)}
-                            className="w-14 text-xs font-mono font-bold text-blue-700 bg-transparent focus:outline-none"
+                            onChange={(e) => setExchangeRate(Number(e.target.value) || 95.26)}
+                            className="w-16 text-xs font-mono font-bold text-blue-700 bg-transparent focus:outline-none"
                             title="Exchange rate"
                           />
                         </div>
@@ -6519,7 +9443,7 @@ export default function AdminPage() {
           ========================================================================= */}
       {isRestockModalOpen && restockTargetProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-3xl max-h-[90vh] bg-white rounded-3xl border border-zinc-200 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-5xl max-h-[90vh] bg-white rounded-3xl border border-zinc-200 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="p-5 sm:p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/80 shrink-0">
               <div className="flex items-center gap-3">
@@ -6564,7 +9488,7 @@ export default function AdminPage() {
 
               {/* Group variants by specOverride (Architecture e.g. A1, A2) */}
               {(() => {
-                const variantsList = restockTargetProduct.childVariants && restockTargetProduct.childVariants.length > 0
+                const variantsList: IVariant[] = restockTargetProduct.childVariants && restockTargetProduct.childVariants.length > 0
                   ? restockTargetProduct.childVariants
                   : (restockTargetProduct.variants || []).map((v, i) => ({
                     sku: `${restockTargetProduct.productId || restockTargetProduct.id.toUpperCase()}-VAR-${i + 1}`,
@@ -6574,6 +9498,7 @@ export default function AdminPage() {
                     discount: 0,
                     stock: Math.max(1, Math.floor(restockTargetProduct.stock / Math.max(1, restockTargetProduct.variants.length))),
                     images: [v.image],
+                    restockProcess: undefined,
                   }));
 
                 // Group by specOverride
@@ -6610,125 +9535,387 @@ export default function AdminPage() {
                         {items.map((v) => {
                           const currentDraftStock = variantStockDrafts[v.sku] ?? v.stock;
                           const diff = currentDraftStock - v.stock;
+                          const rp = v.restockProcess;
+                          const hasRestockProcess = !!rp && rp.status !== "completed";
+                          const isPipelineOpen = restockPipelineOpenSku === v.sku;
 
                           return (
-                            <div key={v.sku} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-zinc-50/50 transition-colors">
-                              <div className="space-y-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  {/* Color Dot */}
-                                  <span
-                                    className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0"
-                                    style={{
-                                      backgroundColor:
-                                        v.color.toLowerCase().includes("green") ? "#2E5339" :
-                                          v.color.toLowerCase().includes("black") ? "#1A1A1A" :
-                                            v.color.toLowerCase().includes("blue") ? "#3B6978" :
-                                              v.color.toLowerCase().includes("white") ? "#F5F5F5" :
-                                                v.color.toLowerCase().includes("silver") ? "#D1D5DB" :
-                                                  v.color.toLowerCase().includes("sandstone") ? "#D4B996" :
-                                                    "#4F46E5",
-                                    }}
-                                  />
-                                  <span className="text-xs font-bold text-zinc-900">{v.color}</span>
-                                  <span className="text-[10px] font-mono bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">
-                                    {v.sku}
-                                  </span>
-                                  <span className="text-[11px] text-zinc-400 font-mono">
-                                    ${v.price}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 text-[11px] text-zinc-500">
-                                  <span>Original: <strong className="font-mono text-zinc-700">{v.stock}</strong> units</span>
-                                  {diff !== 0 && (
-                                    <span className={`font-mono font-semibold ${diff > 0 ? "text-emerald-600" : "text-amber-600"}`}>
-                                      ({diff > 0 ? `+${diff}` : diff} units)
+                            <div key={v.sku} className="p-4 space-y-3 hover:bg-zinc-50/50 transition-colors">
+                              {/* Main Variant Row */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="space-y-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {/* Color Dot */}
+                                    <span
+                                      className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0"
+                                      style={{
+                                        backgroundColor:
+                                          v.color.toLowerCase().includes("green") ? "#2E5339" :
+                                            v.color.toLowerCase().includes("black") ? "#1A1A1A" :
+                                              v.color.toLowerCase().includes("blue") ? "#3B6978" :
+                                                v.color.toLowerCase().includes("white") ? "#F5F5F5" :
+                                                  v.color.toLowerCase().includes("silver") ? "#D1D5DB" :
+                                                    v.color.toLowerCase().includes("sandstone") ? "#D4B996" :
+                                                      "#4F46E5",
+                                      }}
+                                    />
+                                    <span className="text-xs font-bold text-zinc-900">{v.color}</span>
+                                    <span className="text-[10px] font-mono bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">
+                                      {v.sku}
                                     </span>
-                                  )}
+                                    <span className="text-[11px] text-zinc-400 font-mono">
+                                      ${v.price}
+                                    </span>
+                                    {hasRestockProcess && (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-mono font-bold">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping inline-block" />
+                                        Restock In-Process: {rp.remainingQty} units pending
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                                    <span>Original: <strong className="font-mono text-zinc-700">{v.stock}</strong> units</span>
+                                    {diff !== 0 && (
+                                      <span className={`font-mono font-semibold ${diff > 0 ? "text-emerald-600" : "text-amber-600"}`}>
+                                        ({diff > 0 ? `+${diff}` : diff} units)
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
 
-                              {/* Quantity Stepper & Quick Add Chips */}
-                              <div className="flex items-center gap-3 self-end sm:self-auto">
-                                {/* Quick Chips */}
-                                <div className="hidden md:flex items-center gap-1">
-                                  {[1, 5, 10, 25].map((addQty) => (
+                                {/* Pathway 1 (Immediate On-Hand Counter) + Restock Process Trigger */}
+                                <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+                                  {/* Quick Chips for Immediate Stock Add */}
+                                  <div className="hidden md:flex items-center gap-1" title="Mode 1: Direct On-Hand Stock Add">
+                                    {[1, 5, 10, 25].map((addQty) => (
+                                      <button
+                                        key={addQty}
+                                        type="button"
+                                        onClick={() => {
+                                          setVariantStockDrafts((prev) => ({
+                                            ...prev,
+                                            [v.sku]: (prev[v.sku] ?? v.stock) + addQty,
+                                          }));
+                                        }}
+                                        className="px-2 py-1 rounded-md bg-zinc-100 hover:bg-blue-50 hover:text-blue-600 text-[10px] font-mono font-semibold text-zinc-600 transition-colors cursor-pointer"
+                                      >
+                                        +{addQty}
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {/* Stepper */}
+                                  <div className="flex items-center border border-zinc-300 rounded-xl bg-white shadow-2xs overflow-hidden">
                                     <button
-                                      key={addQty}
                                       type="button"
                                       onClick={() => {
                                         setVariantStockDrafts((prev) => ({
                                           ...prev,
-                                          [v.sku]: (prev[v.sku] ?? v.stock) + addQty,
+                                          [v.sku]: Math.max(0, (prev[v.sku] ?? v.stock) - 1),
                                         }));
                                       }}
-                                      className="px-2 py-1 rounded-md bg-zinc-100 hover:bg-blue-50 hover:text-blue-600 text-[10px] font-mono font-semibold text-zinc-600 transition-colors cursor-pointer"
+                                      className="w-8 h-8 flex items-center justify-center text-zinc-600 hover:bg-zinc-100 font-bold transition-colors cursor-pointer"
                                     >
-                                      +{addQty}
+                                      -
                                     </button>
-                                  ))}
-                                </div>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={currentDraftStock}
+                                      onChange={(e) => {
+                                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                                        setVariantStockDrafts((prev) => ({
+                                          ...prev,
+                                          [v.sku]: val,
+                                        }));
+                                      }}
+                                      className="w-14 text-center font-mono font-bold text-sm text-zinc-900 border-x border-zinc-200 py-1 focus:outline-none"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setVariantStockDrafts((prev) => ({
+                                          ...prev,
+                                          [v.sku]: (prev[v.sku] ?? v.stock) + 1,
+                                        }));
+                                      }}
+                                      className="w-8 h-8 flex items-center justify-center text-zinc-600 hover:bg-zinc-100 font-bold transition-colors cursor-pointer"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
 
-                                {/* Stepper */}
-                                <div className="flex items-center border border-zinc-300 rounded-xl bg-white shadow-2xs overflow-hidden">
+                                  <span
+                                    className={`text-[10px] font-mono px-2 py-1 rounded-md font-semibold ${currentDraftStock === 0
+                                      ? "bg-red-100 text-red-700"
+                                      : currentDraftStock <= 5
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-emerald-100 text-emerald-800"
+                                      }`}
+                                  >
+                                    {currentDraftStock === 0 ? "SOLD OUT" : currentDraftStock <= 5 ? "LOW STOCK" : "IN STOCK"}
+                                  </span>
+
+                                  {/* Mode 2 Trigger Button: Apply Restock Process */}
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setVariantStockDrafts((prev) => ({
-                                        ...prev,
-                                        [v.sku]: Math.max(0, (prev[v.sku] ?? v.stock) - 1),
-                                      }));
-                                    }}
-                                    className="w-8 h-8 flex items-center justify-center text-zinc-600 hover:bg-zinc-100 font-bold transition-colors cursor-pointer"
+                                    onClick={() => setRestockPipelineOpenSku(isPipelineOpen ? null : v.sku)}
+                                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${hasRestockProcess
+                                      ? "bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100"
+                                      : isPipelineOpen
+                                        ? "bg-zinc-200 border-zinc-300 text-zinc-800"
+                                        : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                                      }`}
                                   >
-                                    -
+                                    <Clock className="w-3.5 h-3.5" />
+                                    <span>
+                                      {hasRestockProcess
+                                        ? (isPipelineOpen ? "Hide Pipeline" : "Manage Restock Pipeline")
+                                        : (isPipelineOpen ? "Close Form" : "⚡ Apply Restock Process")}
+                                    </span>
                                   </button>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={currentDraftStock}
-                                    onChange={(e) => {
-                                      const val = Math.max(0, parseInt(e.target.value) || 0);
-                                      setVariantStockDrafts((prev) => ({
-                                        ...prev,
-                                        [v.sku]: val,
-                                      }));
-                                    }}
-                                    className="w-14 text-center font-mono font-bold text-sm text-zinc-900 border-x border-zinc-200 py-1 focus:outline-none"
-                                  />
+
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setVariantStockDrafts((prev) => ({
-                                        ...prev,
-                                        [v.sku]: (prev[v.sku] ?? v.stock) + 1,
-                                      }));
-                                    }}
-                                    className="w-8 h-8 flex items-center justify-center text-zinc-600 hover:bg-zinc-100 font-bold transition-colors cursor-pointer"
+                                    onClick={() => handleModalRemoveColor(v.sku)}
+                                    className="text-zinc-400 hover:text-red-600 transition-colors p-1"
+                                    title="Delete colorway"
                                   >
-                                    +
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
-
-                                <span
-                                  className={`text-[10px] font-mono px-2 py-1 rounded-md font-semibold ${currentDraftStock === 0
-                                    ? "bg-red-100 text-red-700"
-                                    : currentDraftStock <= 5
-                                      ? "bg-amber-100 text-amber-800"
-                                      : "bg-emerald-100 text-emerald-800"
-                                    }`}
-                                >
-                                  {currentDraftStock === 0 ? "SOLD OUT" : currentDraftStock <= 5 ? "LOW STOCK" : "IN STOCK"}
-                                </span>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleModalRemoveColor(v.sku)}
-                                  className="text-zinc-400 hover:text-red-600 transition-colors p-1"
-                                  title="Delete colorway"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
                               </div>
+
+                              {/* ACTIVE RESTOCK PROCESS: Dual Progress Bar (Green + Yellow) & Partial Check-in */}
+                              {hasRestockProcess && (
+                                <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-r from-amber-50/70 via-yellow-50/40 to-emerald-50/30 p-4 space-y-3.5 animate-in fade-in">
+                                  {/* Header Info */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/60 pb-2.5">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                                        PO
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs font-bold text-amber-950 font-sans">
+                                            Restock Pipeline In-Progress
+                                          </span>
+                                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-bold uppercase">
+                                            {rp.status.replace("_", " ")}
+                                          </span>
+                                        </div>
+                                        <p className="text-[11px] text-zinc-500 font-mono">
+                                          Procurement lead time: <strong className="text-zinc-800">{rp.leadTimeDays} days</strong> · Initiated: {new Date(rp.initiatedAt).toLocaleDateString()}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <div className="text-right sm:text-right flex sm:flex-col items-center sm:items-end justify-between gap-1 text-[11px] font-mono">
+                                      <span className="text-zinc-500">
+                                        Fulfillment: <strong className="text-zinc-900">{rp.receivedQty}</strong> / {rp.targetQty} units
+                                      </span>
+                                      <span className="text-xs font-bold text-amber-700">
+                                        {Math.round((rp.receivedQty / Math.max(1, rp.targetQty)) * 100)}% Complete
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* THE DUAL PROGRESS BAR: Green (Available On-Hand) + Yellow (Restock In-Process) */}
+                                  {(() => {
+                                    const onHandUnits = currentDraftStock;
+                                    const pendingUnits = rp.remainingQty;
+                                    const totalScale = Math.max(1, onHandUnits + pendingUnits);
+                                    const greenPercent = (onHandUnits / totalScale) * 100;
+                                    const yellowPercent = (pendingUnits / totalScale) * 100;
+
+                                    return (
+                                      <div className="space-y-2">
+                                        <div className="flex items-center justify-between text-[11px] font-mono">
+                                          <span className="flex items-center gap-1.5 text-emerald-800 font-bold">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-2xs" />
+                                            Green Line: On-Hand Available ({onHandUnits} units)
+                                          </span>
+                                          <span className="flex items-center gap-1.5 text-amber-800 font-bold">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block animate-ping shadow-2xs" />
+                                            Yellow Line: Restock In-Process ({pendingUnits} units remaining)
+                                          </span>
+                                        </div>
+
+                                        {/* Dual Track Bar */}
+                                        <div className="w-full h-3.5 bg-zinc-200 rounded-full overflow-hidden flex p-0.5 shadow-inner border border-zinc-300/80">
+                                          {/* Green segment: On-hand available stock */}
+                                          <div
+                                            className="h-full bg-emerald-500 rounded-l-full transition-all duration-500 relative"
+                                            style={{ width: `${greenPercent}%` }}
+                                            title={`On-Hand Available: ${onHandUnits} units (${greenPercent.toFixed(1)}%)`}
+                                          />
+                                          {/* Yellow segment: Pending in-process restock */}
+                                          <div
+                                            className="h-full bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-400 rounded-r-full transition-all duration-500 relative overflow-hidden"
+                                            style={{ width: `${yellowPercent}%` }}
+                                            title={`Restock In-Process: ${pendingUnits} units remaining (${yellowPercent.toFixed(1)}%)`}
+                                          >
+                                            <div className="absolute inset-0 bg-white/30 animate-pulse" />
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+                                          <span>🟢 Available live stock: {onHandUnits} units</span>
+                                          <span>🟡 Processing pipeline: {pendingUnits} units ({rp.leadTimeDays}d ETA)</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {/* Check-in Controls: Partial / Full Arrival */}
+                                  <div className="p-3 bg-white rounded-xl border border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-xs font-semibold text-zinc-800">
+                                        Check-in Arrived Products:
+                                      </span>
+                                      <div className="flex items-center border border-zinc-300 rounded-lg overflow-hidden bg-zinc-50">
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max={rp.remainingQty}
+                                          value={restockReceiveQtyInput[v.sku] ?? Math.min(rp.remainingQty, 3)}
+                                          onChange={(e) => {
+                                            const val = Math.max(1, Math.min(rp.remainingQty, parseInt(e.target.value) || 1));
+                                            setRestockReceiveQtyInput((prev) => ({ ...prev, [v.sku]: val }));
+                                          }}
+                                          className="w-14 text-center font-mono font-bold text-xs py-1 text-zinc-900 bg-white focus:outline-none"
+                                        />
+                                        <span className="px-2 text-[10px] font-mono text-zinc-400">
+                                          / {rp.remainingQty} left
+                                        </span>
+                                      </div>
+
+                                      {/* Quick partial chips */}
+                                      {rp.remainingQty > 1 && (
+                                        <div className="flex items-center gap-1">
+                                          {[1, Math.min(3, rp.remainingQty), rp.remainingQty].filter((q, idx, arr) => arr.indexOf(q) === idx).map((qty) => (
+                                            <button
+                                              key={qty}
+                                              type="button"
+                                              onClick={() => setRestockReceiveQtyInput((prev) => ({ ...prev, [v.sku]: qty }))}
+                                              className="px-2 py-1 rounded bg-zinc-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-zinc-700 transition-colors cursor-pointer"
+                                            >
+                                              {qty === rp.remainingQty ? `All (${qty})` : `+${qty}`}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      <button
+                                        type="button"
+                                        disabled={isProcessingRestockPipeline}
+                                        onClick={() => handleReceiveRestockStock(v.sku, rp.remainingQty)}
+                                        className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+                                      >
+                                        <Check className="w-3.5 h-3.5" />
+                                        <span>
+                                          Mark +{restockReceiveQtyInput[v.sku] ?? Math.min(rp.remainingQty, 3)} Arrived
+                                        </span>
+                                      </button>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      disabled={isProcessingRestockPipeline}
+                                      onClick={() => handleCancelRestockProcess(v.sku)}
+                                      className="text-[11px] text-zinc-400 hover:text-red-600 underline transition-colors cursor-pointer self-end sm:self-auto"
+                                    >
+                                      Abort PO Pipeline
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* INITIATE RESTOCK PROCESS FORM (Mode 2 when not active) */}
+                              {!hasRestockProcess && isPipelineOpen && (
+                                <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 space-y-3 animate-in fade-in">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <Clock className="w-4 h-4 text-blue-600" />
+                                      <h4 className="text-xs font-bold text-blue-950 font-sans">
+                                        Apply Restock Process for {v.color} ({v.sku})
+                                      </h4>
+                                    </div>
+                                    <span className="text-[10px] font-mono bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                                      Procurement PO
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-zinc-600 leading-relaxed">
+                                    When stock is about to go low, create an official restock order with a processing time of <strong className="text-zinc-900">n days</strong>. The table will show the <strong className="text-emerald-700">Green line</strong> (current stock) and <strong className="text-amber-600">Yellow line</strong> (restock in process). As units arrive, check them in to incrementally decrease the yellow line and increase the green line.
+                                  </p>
+
+                                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-semibold text-zinc-700">Target Restock Qty:</span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={restockTargetQtyInput[v.sku] ?? 5}
+                                        onChange={(e) => {
+                                          const val = Math.max(1, parseInt(e.target.value) || 1);
+                                          setRestockTargetQtyInput((prev) => ({ ...prev, [v.sku]: val }));
+                                        }}
+                                        className="w-16 px-2.5 py-1.5 rounded-lg border border-blue-300 bg-white font-mono font-bold text-xs text-center text-zinc-900 focus:outline-none"
+                                      />
+                                      {/* Quick chips */}
+                                      <div className="flex items-center gap-1">
+                                        {[5, 10, 25].map((q) => (
+                                          <button
+                                            key={q}
+                                            type="button"
+                                            onClick={() => setRestockTargetQtyInput((prev) => ({ ...prev, [v.sku]: q }))}
+                                            className="px-2 py-1 rounded bg-blue-100/70 hover:bg-blue-200 text-[10px] font-mono font-bold text-blue-800 transition-colors cursor-pointer"
+                                          >
+                                            {q}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-semibold text-zinc-700">Lead Time:</span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={restockLeadDaysInput[v.sku] ?? 5}
+                                        onChange={(e) => {
+                                          const val = Math.max(1, parseInt(e.target.value) || 1);
+                                          setRestockLeadDaysInput((prev) => ({ ...prev, [v.sku]: val }));
+                                        }}
+                                        className="w-16 px-2.5 py-1.5 rounded-lg border border-blue-300 bg-white font-mono font-bold text-xs text-center text-zinc-900 focus:outline-none"
+                                      />
+                                      <span className="text-xs text-zinc-500 font-mono">days</span>
+                                      <div className="flex items-center gap-1">
+                                        {[3, 5, 7, 14].map((d) => (
+                                          <button
+                                            key={d}
+                                            type="button"
+                                            onClick={() => setRestockLeadDaysInput((prev) => ({ ...prev, [v.sku]: d }))}
+                                            className="px-2 py-1 rounded bg-blue-100/70 hover:bg-blue-200 text-[10px] font-mono font-bold text-blue-800 transition-colors cursor-pointer"
+                                          >
+                                            {d}d
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      disabled={isProcessingRestockPipeline}
+                                      onClick={() => handleApplyRestockProcess(v.sku)}
+                                      className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50 ml-auto"
+                                    >
+                                      <Clock className="w-3.5 h-3.5" />
+                                      <span>Start Restock Process</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -7488,6 +10675,75 @@ export default function AdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Full-Screen Proof of Delivery Image Modal (Lightbox) */}
+      {/* Full-Screen Proof of Delivery Image Modal (Lightbox) */}
+      {podModalImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-2.5 sm:p-6 animate-in fade-in duration-200"
+          onClick={() => setPodModalImage(null)}
+        >
+          {/* Modal Header */}
+          <div
+            className="w-full max-w-5xl flex items-center justify-between py-2 px-3 sm:py-2.5 sm:px-4 rounded-xl sm:rounded-2xl bg-zinc-900/95 border border-zinc-800 text-white shrink-0 z-10 shadow-2xl gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-0.5 min-w-0 flex-1 pr-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <h3 className="font-bold text-xs sm:text-sm text-zinc-100 truncate">{podModalImage.title}</h3>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 text-[10px] font-mono border border-emerald-800/60 font-semibold shrink-0">
+                  Damage Inspection Passed
+                </span>
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-zinc-400 font-mono truncate">
+                {podModalImage.subtitle} {podModalImage.name && `· ${podModalImage.name}`}{" "}
+                {podModalImage.size ? `(${(podModalImage.size / (1024 * 1024)).toFixed(2)} MB)` : ""}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <a
+                href={podModalImage.src}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl bg-zinc-800 hover:bg-zinc-700 text-[11px] sm:text-xs font-semibold text-zinc-200 flex items-center gap-1 sm:gap-1.5 transition"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline sm:inline">Raw</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setPodModalImage(null)}
+                className="p-1.5 rounded-lg sm:rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Modal Image Body */}
+          <div
+            className="relative flex-1 w-full max-w-5xl flex items-center justify-center p-2 sm:p-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={podModalImage.src}
+              alt={podModalImage.title}
+              className="max-h-[72vh] sm:max-h-[78vh] max-w-full object-contain rounded-xl sm:rounded-2xl shadow-2xl border border-zinc-800 select-none"
+            />
+          </div>
+
+          {/* Modal Footer Note */}
+          <div
+            className="w-full max-w-5xl text-center text-zinc-400 text-[10px] sm:text-xs font-mono py-1 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            High-resolution Proof of Delivery archive · Authenticated by carrier terminal · Press ESC or click backdrop to close
           </div>
         </div>
       )}
