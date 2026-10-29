@@ -1,0 +1,26 @@
+[
+  {
+    "id": "HUB-HYD-5588",
+    "code": "HYD",
+    "name": "Hyderabad Deccan Logistics Park",
+    "region": "Telangana (South-Central Zone)",
+    "country": "India",
+    "type": "regional_gateway",
+    "coverageArea": "Covers Telangana, Hyderabad IT corridor, and North AP",
+    "strategicRole": "South-Central tech corridor and distribution center",
+    "isDynamic": true,
+    "createdAt": "2026-10-29T08:30:55.588Z"
+  },
+  {
+    "id": "HUB-HUB-JAI-01-5321",
+    "code": "HUB-JAI-01",
+    "name": "Jaipur Western Logistics Park",
+    "region": "North-West",
+    "country": "India",
+    "type": "regional_gateway",
+    "coverageArea": "Rajasthan, Southern Haryana, and Delhi Western Bypass.",
+    "strategicRole": "Western industrial line-haul staging and handicraft export gateway.",
+    "isDynamic": true,
+    "createdAt": "2026-10-29T08:41:15.321Z"
+  }
+]

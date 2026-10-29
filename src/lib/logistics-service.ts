@@ -128,22 +128,106 @@ export const DEFAULT_AIR_CARGO: AirCargoDetails = {
 };
 
 export const STANDARD_HUBS: LogisticsHub[] = [
+  // 1. NORTH: Delhi-NCR
   {
     id: "HUB-DEL-01",
     code: "DEL",
-    name: "Delhi National Fulfillment Hub",
-    region: "Delhi NCR, IN",
+    name: "Delhi-NCR National Fulfillment Gateway",
+    region: "Delhi-NCR (North Zone)",
     country: "India",
     type: "origin",
+    coverageArea: "Covers Jammu & Kashmir, Punjab, Haryana, Himachal, and Western UP.",
+    strategicRole: "Primary Northern multi-modal origin, fulfillment, and air freight gateway",
   },
+  // 2. CENTRAL: Nagpur (MP/Maharashtra border)
+  {
+    id: "HUB-NAG-01",
+    code: "NAG",
+    name: "Nagpur Central Multi-Modal Logistics Hub",
+    region: "Nagpur, MP/Maharashtra Border (Central Zone)",
+    country: "India",
+    type: "regional_gateway",
+    coverageArea: "Connects North-South and East-West corridors perfectly across Central India.",
+    strategicRole: "The ultimate logistics hub of India. Zero-mile geographic crossroads connecting all 4 cardinal directions.",
+  },
+  // 3. WEST: Mumbai / Pune
+  {
+    id: "HUB-BOM-01",
+    code: "BOM",
+    name: "Mumbai / Pune Western Gateway Hub",
+    region: "Mumbai / Pune, Maharashtra (West Zone)",
+    country: "India",
+    type: "regional_gateway",
+    coverageArea: "Covers Maharashtra, Goa, and coastal trade routes.",
+    strategicRole: "Premier West Coast commercial, financial, and maritime deep-sea gateway",
+  },
+  // 4. WEST-INDUSTRIAL: Ahmedabad / Surat
+  {
+    id: "HUB-AMD-01",
+    code: "AMD",
+    name: "Ahmedabad / Surat Industrial Hub",
+    region: "Ahmedabad / Surat, Gujarat (West-Industrial Zone)",
+    country: "India",
+    type: "regional_gateway",
+    coverageArea: "Critical for covering Gujarat, Rajasthan, and heavy manufacturing clusters.",
+    strategicRole: "Industrial corridor powerhouse & Western Dedicated Freight Corridor (DFC) rail hub",
+  },
+  // 5. EAST: Kolkata
   {
     id: "HUB-CCU-01",
     code: "CCU",
-    name: "Kolkata Eastern Logistics Hub",
-    region: "West Bengal, IN",
+    name: "Kolkata Eastern Logistics Gateway",
+    region: "Kolkata, West Bengal (East Zone)",
     country: "India",
     type: "regional_gateway",
+    coverageArea: "Covers West Bengal, Odisha, and acts as the gateway to the East.",
+    strategicRole: "Trunk line rail junction, Bay of Bengal maritime ports, and Eastern anchor",
   },
+  // 6. EAST-CENTRAL: Lucknow (UP)
+  {
+    id: "HUB-LKO-01",
+    code: "LKO",
+    name: "Lucknow East-Central Logistics Center",
+    region: "Lucknow, Uttar Pradesh (East-Central Zone)",
+    country: "India",
+    type: "regional_gateway",
+    coverageArea: "Covers Central/Eastern UP and Bihar efficiently, removing duplicate staging.",
+    strategicRole: "Consolidated high-density express dispatch for Gangetic plains & Bihar",
+  },
+  // 7. NORTHEAST: Guwahati
+  {
+    id: "HUB-GAU-01",
+    code: "GAU",
+    name: "Guwahati Northeast Gateway Hub",
+    region: "Guwahati, Assam (Northeast Zone)",
+    country: "India",
+    type: "regional_gateway",
+    coverageArea: "Non-negotiable for true pan-India coverage. Serves all 7 sister states.",
+    strategicRole: "Essential lifeline corridor connecting Assam, Meghalaya, Tripura, Mizoram, Manipur, Nagaland, and Arunachal",
+  },
+  // 8. SOUTH-WEST: Bengaluru
+  {
+    id: "HUB-BLR-01",
+    code: "BLR",
+    name: "Bengaluru South-West Tech & Fulfillment Hub",
+    region: "Bengaluru, Karnataka (South-West Zone)",
+    country: "India",
+    type: "regional_gateway",
+    coverageArea: "Covers Karnataka, Kerala, and acts as a massive tech/e-commerce consumption hub.",
+    strategicRole: "High-velocity tech electronics fulfillment & South-Western corridor anchor",
+  },
+  // 9. SOUTH-EAST: Chennai
+  {
+    id: "HUB-MAA-01",
+    code: "MAA",
+    name: "Chennai South-East Coastal Hub",
+    region: "Chennai, Tamil Nadu (South-East Zone)",
+    country: "India",
+    type: "regional_gateway",
+    coverageArea: "Covers Tamil Nadu, Andhra Pradesh, and Telangana.",
+    strategicRole: "Automotive/electronics corridor, deep-sea container terminal, and South-East distribution",
+  },
+  // Sub-Hub for backward compatibility with active test consignments
   {
     id: "HUB-ASN-01",
     code: "ASN",
@@ -151,23 +235,10 @@ export const STANDARD_HUBS: LogisticsHub[] = [
     region: "Asansol Zone, West Bengal, IN",
     country: "India",
     type: "local_delivery",
+    coverageArea: "Local doorstep distribution node for West Bengal industrial belt.",
+    strategicRole: "Local delivery sub-hub paired with Kolkata Gateway",
   },
-  {
-    id: "HUB-BOM-01",
-    code: "BOM",
-    name: "Mumbai Western Air Gateway",
-    region: "Maharashtra, IN",
-    country: "India",
-    type: "regional_gateway",
-  },
-  {
-    id: "HUB-BLR-01",
-    code: "BLR",
-    name: "Bangalore South Tech Hub",
-    region: "Karnataka, IN",
-    country: "India",
-    type: "regional_gateway",
-  },
+  // International Global Fulfillment Hubs
   {
     id: "HUB-PDX-01",
     code: "PDX",
@@ -175,6 +246,8 @@ export const STANDARD_HUBS: LogisticsHub[] = [
     region: "Oregon, US",
     country: "United States",
     type: "origin",
+    coverageArea: "North American Pacific Northwest fulfillment.",
+    strategicRole: "US primary origin & warehouse center",
   },
   {
     id: "HUB-FRA-01",
@@ -183,6 +256,8 @@ export const STANDARD_HUBS: LogisticsHub[] = [
     region: "Frankfurt, DE",
     country: "Germany",
     type: "air_transit",
+    coverageArea: "European Union distribution.",
+    strategicRole: "European air cargo interchange",
   },
   {
     id: "HUB-LHR-01",
@@ -191,21 +266,29 @@ export const STANDARD_HUBS: LogisticsHub[] = [
     region: "London, UK",
     country: "United Kingdom",
     type: "regional_gateway",
+    coverageArea: "UK & Ireland metropolitan coverage.",
+    strategicRole: "British Isles regional distribution",
   },
 ];
 
-export function getHubById(id?: string): LogisticsHub | undefined {
+export function getHubById(id?: string, customHubs: LogisticsHub[] = []): LogisticsHub | undefined {
   if (!id) return undefined;
-  return STANDARD_HUBS.find((h) => h.id.toLowerCase() === id.toLowerCase() || h.code.toLowerCase() === id.toLowerCase());
+  const targetId = id.toLowerCase();
+  return (
+    customHubs.find((h) => h.id.toLowerCase() === targetId || h.code.toLowerCase() === targetId) ||
+    STANDARD_HUBS.find((h) => h.id.toLowerCase() === targetId || h.code.toLowerCase() === targetId)
+  );
 }
 
-export function getHubByNameOrCity(query?: string): LogisticsHub | undefined {
+export function getHubByNameOrCity(query?: string, customHubs: LogisticsHub[] = []): LogisticsHub | undefined {
   if (!query) return undefined;
   const q = query.toLowerCase().trim();
-  return STANDARD_HUBS.find(
+  const all = [...customHubs, ...STANDARD_HUBS];
+  return all.find(
     (h) =>
       h.name.toLowerCase().includes(q) ||
       h.region.toLowerCase().includes(q) ||
+      (h.coverageArea && h.coverageArea.toLowerCase().includes(q)) ||
       h.code.toLowerCase() === q ||
       h.id.toLowerCase() === q
   );
@@ -213,7 +296,7 @@ export function getHubByNameOrCity(query?: string): LogisticsHub | undefined {
 
 /**
  * Automatically creates a deterministic, scalable multi-hub sequence for an order
- * based on customer destination.
+ * based on customer destination across the 9 Strategic Pan-India Master Hubs.
  */
 export function generateRouteForOrder(order: Partial<Order>): ShipmentRouteLeg[] {
   const customer = order.customer || {
@@ -230,15 +313,316 @@ export function generateRouteForOrder(order: Partial<Order>): ShipmentRouteLeg[]
   const city = (customer.city || "").toLowerCase();
   const state = (customer.state || "").toLowerCase();
 
-  // Route Pattern A: India East / Asansol / West Bengal corridor
+  // PAN-INDIA STRATEGIC ROUTING (9 Master Regional Corridors)
   if (country.includes("ind") || country.includes("in")) {
-    if (city.includes("asansol") || city.includes("burdwan") || city.includes("durgapur") || state.includes("bengal")) {
+    // 1. NORTHEAST: Covers all 7 sister states
+    if (
+      city.includes("guwahati") ||
+      city.includes("silchar") ||
+      city.includes("shillong") ||
+      city.includes("agartala") ||
+      city.includes("imphal") ||
+      city.includes("aizawl") ||
+      city.includes("kohima") ||
+      city.includes("itanagar") ||
+      city.includes("dimapur") ||
+      state.includes("assam") ||
+      state.includes("meghalaya") ||
+      state.includes("tripura") ||
+      state.includes("mizoram") ||
+      state.includes("manipur") ||
+      state.includes("nagaland") ||
+      state.includes("arunachal")
+    ) {
       return [
         {
           sequence: 1,
           hubId: "HUB-DEL-01",
-          hubName: "Delhi National Fulfillment Hub",
-          region: "Delhi NCR, IN",
+          hubName: "Delhi-NCR National Fulfillment Gateway",
+          region: "Delhi-NCR (North Zone)",
+          status: "completed",
+          transportMode: "plane",
+          vehicleNo: "6E-CARGO-701",
+          containerId: "DEL-GAU-AIR-01",
+          dispatchCategory: "b2b_bulk_freight",
+        },
+        {
+          sequence: 2,
+          hubId: "HUB-GAU-01",
+          hubName: "Guwahati Northeast Gateway Hub",
+          region: "Guwahati, Assam (Northeast Zone)",
+          status: "sorting",
+          transportMode: "van",
+          vehicleNo: "AS-01-EXP-8810",
+          containerId: "GAU-LOCAL-09",
+          dispatchCategory: "b2c_individual_courier",
+        },
+      ];
+    }
+
+    // 2. CENTRAL: Nagpur (MP / Maharashtra Border Zero-Mile Hub)
+    if (
+      city.includes("nagpur") ||
+      city.includes("bhopal") ||
+      city.includes("indore") ||
+      city.includes("jabalpur") ||
+      city.includes("gwalior") ||
+      city.includes("raipur") ||
+      city.includes("bilaspur") ||
+      state.includes("madhya pradesh") ||
+      state.includes("chhattisgarh") ||
+      state.includes("mp")
+    ) {
+      return [
+        {
+          sequence: 1,
+          hubId: "HUB-DEL-01",
+          hubName: "Delhi-NCR National Fulfillment Gateway",
+          region: "Delhi-NCR (North Zone)",
+          status: "completed",
+          transportMode: "train",
+          vehicleNo: "IR-12434-RAJ",
+          containerId: "DEL-NAG-RAIL-02",
+          dispatchCategory: "b2b_bulk_freight",
+        },
+        {
+          sequence: 2,
+          hubId: "HUB-NAG-01",
+          hubName: "Nagpur Central Multi-Modal Logistics Hub",
+          region: "Nagpur, MP/Maharashtra Border (Central Zone)",
+          status: "sorting",
+          transportMode: "truck",
+          vehicleNo: "MH-31-TRK-5520",
+          containerId: "NAG-CTR-01",
+          dispatchCategory: "b2c_individual_courier",
+        },
+      ];
+    }
+
+    // 3. WEST-INDUSTRIAL: Ahmedabad / Surat (Gujarat + Rajasthan)
+    if (
+      city.includes("ahmedabad") ||
+      city.includes("surat") ||
+      city.includes("vadodara") ||
+      city.includes("rajkot") ||
+      city.includes("bhavnagar") ||
+      city.includes("jaipur") ||
+      city.includes("jodhpur") ||
+      city.includes("udaipur") ||
+      city.includes("kota") ||
+      state.includes("gujarat") ||
+      state.includes("rajasthan")
+    ) {
+      return [
+        {
+          sequence: 1,
+          hubId: "HUB-DEL-01",
+          hubName: "Delhi-NCR National Fulfillment Gateway",
+          region: "Delhi-NCR (North Zone)",
+          status: "completed",
+          transportMode: "train",
+          vehicleNo: "IR-12958-SWARNA",
+          containerId: "DEL-AMD-DFC-01",
+          dispatchCategory: "b2b_bulk_freight",
+        },
+        {
+          sequence: 2,
+          hubId: "HUB-AMD-01",
+          hubName: "Ahmedabad / Surat Industrial Hub",
+          region: "Ahmedabad / Surat, Gujarat (West-Industrial Zone)",
+          status: "sorting",
+          transportMode: "van",
+          vehicleNo: "GJ-01-EXP-4411",
+          containerId: "AMD-IND-04",
+          dispatchCategory: "b2c_individual_courier",
+        },
+      ];
+    }
+
+    // 4. EAST-CENTRAL: Lucknow (Central/Eastern UP and Bihar)
+    if (
+      city.includes("lucknow") ||
+      city.includes("kanpur") ||
+      city.includes("patna") ||
+      city.includes("varanasi") ||
+      city.includes("gaya") ||
+      city.includes("gorakhpur") ||
+      city.includes("prayagraj") ||
+      city.includes("allahabad") ||
+      city.includes("muzaffarpur") ||
+      city.includes("bhagalpur") ||
+      state.includes("bihar") ||
+      (state.includes("uttar pradesh") && !city.includes("noida") && !city.includes("ghaziabad")) ||
+      state.includes("up")
+    ) {
+      return [
+        {
+          sequence: 1,
+          hubId: "HUB-DEL-01",
+          hubName: "Delhi-NCR National Fulfillment Gateway",
+          region: "Delhi-NCR (North Zone)",
+          status: "completed",
+          transportMode: "train",
+          vehicleNo: "IR-12004-SHATABDI",
+          containerId: "DEL-LKO-RAIL-01",
+          dispatchCategory: "b2b_bulk_freight",
+        },
+        {
+          sequence: 2,
+          hubId: "HUB-LKO-01",
+          hubName: "Lucknow East-Central Logistics Center",
+          region: "Lucknow, Uttar Pradesh (East-Central Zone)",
+          status: "sorting",
+          transportMode: "van",
+          vehicleNo: "UP-32-EXP-9921",
+          containerId: "LKO-EXP-08",
+          dispatchCategory: "b2c_individual_courier",
+        },
+      ];
+    }
+
+    // 5. SOUTH-EAST: Chennai (Tamil Nadu, Andhra Pradesh, Telangana)
+    if (
+      city.includes("chennai") ||
+      city.includes("coimbatore") ||
+      city.includes("madurai") ||
+      city.includes("salem") ||
+      city.includes("hyderabad") ||
+      city.includes("secunderabad") ||
+      city.includes("visakhapatnam") ||
+      city.includes("vijayawada") ||
+      city.includes("tirupati") ||
+      state.includes("tamil nadu") ||
+      state.includes("andhra") ||
+      state.includes("telangana")
+    ) {
+      return [
+        {
+          sequence: 1,
+          hubId: "HUB-DEL-01",
+          hubName: "Delhi-NCR National Fulfillment Gateway",
+          region: "Delhi-NCR (North Zone)",
+          status: "completed",
+          transportMode: "plane",
+          vehicleNo: "6E-CARGO-502",
+          containerId: "DEL-MAA-AIR-03",
+          dispatchCategory: "b2b_bulk_freight",
+        },
+        {
+          sequence: 2,
+          hubId: "HUB-MAA-01",
+          hubName: "Chennai South-East Coastal Hub",
+          region: "Chennai, Tamil Nadu (South-East Zone)",
+          status: "sorting",
+          transportMode: "van",
+          vehicleNo: "TN-01-EXP-6622",
+          containerId: "MAA-SE-02",
+          dispatchCategory: "b2c_individual_courier",
+        },
+      ];
+    }
+
+    // 6. SOUTH-WEST: Bengaluru (Karnataka, Kerala)
+    if (
+      city.includes("bangalore") ||
+      city.includes("bengaluru") ||
+      city.includes("mysore") ||
+      city.includes("hubli") ||
+      city.includes("kochi") ||
+      city.includes("cochin") ||
+      city.includes("thiruvananthapuram") ||
+      city.includes("trivandrum") ||
+      city.includes("calicut") ||
+      city.includes("kozhikode") ||
+      state.includes("karnataka") ||
+      state.includes("kerala")
+    ) {
+      return [
+        {
+          sequence: 1,
+          hubId: "HUB-DEL-01",
+          hubName: "Delhi-NCR National Fulfillment Gateway",
+          region: "Delhi-NCR (North Zone)",
+          status: "completed",
+          transportMode: "plane",
+          vehicleNo: "6E-CARGO-308",
+          containerId: "DEL-BLR-AIR-04",
+          dispatchCategory: "b2b_bulk_freight",
+        },
+        {
+          sequence: 2,
+          hubId: "HUB-BLR-01",
+          hubName: "Bengaluru South-West Tech & Fulfillment Hub",
+          region: "Bengaluru, Karnataka (South-West Zone)",
+          status: "sorting",
+          transportMode: "bike",
+          vehicleNo: "KA-01-BK-4092",
+          containerId: "BLR-SW-01",
+          dispatchCategory: "b2c_individual_courier",
+        },
+      ];
+    }
+
+    // 7. WEST: Mumbai / Pune (Maharashtra, Goa)
+    if (
+      city.includes("mumbai") ||
+      city.includes("pune") ||
+      city.includes("navi mumbai") ||
+      city.includes("thane") ||
+      city.includes("nashik") ||
+      city.includes("goa") ||
+      city.includes("panaji") ||
+      state.includes("maharashtra") ||
+      state.includes("goa")
+    ) {
+      return [
+        {
+          sequence: 1,
+          hubId: "HUB-DEL-01",
+          hubName: "Delhi-NCR National Fulfillment Gateway",
+          region: "Delhi-NCR (North Zone)",
+          status: "completed",
+          transportMode: "plane",
+          vehicleNo: "6E-CARGO-402",
+          containerId: "DEL-BOM-AIR-02",
+          dispatchCategory: "b2b_bulk_freight",
+        },
+        {
+          sequence: 2,
+          hubId: "HUB-BOM-01",
+          hubName: "Mumbai / Pune Western Gateway Hub",
+          region: "Mumbai / Pune, Maharashtra (West Zone)",
+          status: "sorting",
+          transportMode: "van",
+          vehicleNo: "MH-02-EXP-3310",
+          containerId: "BOM-WEST-01",
+          dispatchCategory: "b2c_individual_courier",
+        },
+      ];
+    }
+
+    // 8. EAST: Kolkata (West Bengal, Odisha, Gateway to East)
+    if (
+      city.includes("asansol") ||
+      city.includes("burdwan") ||
+      city.includes("durgapur") ||
+      city.includes("kolkata") ||
+      city.includes("howrah") ||
+      city.includes("siliguri") ||
+      city.includes("bhubaneswar") ||
+      city.includes("cuttack") ||
+      city.includes("puri") ||
+      state.includes("bengal") ||
+      state.includes("odisha") ||
+      state.includes("orissa")
+    ) {
+      const isAsansolBelt = city.includes("asansol") || city.includes("durgapur") || city.includes("burdwan");
+      return [
+        {
+          sequence: 1,
+          hubId: "HUB-DEL-01",
+          hubName: "Delhi-NCR National Fulfillment Gateway",
+          region: "Delhi-NCR (North Zone)",
           status: "completed",
           transportMode: "truck",
           vehicleNo: "DL-01-TRK-8812",
@@ -248,9 +632,9 @@ export function generateRouteForOrder(order: Partial<Order>): ShipmentRouteLeg[]
         {
           sequence: 2,
           hubId: "HUB-CCU-01",
-          hubName: "Kolkata Eastern Logistics Hub",
-          region: "West Bengal, IN",
-          status: "dispatched",
+          hubName: "Kolkata Eastern Logistics Gateway",
+          region: "Kolkata, West Bengal (East Zone)",
+          status: isAsansolBelt ? "dispatched" : "sorting",
           transportMode: "train",
           vehicleNo: "IR-12302-RAJ",
           containerId: "KOL-ASN-0001",
@@ -274,83 +658,31 @@ export function generateRouteForOrder(order: Partial<Order>): ShipmentRouteLeg[]
             loadingManifestId: "LMF-HWH-ASN-4402",
           },
         },
-        {
-          sequence: 3,
-          hubId: "HUB-ASN-01",
-          hubName: "Asansol Regional Sorting Center",
-          region: "Asansol Zone, West Bengal, IN",
-          status: "incoming",
-          transportMode: "van",
-          vehicleNo: "WB-38-VAN-9920",
-          containerId: "ASN-GATE-404",
-          dispatchCategory: "b2c_individual_courier",
-          courierService: {
-            provider: "bluedart",
-            providerName: "Blue Dart Express (Apex)",
-            serviceType: "air_express",
-            trackingAwb: "BLUEDART-882914402",
-            pickupManifestId: "MNF-BD-ASN-009",
-            estimatedDeliveryDays: 1,
-            riderName: "Rakesh Sharma",
-            riderContact: "+91 98301 23456",
-          },
-        },
+        ...(isAsansolBelt
+          ? [
+              {
+                sequence: 3,
+                hubId: "HUB-ASN-01",
+                hubName: "Asansol Regional Sorting Center",
+                region: "Asansol Zone, West Bengal, IN",
+                status: "incoming" as const,
+                transportMode: "van" as const,
+                vehicleNo: "WB-38-VAN-9920",
+                containerId: "ASN-GATE-404",
+                dispatchCategory: "b2c_individual_courier" as const,
+              },
+            ]
+          : []),
       ];
     }
 
-    if (city.includes("mumbai") || city.includes("pune") || state.includes("maharashtra")) {
-      return [
-        {
-          sequence: 1,
-          hubId: "HUB-DEL-01",
-          hubName: "Delhi National Fulfillment Hub",
-          region: "Delhi NCR, IN",
-          status: "completed",
-          transportMode: "plane",
-          vehicleNo: "6E-CARGO-402",
-        },
-        {
-          sequence: 2,
-          hubId: "HUB-BOM-01",
-          hubName: "Mumbai Western Air Gateway",
-          region: "Maharashtra, IN",
-          status: "sorting",
-          transportMode: "van",
-          vehicleNo: "MH-02-EXP-3310",
-        },
-      ];
-    }
-
-    if (city.includes("bangalore") || city.includes("bengaluru") || state.includes("karnataka")) {
-      return [
-        {
-          sequence: 1,
-          hubId: "HUB-BOM-01",
-          hubName: "Mumbai Western Air Gateway",
-          region: "Maharashtra, IN",
-          status: "completed",
-          transportMode: "truck",
-          vehicleNo: "MH-04-TRK-7711",
-        },
-        {
-          sequence: 2,
-          hubId: "HUB-BLR-01",
-          hubName: "Bangalore South Tech Hub",
-          region: "Karnataka, IN",
-          status: "sorting",
-          transportMode: "bike",
-          vehicleNo: "KA-01-BK-4040",
-        },
-      ];
-    }
-
-    // Default India General Route
+    // 9. NORTH (Default India Doorstep from Delhi National Gateway)
     return [
       {
         sequence: 1,
         hubId: "HUB-DEL-01",
-        hubName: "Delhi National Fulfillment Hub",
-        region: "Delhi NCR, IN",
+        hubName: "Delhi-NCR National Fulfillment Gateway",
+        region: "Delhi-NCR (North Zone)",
         status: "dispatched",
         transportMode: "truck",
         vehicleNo: "DL-01-TRK-9000",
@@ -358,8 +690,8 @@ export function generateRouteForOrder(order: Partial<Order>): ShipmentRouteLeg[]
       {
         sequence: 2,
         hubId: "HUB-CCU-01",
-        hubName: "Kolkata Eastern Logistics Hub",
-        region: "West Bengal, IN",
+        hubName: "Kolkata Eastern Logistics Gateway",
+        region: "Kolkata, West Bengal (East Zone)",
         status: "incoming",
         transportMode: "van",
         vehicleNo: "WB-02-EXP-1122",
@@ -388,6 +720,16 @@ export function generateRouteForOrder(order: Partial<Order>): ShipmentRouteLeg[]
       transportMode: "plane",
       vehicleNo: "LH-CARGO-772",
       containerId: "FRA-REG-011",
+    },
+    {
+      sequence: 3,
+      hubId: "HUB-LHR-01",
+      hubName: "London Heathrow Gateway Hub",
+      region: "London, UK",
+      status: "incoming",
+      transportMode: "van",
+      vehicleNo: "LDN-VAN-12",
+      containerId: "LHR-FINAL-99",
     },
   ];
 }

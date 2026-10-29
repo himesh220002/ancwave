@@ -102,6 +102,7 @@ import {
   LocalDeliveryDetails,
   CourierServiceDetails,
   DispatchCategory,
+  LogisticsHub,
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/components/Toaster";
@@ -313,6 +314,124 @@ export default function AdminPage() {
     }
   }, [podModalImage]);
 
+  // Dynamic Hubs Directory & Registration State
+  const [hubsList, setHubsList] = useState<LogisticsHub[]>(STANDARD_HUBS);
+  const [showRegisterHubModal, setShowRegisterHubModal] = useState<boolean>(false);
+  const [newHubCode, setNewHubCode] = useState<string>("");
+  const [newHubName, setNewHubName] = useState<string>("");
+  const [newHubRegion, setNewHubRegion] = useState<string>("");
+  const [newHubCoverage, setNewHubCoverage] = useState<string>("");
+  const [newHubRole, setNewHubRole] = useState<string>("");
+  const [newHubType, setNewHubType] = useState<LogisticsHub["type"]>("regional_gateway");
+  const [newHubCountry, setNewHubCountry] = useState<string>("India");
+  const [isRegisteringHub, setIsRegisteringHub] = useState<boolean>(false);
+
+  // Fetch all standard and dynamic hubs on mount
+  useEffect(() => {
+    async function loadHubs() {
+      try {
+        const res = await fetch("/api/hubs");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.hubs) && data.hubs.length > 0) {
+          setHubsList(data.hubs);
+        }
+      } catch (err) {
+        console.error("Error fetching hubs from /api/hubs:", err);
+      }
+    }
+    loadHubs();
+  }, []);
+
+  const handleRegisterDynamicHub = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newHubCode.trim() || !newHubName.trim() || !newHubRegion.trim()) {
+      toast({
+        type: "error",
+        title: "Required Fields Missing",
+        description: "Please provide Hub Code, Facility Name, and Region.",
+      });
+      return;
+    }
+    setIsRegisteringHub(true);
+    try {
+      const res = await fetch("/api/hubs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: newHubCode,
+          name: newHubName,
+          region: newHubRegion,
+          coverageArea: newHubCoverage,
+          strategicRole: newHubRole,
+          type: newHubType,
+          country: newHubCountry,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHubsList(data.hubs);
+        toast({
+          type: "success",
+          title: "Hub Registered",
+          description: data.message || `Strategic Hub ${newHubName} [${newHubCode.toUpperCase()}] registered!`,
+        });
+        setShowRegisterHubModal(false);
+        setNewHubCode("");
+        setNewHubName("");
+        setNewHubRegion("");
+        setNewHubCoverage("");
+        setNewHubRole("");
+      } else {
+        toast({
+          type: "error",
+          title: "Registration Failed",
+          description: data.error || "Failed to register hub.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: err.message || "Network error registering hub.",
+      });
+    } finally {
+      setIsRegisteringHub(false);
+    }
+  };
+
+  const handleDeleteDynamicHub = async (hubId: string, hubName: string) => {
+    if (!confirm(`Are you sure you want to decommission dynamic hub "${hubName}"?`)) return;
+    try {
+      const res = await fetch(`/api/hubs?id=${encodeURIComponent(hubId)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHubsList(data.hubs);
+        if (activeHubId === hubId) {
+          setActiveHubId("HUB-DEL-01");
+        }
+        toast({
+          type: "success",
+          title: "Hub Decommissioned",
+          description: data.message || `Hub ${hubName} decommissioned.`,
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "Action Failed",
+          description: data.error || "Failed to remove hub.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: err.message || "Network error removing hub.",
+      });
+    }
+  };
+
   // URL & LocalStorage Persistence: Keep user on exact tab and open order on refresh
   const [hasHydratedLocation, setHasHydratedLocation] = useState(false);
 
@@ -481,9 +600,9 @@ export default function AdminPage() {
   }, [orders, activeHubId]);
 
   // Precomputed operational queue breakdown [incoming, received, sorting, loading, outgoing, gateHandover]
-  // and sum of the 5 core hub operations for every standard hub in the dropdown
+  // and sum of the 5 core hub operations for every hub (standard & dynamic)
   const allHubsQueueStats = useMemo(() => {
-    return STANDARD_HUBS.map((h) => {
+    return hubsList.map((h) => {
       const q = getHubOperationsQueue(orders, h.id);
       const inCount = q.totals.incoming;
       const recCount = q.totals.received;
@@ -509,12 +628,12 @@ export default function AdminPage() {
         formattedArray: `[${countsArray.join(",")}]`,
       };
     });
-  }, [orders]);
+  }, [orders, hubsList]);
 
   const activeHubStats = useMemo(() => {
     return (
       allHubsQueueStats.find((s) => s.hub.id === activeHubId) || {
-        hub: getHubById(activeHubId) || STANDARD_HUBS[0],
+        hub: getHubById(activeHubId, hubsList) || hubsList[0],
         queue: hubQueue,
         inCount: hubQueue.totals.incoming,
         recCount: hubQueue.totals.received,
@@ -5436,37 +5555,50 @@ export default function AdminPage() {
 
                 {/* Active Hub Network Operations Table (Just Below Heading) */}
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
                       <MapPin className="w-4 h-4 text-purple-400 shrink-0" />
                       <h3 className="text-sm font-bold text-zinc-100 font-sans tracking-tight">
                         Active Hub Operational Directory
                       </h3>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">
-                        {STANDARD_HUBS.length} Stations Connected
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
+                        {hubsList.length} Stations Connected
                       </span>
+                      {hubsList.some((h) => h.isDynamic) && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold">
+                          ⚡ {hubsList.filter((h) => h.isDynamic).length} Dynamic
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
-                      <span className="text-zinc-500">Click any row or button to switch active hub console</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowRegisterHubModal(true)}
+                        className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-purple-600/20 active:scale-95 transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Discover / Add Dynamic Hub</span>
+                      </button>
                     </div>
                   </div>
 
                   <div className="overflow-x-auto rounded-xl border border-zinc-800/80 bg-zinc-950/80 shadow-inner">
-                    <table className="w-full text-left text-xs font-mono border-collapse min-w-[760px]">
+                    <table className="w-full text-left text-xs font-mono border-collapse min-w-[900px]">
                       <thead>
                         <tr className="border-b border-zinc-800 bg-zinc-900/70 text-[11px] text-zinc-400 uppercase tracking-wider font-semibold">
                           <th className="py-2.5 px-3">Status</th>
                           <th className="py-2.5 px-3">Hub</th>
                           <th className="py-2.5 px-3">Facility Name & Region</th>
+                          <th className="py-2.5 px-3">Coverage Area & Strategic Role</th>
                           <th className="py-2.5 px-3 text-center">Sum (5 Ops)</th>
-                          <th className="py-2.5 px-2.5 text-center text-blue-400">1. In</th>
-                          <th className="py-2.5 px-2.5 text-center text-emerald-400">2. Recv</th>
-                          <th className="py-2.5 px-2.5 text-center text-amber-400">3. Sort</th>
-                          <th className="py-2.5 px-2.5 text-center text-cyan-400">4. Load</th>
-                          <th className="py-2.5 px-2.5 text-center text-purple-400">5. Out</th>
-                          <th className="py-2.5 px-2.5 text-center text-pink-400">6. Gate</th>
+                          <th className="py-2.5 px-2 text-center text-blue-400">1. In</th>
+                          <th className="py-2.5 px-2 text-center text-emerald-400">2. Recv</th>
+                          <th className="py-2.5 px-2 text-center text-amber-400">3. Sort</th>
+                          <th className="py-2.5 px-2 text-center text-cyan-400">4. Load</th>
+                          <th className="py-2.5 px-2 text-center text-purple-400">5. Out</th>
+                          <th className="py-2.5 px-2 text-center text-pink-400">6. Gate</th>
                           <th className="py-2.5 px-3 text-center">Vector [1-6]</th>
-                          <th className="py-2.5 px-3 text-right">Switch</th>
+                          <th className="py-2.5 px-3 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-800/60">
@@ -5488,6 +5620,10 @@ export default function AdminPage() {
                                     <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
                                     ACTIVE
                                   </span>
+                                ) : h.isDynamic ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                                    ⚡ DYNAMIC
+                                  </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-900 text-zinc-500 border border-zinc-800">
                                     READY
@@ -5495,11 +5631,21 @@ export default function AdminPage() {
                                 )}
                               </td>
                               <td className="py-2.5 px-3 font-bold text-white group-hover:text-purple-300 transition-colors">
-                                {h.code}
+                                <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[11px] font-mono">
+                                  {h.code}
+                                </span>
                               </td>
                               <td className="py-2.5 px-3 font-sans font-medium text-zinc-200">
                                 <div className="text-xs text-zinc-100 font-semibold">{h.name}</div>
                                 <div className="text-[10px] font-mono text-zinc-400">{h.region} · {h.country}</div>
+                              </td>
+                              <td className="py-2.5 px-3 font-sans max-w-[280px]">
+                                <div className="text-[11px] text-zinc-200 font-semibold truncate" title={h.coverageArea || h.strategicRole}>
+                                  {h.coverageArea || "Strategic logistics corridor"}
+                                </div>
+                                <div className="text-[10px] text-zinc-400 font-mono truncate" title={h.strategicRole}>
+                                  {h.strategicRole || "Regional distribution node"}
+                                </div>
                               </td>
                               <td className="py-2.5 px-3 text-center">
                                 <span
@@ -5512,32 +5658,32 @@ export default function AdminPage() {
                                   {sum5} ops
                                 </span>
                               </td>
-                              <td className="py-2.5 px-2.5 text-center">
+                              <td className="py-2.5 px-2 text-center">
                                 <span className={`font-semibold ${inCount > 0 ? "text-blue-400 font-bold" : "text-zinc-600"}`}>
                                   {inCount}
                                 </span>
                               </td>
-                              <td className="py-2.5 px-2.5 text-center">
+                              <td className="py-2.5 px-2 text-center">
                                 <span className={`font-semibold ${recCount > 0 ? "text-emerald-400 font-bold" : "text-zinc-600"}`}>
                                   {recCount}
                                 </span>
                               </td>
-                              <td className="py-2.5 px-2.5 text-center">
+                              <td className="py-2.5 px-2 text-center">
                                 <span className={`font-semibold ${sortCount > 0 ? "text-amber-400 font-bold" : "text-zinc-600"}`}>
                                   {sortCount}
                                 </span>
                               </td>
-                              <td className="py-2.5 px-2.5 text-center">
+                              <td className="py-2.5 px-2 text-center">
                                 <span className={`font-semibold ${loadCount > 0 ? "text-cyan-400 font-bold" : "text-zinc-600"}`}>
                                   {loadCount}
                                 </span>
                               </td>
-                              <td className="py-2.5 px-2.5 text-center">
+                              <td className="py-2.5 px-2 text-center">
                                 <span className={`font-semibold ${outCount > 0 ? "text-purple-400 font-bold" : "text-zinc-600"}`}>
                                   {outCount}
                                 </span>
                               </td>
-                              <td className="py-2.5 px-2.5 text-center">
+                              <td className="py-2.5 px-2 text-center">
                                 <span className={`font-semibold ${gateCount > 0 ? "text-pink-400 font-bold" : "text-zinc-600"}`}>
                                   {gateCount}
                                 </span>
@@ -5554,22 +5700,37 @@ export default function AdminPage() {
                                 </span>
                               </td>
                               <td className="py-2.5 px-3 text-right">
-                                {isActive ? (
-                                  <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider px-2 py-1 bg-purple-500/10 rounded-lg border border-purple-500/30">
-                                    Current
-                                  </span>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveHubId(h.id);
-                                    }}
-                                    className="px-2.5 py-1 text-[10px] font-bold bg-zinc-800 hover:bg-purple-600 text-zinc-300 hover:text-white rounded-lg transition-colors cursor-pointer border border-zinc-700 hover:border-purple-500"
-                                  >
-                                    Select
-                                  </button>
-                                )}
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {isActive ? (
+                                    <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider px-2 py-1 bg-purple-500/10 rounded-lg border border-purple-500/30">
+                                      Current
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveHubId(h.id);
+                                      }}
+                                      className="px-2.5 py-1 text-[10px] font-bold bg-zinc-800 hover:bg-purple-600 text-zinc-300 hover:text-white rounded-lg transition-colors cursor-pointer border border-zinc-700 hover:border-purple-500"
+                                    >
+                                      Select
+                                    </button>
+                                  )}
+                                  {h.isDynamic && (
+                                    <button
+                                      type="button"
+                                      title="Decommission Dynamic Hub"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteDynamicHub(h.id, h.name);
+                                      }}
+                                      className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -8160,6 +8321,264 @@ export default function AdminPage() {
                         Close Waybill Audit
                       </button>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic Hub Discovery & Registration Modal */}
+              {showRegisterHubModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-2xl w-full shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => setShowRegisterHubModal(false)}
+                      className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 shadow-md">
+                        <MapPin className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          Discover & Register New Logistics Hub
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                            Dynamic Grid
+                          </span>
+                        </h3>
+                        <p className="text-xs text-zinc-400">
+                          Dynamically expand the routing matrix with new regional corridors, industrial gateways, or local fulfillment clusters.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Quick Preset Buttons */}
+                    <div className="mb-5 p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                      <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-amber-400" />
+                        <span>Quick Discover Templates:</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          {
+                            label: "Hyderabad [HYD]",
+                            code: "HUB-HYD-01",
+                            name: "Hyderabad South-Central Fulfillment Gateway",
+                            region: "South-Central",
+                            coverage: "Telangana, North Andhra Pradesh, and Hyderabad Urban Tech Zone.",
+                            role: "High-throughput semiconductor and e-commerce regional transit bridge.",
+                            type: "regional_gateway" as const,
+                          },
+                          {
+                            label: "Patna [PAT]",
+                            code: "HUB-PAT-01",
+                            name: "Patna Bihar Freight Hub",
+                            region: "East-Central",
+                            coverage: "Bihar, Eastern UP, and border transit to Nepal.",
+                            role: "Dedicated Bihar distribution node balancing the Lucknow corridor.",
+                            type: "regional_gateway" as const,
+                          },
+                          {
+                            label: "Jaipur [JAI]",
+                            code: "HUB-JAI-01",
+                            name: "Jaipur Western Logistics Park",
+                            region: "North-West",
+                            coverage: "Rajasthan, Southern Haryana, and Delhi Western Bypass.",
+                            role: "Western industrial line-haul staging and handicraft export gateway.",
+                            type: "regional_gateway" as const,
+                          },
+                          {
+                            label: "Indore [IDR]",
+                            code: "HUB-IDR-01",
+                            name: "Indore Malwa Gateway",
+                            region: "Central-West",
+                            coverage: "Madhya Pradesh commercial cluster and Eastern Gujarat border.",
+                            role: "Central industrial feeder linking Nagpur and Ahmedabad corridors.",
+                            type: "regional_gateway" as const,
+                          },
+                          {
+                            label: "Kochi [COK]",
+                            code: "HUB-COK-01",
+                            name: "Kochi Coastal & Maritime Gateway",
+                            region: "South-Coastal",
+                            coverage: "Kerala, Lakshadweep coastal maritime route, and Southern Tamil Nadu.",
+                            role: "Deep-sea port interface and southern coastal express line-haul.",
+                            type: "regional_gateway" as const,
+                          },
+                        ].map((preset) => (
+                          <button
+                            key={preset.code}
+                            type="button"
+                            onClick={() => {
+                              setNewHubCode(preset.code);
+                              setNewHubName(preset.name);
+                              setNewHubRegion(preset.region);
+                              setNewHubCoverage(preset.coverage);
+                              setNewHubRole(preset.role);
+                              setNewHubType(preset.type);
+                              setNewHubCountry("India");
+                            }}
+                            className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-purple-600/30 hover:border-purple-500/50 border border-zinc-700/60 text-zinc-300 hover:text-white transition cursor-pointer"
+                          >
+                            + {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleRegisterDynamicHub} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                            Hub Code <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. HUB-HYD-01"
+                            value={newHubCode}
+                            onChange={(e) => setNewHubCode(e.target.value.toUpperCase())}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                            required
+                          />
+                          <p className="text-[10px] text-zinc-500 mt-1">Unique node identifier (HUB-XXX-01)</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                            Operational Hub Type
+                          </label>
+                          <select
+                            value={newHubType}
+                            onChange={(e) => setNewHubType(e.target.value as LogisticsHub["type"])}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-purple-500"
+                          >
+                            <option value="regional_gateway">Regional Gateway (National Line-Haul)</option>
+                            <option value="origin">Origin Warehouse (Manufacturing/Packaging)</option>
+                            <option value="local_delivery">Local Delivery Hub (Doorstep Last-Mile)</option>
+                            <option value="air_transit">Air Transit Gateway (Airport Air-Cargo)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                            Facility Name <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Hyderabad South-Central Hub"
+                            value={newHubName}
+                            onChange={(e) => setNewHubName(e.target.value)}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                            Region / Strategic Zone <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. South-Central, West-Industrial, North"
+                            value={newHubRegion}
+                            onChange={(e) => setNewHubRegion(e.target.value)}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                          Coverage Area
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Covers Telangana, North Andhra Pradesh, and Hyderabad Urban"
+                          value={newHubCoverage}
+                          onChange={(e) => setNewHubCoverage(e.target.value)}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                        />
+                        <p className="text-[10px] text-zinc-500 mt-1">States, metropolitan zones, or districts covered by this hub</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                          Strategic Logistics Role
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Central distribution gateway connecting Deccan plateau to North-South line-haul"
+                          value={newHubRole}
+                          onChange={(e) => setNewHubRole(e.target.value)}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                        />
+                        <p className="text-[10px] text-zinc-500 mt-1">The primary function and role in the pan-India supply chain</p>
+                      </div>
+
+                      {/* Live Preview Card */}
+                      {newHubCode && (
+                        <div className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/30 flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-mono font-bold text-xs text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                                {newHubCode}
+                              </span>
+                              <span className="text-xs font-semibold text-white">
+                                {newHubName || "Facility Preview"}
+                              </span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                                ⚡ Dynamic
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400">
+                              {newHubCoverage || "Coverage area will appear here..."}
+                            </p>
+                            {newHubRole && (
+                              <p className="text-[10px] text-purple-300/80 italic mt-0.5">
+                                Role: {newHubRole}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                              {newHubType}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
+                        <button
+                          type="button"
+                          onClick={() => setShowRegisterHubModal(false)}
+                          className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold transition cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isRegisteringHub || !newHubCode || !newHubName || !newHubRegion}
+                          className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-purple-600/30 transition cursor-pointer flex items-center gap-2"
+                        >
+                          {isRegisteringHub ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Activating Hub...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Activate Dynamic Hub</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
                   </div>
                 </div>
               )}
