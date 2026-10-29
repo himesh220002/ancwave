@@ -31,6 +31,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Order, ShippingSettings, DEFAULT_USD_TO_INR_RATE } from "@/types";
 import { toast } from "@/components/Toaster";
 import { downloadOrderInvoicePdf } from "@/lib/invoice-generator";
+import { CheckoutSkeleton } from "@/components/Skeleton";
 
 declare global {
   interface Window {
@@ -57,6 +58,11 @@ export default function CheckoutPage() {
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // User auth interception & checkout handshake
   const [pendingPaymentAfterAuth, setPendingPaymentAfterAuth] = useState(false);
@@ -413,6 +419,10 @@ export default function CheckoutPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (!isMounted) {
+    return <CheckoutSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-[#FBFBFA] flex flex-col font-sans selection:bg-blue-600 selection:text-white">

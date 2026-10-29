@@ -45,6 +45,7 @@ import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
 import { toast } from "@/components/Toaster";
 import { sampleReviews } from "@/lib/store";
+import { ReviewCardSkeleton } from "@/components/Skeleton";
 import confetti from "canvas-confetti";
 import {
   Camera,
@@ -116,6 +117,7 @@ export function ProductDetailView({
     hasReviewed?: boolean;
   } | null>(null);
   const [isLoadingEligibility, setIsLoadingEligibility] = useState<boolean>(false);
+  const [isLoadingReviews, setIsLoadingReviews] = useState<boolean>(true);
 
   // Review Composer form state
   const [formRating, setFormRating] = useState<number>(5);
@@ -354,6 +356,7 @@ export function ProductDetailView({
     } catch (err) {
       console.warn("Reviews/eligibility fetch error:", err);
     } finally {
+      setIsLoadingReviews(false);
       setIsLoadingEligibility(false);
     }
   }, [product.productId, product.slug, user]);
@@ -1313,7 +1316,14 @@ export function ProductDetailView({
 
             {/* Reviews Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {filteredReviews.map((review, rIdx) => (
+              {isLoadingReviews ? (
+                <>
+                  <ReviewCardSkeleton />
+                  <ReviewCardSkeleton />
+                  <ReviewCardSkeleton />
+                </>
+              ) : (
+                filteredReviews.map((review, rIdx) => (
                 <div
                   key={`rev-${review.id || review.reviewId || rIdx}-${rIdx}`}
                   className="rounded-3xl bg-white border border-[#EAEAE5] p-6 space-y-4 flex flex-col justify-between shadow-2xs"
@@ -1384,8 +1394,9 @@ export function ProductDetailView({
                     </span>
                   </div>
                 </div>
-              ))}
+              )))}
             </div>
+
 
             {/* CONDITIONAL REVIEW COMPOSER (LoggedIn + Bought) */}
             <div className="pt-6">

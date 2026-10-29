@@ -43,6 +43,7 @@ import { toast } from "@/components/Toaster";
 import { downloadOrderInvoicePdf } from "@/lib/invoice-generator";
 import { generateRazorpayOrderEmail, CustomRazorpayEmailData } from "@/lib/email-service";
 import { formatLogisticsJourneyLogs } from "@/lib/logistics-service";
+import { OrderCardSkeleton, OrdersPageSkeleton } from "@/components/Skeleton";
 
 function MyOrdersContent() {
   const searchParams = useSearchParams();
@@ -452,16 +453,8 @@ function MyOrdersContent() {
         {/* Loading State */}
         {isLoading && (
           <div className="space-y-6">
-            {[1, 2].map((i) => (
-              <div
-                key={i}
-                className="h-64 rounded-3xl bg-white border border-[#EAEAE5] animate-pulse p-8 space-y-4"
-              >
-                <div className="h-6 bg-zinc-100 rounded-lg w-1/3"></div>
-                <div className="h-24 bg-zinc-100 rounded-2xl w-full"></div>
-                <div className="h-10 bg-zinc-100 rounded-xl w-1/4"></div>
-              </div>
-            ))}
+            <OrderCardSkeleton />
+            <OrderCardSkeleton />
           </div>
         )}
 
@@ -1540,16 +1533,7 @@ function MyOrdersContent() {
 
 export default function MyOrdersPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-white flex flex-col items-center justify-center">
-          <div className="w-8 h-8 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-xs uppercase tracking-widest text-zinc-500 font-mono">
-            Loading Order Ledger...
-          </p>
-        </div>
-      }
-    >
+    <Suspense fallback={<OrdersPageSkeleton />}>
       <MyOrdersContent />
     </Suspense>
   );

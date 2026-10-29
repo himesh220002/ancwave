@@ -25,6 +25,7 @@ import { sampleCatalog } from "@/lib/store";
 import { useCart } from "@/context/CartContext";
 import { toast } from "@/components/Toaster";
 import { ProductData, normalizeProductData } from "@/types";
+import { ProductCardSkeleton } from "@/components/Skeleton";
 
 type CategoryFilter = string;
 type SortOption = "featured" | "price-asc" | "price-desc" | "rating";
@@ -268,15 +269,21 @@ export default function ProductsCatalogPage() {
       {/* Product Cards Grid */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProducts.map((product, pIdx) => (
-            <ProductCatalogCard
-              key={`cat-card-${product.id || product.slug || pIdx}-${pIdx}`}
-              product={product}
-              onQuickAdd={handleQuickAdd}
-              isCompared={comparedSlugs.includes(product.slug)}
-              onToggleCompare={() => toggleCompare(product.slug)}
-            />
-          ))}
+          {catalogProducts.length === 0 ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))
+          ) : (
+            filteredProducts.map((product, pIdx) => (
+              <ProductCatalogCard
+                key={`cat-card-${product.id || product.slug || pIdx}-${pIdx}`}
+                product={product}
+                onQuickAdd={handleQuickAdd}
+                isCompared={comparedSlugs.includes(product.slug)}
+                onToggleCompare={() => toggleCompare(product.slug)}
+              />
+            ))
+          )}
         </div>
 
         {/* Footer Subline & Quick Link to Comparison Matrix */}
