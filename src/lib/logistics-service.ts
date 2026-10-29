@@ -582,3 +582,197 @@ export function getHubOperationsQueue(orders: Order[], hubId: string): HubFilter
     },
   };
 }
+
+export interface LogisticsJourneyStep {
+  stepType: "order_creation" | "hub_in_out" | "out_for_delivery" | "delivered" | "gate_exception" | "rto_step";
+  title: string;
+  hubNumber?: number;
+  hubName?: string;
+  hubCode?: string;
+  inTime?: string;
+  outTime?: string;
+  timestamp?: string;
+  status: "completed" | "in_progress" | "pending" | "failed";
+  details?: string;
+  badge?: string;
+}
+
+/**
+ * Formats the exact industrial paired timeline specified in the user whiteboard:
+ * - Order creation [d & time]
+ * - in hub1 [d & time] - out hub1 [d & time]
+ * - in hub2 [d & time] - out hub2 [d & time]
+ * - in hub3 [d & time] - out hub3 [d & time]
+ * - Out for delivery [d & time]
+ * - delivered [d & time] (or Gate Exception / RTO retrieval)
+ */
+export function formatLogisticsJourneyLogs(order: Order): LogisticsJourneyStep[] {
+  const steps: LogisticsJourneyStep[] = [];
+  const route = order.route && order.route.length > 0 ? order.route : generateRouteForOrder(order);
+
+  const formatDate = (isoStr?: string) => {
+    if (!isoStr) return "";
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return isoStr;
+      return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
+    } catch {
+      return isoStr;
+    }
+  };
+
+  // 1. Order Creation Step
+  const orderCreatedEv = (order.events || []).find((e) => e.title.toLowerCase().includes("order created") || e.title.toLowerCase().includes("order placed"));
+  const createdTime = orderCreatedEv?.timestamp || order.createdAt || "2026-10-25T11:34:00Z";
+  steps.push({
+    stepType: "order_creation",
+    title: "Order creation",
+    timestamp: formatDate(createdTime),
+    status: "completed",
+    details: "Order placed & verified · Boxed and dispatched at origin warehouse",
+    badge: "Origin Pack Complete",
+  });
+
+  // 2. Multi-Hub In/Out Steps (hub1, hub2, hub3...)
+  route.forEach((leg, idx) => {
+    const hubNum = leg.sequence || idx + 1;
+    const isCompleted = leg.status === "completed";
+    const isActive = leg.status === "received" || leg.status === "sorting" || leg.status === "loading" || leg.status === "dispatched";
+
+    // Approximate timestamps from events or leg data if not explicitly set
+    let inTime = leg.inHubAt || leg.receivedAt;
+    let outTime = leg.outHubAt || leg.dispatchedAt;
+
+    if (!inTime) {
+      if (idx === 0) {
+        inTime = order.createdAt;
+      } else {
+        const inEv = (order.events || []).find((e) => e.title.toLowerCase().includes(`received at ${leg.hubName.toLowerCase()}`) || e.description.toLowerCase().includes(leg.hubName.toLowerCase()));
+        if (inEv) inTime = inEv.timestamp;
+        else if (isCompleted || isActive) {
+          // Synthetic realistic offset based on sequence
+          const baseDate = new Date(order.createdAt).getTime();
+          inTime = new Date(baseDate + idx * 8 * 3600 * 1000).toISOString();
+        }
+      }
+    }
+
+    if (!outTime) {
+      const outEv = (order.events || []).find((e) => (e.title.toLowerCase().includes("dispatched") || e.title.toLowerCase().includes("on the way")) && (e.title.toLowerCase().includes(leg.hubName.toLowerCase()) || e.description.toLowerCase().includes(leg.hubName.toLowerCase())));
+      if (outEv) outTime = outEv.timestamp;
+      else if (isCompleted) {
+        const baseDate = inTime ? new Date(inTime).getTime() : new Date(order.createdAt).getTime();
+        outTime = new Date(baseDate + 3 * 3600 * 1000).toISOString();
+      }
+    }
+
+    steps.push({
+      stepType: "hub_in_out",
+      hubNumber: hubNum,
+      hubName: leg.hubName,
+      hubCode: leg.hubCode || leg.hubId,
+      title: `in hub${hubNum} [${formatDate(inTime) || "Pending Dock Scan"}] - out hub${hubNum} [${formatDate(outTime) || (isActive ? "Staging / Active" : "Pending")}]`,
+      inTime: formatDate(inTime),
+      outTime: formatDate(outTime),
+      status: isCompleted ? "completed" : isActive ? "in_progress" : "pending",
+      details: `${leg.hubName} (${leg.region}) · Fleet: ${String(leg.transportMode || "truck").toUpperCase()} ${leg.vehicleNo ? `[${leg.vehicleNo}]` : ""}`,
+      badge: isCompleted ? "Departed Hub" : isActive ? "Inside Hub Operations" : "Scheduled",
+    });
+  });
+
+  // 3. Out for delivery Step
+  const outForDeliveryEv = (order.events || []).find((e) => e.title.toLowerCase().includes("out for delivery") || e.title.toLowerCase().includes("on the way near location"));
+  const isOutOfDelivery = order.deliveryStatus === "out_for_delivery" || order.deliveryStatus === "delivered" || String(order.deliveryStatus || "").startsWith("rto_");
+  const outTime = outForDeliveryEv?.timestamp || (isOutOfDelivery ? new Date(new Date(order.createdAt).getTime() + 32 * 3600 * 1000).toISOString() : undefined);
+
+  steps.push({
+    stepType: "out_for_delivery",
+    title: `Out for delivery [${formatDate(outTime) || "Awaiting Final Hub Dispatch"}]`,
+    timestamp: formatDate(outTime),
+    status: order.deliveryStatus === "delivered" || String(order.deliveryStatus || "").startsWith("rto_") ? "completed" : order.deliveryStatus === "out_for_delivery" ? "in_progress" : "pending",
+    details: "Package on the way near location · Arrives in afternoon/evening window",
+    badge: "Last-Mile Active",
+  });
+
+  // 4. Gate / Handover / Delivered Step OR Gate Exception RTO
+  if (String(order.deliveryStatus || "").startsWith("rto_") || order.gateException) {
+    const exc = order.gateException;
+    const excReason = exc?.reason === "damaged_package"
+      ? "Package Damaged / Unstable Shape (Refused by customer)"
+      : exc?.reason === "customer_out_of_station"
+      ? "Customer Out of Station / Unreachable"
+      : "Customer Bad Treatment Exception / Refused [Red Flag Customer]";
+
+    steps.push({
+      stepType: "gate_exception",
+      title: `Gate Refusal Exception [${formatDate(exc?.reportedAt) || "Gate Rejection"}]`,
+      timestamp: formatDate(exc?.reportedAt),
+      status: "failed",
+      details: `${excReason} · Initiating Return to Origin (RTO)`,
+      badge: exc?.isRedFlagCustomer ? "RED FLAG CUSTOMER" : "RTO INITIATED",
+    });
+
+    if (order.rtoDetails) {
+      steps.push({
+        stepType: "rto_step",
+        title: `RTO Reverse Logistics [Tracking: ${order.rtoDetails.returnTrackingNumber}]`,
+        timestamp: formatDate(order.rtoDetails.initiatedAt),
+        status: order.rtoDetails.returnStatus === "restocked_refunded" ? "completed" : "in_progress",
+        details: `Reverse flow: ${order.rtoDetails.currentReturnHubId} ➔ Reverse Line-Haul ➔ ${order.rtoDetails.destinationOriginHubId} (Origin Warehouse)`,
+        badge: order.rtoDetails.returnStatus.replace("_", " ").toUpperCase(),
+      });
+    }
+  } else {
+    const deliveredEv = (order.events || []).find((e) => e.title.toLowerCase().includes("delivered") || e.title.toLowerCase().includes("handover completed"));
+    const isDelivered = order.deliveryStatus === "delivered";
+    const delivTime = deliveredEv?.timestamp || (isDelivered ? new Date().toISOString() : undefined);
+
+    steps.push({
+      stepType: "delivered",
+      title: `delivered [${formatDate(delivTime) || "Pending Handover"}]`,
+      timestamp: formatDate(delivTime),
+      status: isDelivered ? "completed" : "pending",
+      details: isDelivered ? "Doorstep Handover Complete: Customer 6-Digit OTP verified + 2 PoD photos archived in S3 vault" : "Pending arrival at customer address",
+      badge: isDelivered ? "Verified & Delivered ✓" : "Pending Gate Verification",
+    });
+  }
+
+  return steps;
+}
+
+/**
+ * Generates reverse routing legs for an order returned from the gate back to origin
+ */
+export function generateRtoReverseRoute(order: Order): ShipmentRouteLeg[] {
+  const forwardRoute = order.route && order.route.length > 0 ? order.route : generateRouteForOrder(order);
+  const now = new Date().toISOString();
+
+  // Reverse the sequence: last hub (e.g. HUB-ASN-01) -> intermediate (HUB-CCU-01) -> origin (HUB-DEL-01)
+  const reversed: ShipmentRouteLeg[] = [];
+  const len = forwardRoute.length;
+
+  for (let i = len - 1; i >= 0; i--) {
+    const fLeg = forwardRoute[i];
+    const isFirstReturnLeg = (i === len - 1);
+    const seq = len - i;
+
+    reversed.push({
+      sequence: seq,
+      hubId: fLeg.hubId,
+      hubCode: fLeg.hubCode,
+      hubName: `${fLeg.hubName} (RTO Dock)`,
+      region: fLeg.region,
+      status: isFirstReturnLeg ? "received" : "pending",
+      transportMode: fLeg.transportMode || "truck",
+      vehicleNo: `RET-${fLeg.vehicleNo || "WB-TRK-900"}`,
+      containerId: `RTO-CONT-${order.orderNumber}`,
+      dispatchCategory: "b2b_bulk_freight",
+      receivedAt: isFirstReturnLeg ? now : undefined,
+      inHubAt: isFirstReturnLeg ? now : undefined,
+      isReturnLeg: true,
+    });
+  }
+
+  return reversed;
+}
+

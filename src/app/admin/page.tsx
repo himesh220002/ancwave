@@ -3,12 +3,23 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { STANDARD_HUBS, getHubById, getHubOperationsQueue, COURIER_PROVIDERS_CATALOG } from "@/lib/logistics-service";
+import {
+  STANDARD_HUBS,
+  getHubById,
+  getHubOperationsQueue,
+  COURIER_PROVIDERS_CATALOG,
+  formatLogisticsJourneyLogs,
+  generateRtoReverseRoute,
+  LogisticsJourneyStep,
+} from "@/lib/logistics-service";
 import {
   Cpu,
   RefreshCw,
   Flame,
   ArrowLeft,
+  AlertTriangle,
+  RotateCcw,
+  Undo2,
   Package,
   ShoppingBag,
   Zap,
@@ -87,6 +98,8 @@ import {
   ECOMMERCE_CATEGORIES,
   RailFreightDetails,
   AirCargoDetails,
+  OceanFreightDetails,
+  LocalDeliveryDetails,
   CourierServiceDetails,
   DispatchCategory,
 } from "@/types";
@@ -173,12 +186,23 @@ export default function AdminPage() {
 
   // Multi-Hub Destination Routing & Queue Operations State
   const [activeHubId, setActiveHubId] = useState<string>("HUB-DEL-01");
-  const [hubTab, setHubTab] = useState<"incoming" | "received" | "sorting" | "loading" | "outgoing" | "gate">("incoming");
+  const [hubTab, setHubTab] = useState<"incoming" | "received" | "sorting" | "loading" | "outgoing" | "gate" | "rto">("incoming");
   const [waybillScanInput, setWaybillScanInput] = useState<string>("");
   const [filterDestinationHub, setFilterDestinationHub] = useState<string>("all");
   const [activeContainerId, setActiveContainerId] = useState<string>("DEL-CCU-101");
   const [targetDestinationHubId, setTargetDestinationHubId] = useState<string>("HUB-CCU-01");
   const [hubActionLoading, setHubActionLoading] = useState<string | null>(null);
+
+  // Sorting Dock: Address Close to Hub Logic (Default: FALSE)
+  const [isAddressCloseToHub, setIsAddressCloseToHub] = useState<boolean>(false);
+  const [perOrderAddressClose, setPerOrderAddressClose] = useState<Record<string, boolean>>({});
+
+  // Gate Handover: Condition 1 (Acceptance) vs Condition 2 (Refusal/Exception RTO)
+  const [selectedGateCondition, setSelectedGateCondition] = useState<"condition_1_acceptance" | "condition_2_refusal">("condition_1_acceptance");
+  const [gateExceptionReason, setGateExceptionReason] = useState<"damaged_package" | "customer_out_of_station" | "customer_refused">("damaged_package");
+  const [gateExceptionNote, setGateExceptionNote] = useState<string>("");
+  const [isSubmittingGateException, setIsSubmittingGateException] = useState<boolean>(false);
+  const [rtoActionLoading, setRtoActionLoading] = useState<string | null>(null);
 
   // Delivery Hub & Doorstep Gate Verification State
   const [deliverySelectedOrderId, setDeliverySelectedOrderId] = useState<string>("ANC-763954");
@@ -223,6 +247,30 @@ export default function AdminPage() {
   const [showCourierExtraDetails, setShowCourierExtraDetails] = useState<boolean>(false);
   const [courierRiderName, setCourierRiderName] = useState<string>("Rakesh Sharma (ANC Fleet)");
   const [courierRiderContact, setCourierRiderContact] = useState<string>("+91 98301 23456");
+
+  // Ship (Maritime Ocean Cargo) Primary & Additional Fields
+  const [vesselName, setVesselName] = useState<string>("MV Ocean Carrier");
+  const [vesselImo, setVesselImo] = useState<string>("IMO 9382014");
+  const [shipDateTime, setShipDateTime] = useState<string>("2026-10-30T06:00");
+  const [shipContainerId, setShipContainerId] = useState<string>("MSKU-982104-7");
+  const [shipSealNumber, setShipSealNumber] = useState<string>("SEAL-88219");
+  const [showShipExtraDetails, setShowShipExtraDetails] = useState<boolean>(false);
+  const [shipSourcePort, setShipSourcePort] = useState<string>("INNSA (Nhava Sheva Port, Mumbai)");
+  const [shipDestPort, setShipDestPort] = useState<string>("INHAL (Haldia Port, West Bengal)");
+  const [shipVoyageNumber, setShipVoyageNumber] = useState<string>("VOY-2026-09E");
+  const [shipBillOfLading, setShipBillOfLading] = useState<string>("BL-MSC-IN-994821");
+  const [shipShippingLine, setShipShippingLine] = useState<string>("Maersk Line");
+  const [shipBerthLocation, setShipBerthLocation] = useState<string>("Berth 4 / Container Terminal 2");
+  const [shipManifestId, setShipManifestId] = useState<string>("OCM-KOL-HAL-882");
+
+  // Local Delivery / Out For Delivery Fleet (Bike, Van, Truck)
+  const [deliveryDriverName, setDeliveryDriverName] = useState<string>("Rakesh Sharma (ANC Fleet)");
+  const [deliveryDriverContact, setDeliveryDriverContact] = useState<string>("+91 98301 23456");
+  const [deliveryVehiclePlate, setDeliveryVehiclePlate] = useState<string>("DL-01-BK-4092");
+  const [deliverySlot, setDeliverySlot] = useState<string>("Afternoon Window (14:00 - 18:00)");
+  const [showLocalFleetExtra, setShowLocalFleetExtra] = useState<boolean>(false);
+  const [deliveryFleetProvider, setDeliveryFleetProvider] = useState<string>("ANC In-House Priority Delivery");
+  const [deliveryRunSheetId, setDeliveryRunSheetId] = useState<string>("DRS-20261029-01");
 
   // Architecture Comparison Reference Drawer
   const [showFreightArchitectureRef, setShowFreightArchitectureRef] = useState<boolean>(false);
@@ -2710,6 +2758,41 @@ export default function AdminPage() {
       estimatedDeliveryDays: 1,
     };
 
+    const [shipDate, shipTime] = shipDateTime.includes("T")
+      ? shipDateTime.split("T")
+      : [shipDateTime, "06:00"];
+
+    const oceanFreightPayload: OceanFreightDetails = {
+      vesselName: vesselName.trim() || "MV Ocean Carrier",
+      imoNumber: vesselImo.trim() || "IMO 9382014",
+      departureDate: shipDate || new Date().toISOString().split("T")[0],
+      departureTime: shipTime || "06:00",
+      containerId: shipContainerId || containerToUse || "MSKU-982104-7",
+      sealNumber: shipSealNumber || "SEAL-88219",
+      sourcePortCode: shipSourcePort.split(" ")[0] || "INNSA",
+      sourcePortName: shipSourcePort,
+      destPortCode: shipDestPort.split(" ")[0] || "INHAL",
+      destPortName: shipDestPort,
+      voyageNumber: shipVoyageNumber || "VOY-2026-09E",
+      billOfLading: shipBillOfLading || "BL-MSC-IN-994821",
+      shippingLine: shipShippingLine || "Maersk Line",
+      berthLocation: shipBerthLocation,
+      shippingManifestId: shipManifestId,
+    };
+
+    const targetOrderForLocal = orders.find((o) => o.orderNumber === orderNumber);
+    const localDeliveryPayload: LocalDeliveryDetails = {
+      vehicleType: (modeToUse === "bike" || modeToUse === "van" || modeToUse === "truck") ? modeToUse : "van",
+      vehicleNumber: customVehicleNo || vehicleNo || (modeToUse === "bike" ? "DL-01-BK-4092" : modeToUse === "truck" ? "HR-55-TRK-9000" : "WB-02-VN-8812"),
+      packageId: orderNumber,
+      deliveryAddress: targetOrderForLocal ? `${targetOrderForLocal.customer.address}, ${targetOrderForLocal.customer.city}, ${targetOrderForLocal.customer.state} ${targetOrderForLocal.customer.zipCode}` : "Customer Doorstep Address",
+      customerContact: targetOrderForLocal?.customer?.contact || targetOrderForLocal?.customer?.email || "+91 81055 42318",
+      driverName: deliveryDriverName || "Rakesh Sharma (ANC Fleet)",
+      driverContact: deliveryDriverContact || "+91 98301 23456",
+      deliverySlot: deliverySlot || "Afternoon Window (14:00 - 18:00)",
+      runSheetId: deliveryRunSheetId || "DRS-20261029-01",
+    };
+
     setHubActionLoading(orderNumber);
     try {
       const res = await fetch("/api/orders", {
@@ -2721,14 +2804,17 @@ export default function AdminPage() {
           hubId: activeHubId,
           queueAction,
           transitMode: modeToUse,
-          vehicleNo: modeToUse === "train" ? `IR-${trainNumber}` : modeToUse === "plane" ? `FLT-${flightNumber}` : customVehicleNo || vehicleNo,
-          containerId: modeToUse === "train" ? `TRN-${trainNumber}-${trainDate}` : modeToUse === "plane" ? airUldId : containerToUse,
+          vehicleNo: modeToUse === "train" ? `IR-${trainNumber}` : modeToUse === "plane" ? `FLT-${flightNumber}` : modeToUse === "ship" ? `${vesselName} [${vesselImo}]` : customVehicleNo || vehicleNo,
+          containerId: modeToUse === "train" ? `TRN-${trainNumber}-${trainDate}` : modeToUse === "plane" ? airUldId : modeToUse === "ship" ? shipContainerId : containerToUse,
           destinationHubId: customDestHubId || targetDestinationHubId,
           manifestVerified,
           dispatchCategory: (modeToUse === "train" || modeToUse === "plane" || modeToUse === "ship") ? "b2b_bulk_freight" : "b2c_individual_courier",
           railFreight: modeToUse === "train" ? railFreightPayload : undefined,
           airCargo: modeToUse === "plane" ? airCargoPayload : undefined,
+          oceanFreight: modeToUse === "ship" ? oceanFreightPayload : undefined,
+          localDelivery: (modeToUse === "bike" || modeToUse === "van" || modeToUse === "truck") ? localDeliveryPayload : undefined,
           courierService: (modeToUse === "van" || modeToUse === "bike") ? courierPayload : undefined,
+          isDestinationClose: perOrderAddressClose[orderNumber] ?? isAddressCloseToHub,
         }),
       });
 
@@ -2740,8 +2826,8 @@ export default function AdminPage() {
         const actionLabels: Record<string, string> = {
           receive: "Dock Scanned & Received",
           to_sorting: "Staged in Sorting Dock",
-          to_loading: "Sorted & Moved to Vehicle Loading Bay",
-          dispatch: "Marked Loaded & Dispatched [On The Way]",
+          to_loading: (perOrderAddressClose[orderNumber] ?? isAddressCloseToHub) ? "Sorted for Doorstep Loading" : "Sorted & Moved to Vehicle Loading Bay",
+          dispatch: (perOrderAddressClose[orderNumber] ?? isAddressCloseToHub) ? "Out for Delivery [Arrives Afternoon/Evening]" : "Marked Loaded & Dispatched [On The Way]",
           container_dispatch: "Container Dispatched",
         };
         toast({
@@ -2764,6 +2850,96 @@ export default function AdminPage() {
       });
     } finally {
       setHubActionLoading(null);
+    }
+  };
+
+  const handleGateExceptionRto = async (
+    orderNumber: string,
+    reason: "damaged_package" | "customer_out_of_station" | "customer_refused",
+    reasonNote = ""
+  ) => {
+    setIsSubmittingGateException(true);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "gate-exception-rto",
+          orderNumber,
+          reason,
+          reasonNote,
+          carrierRider: courierRiderName || "Doorstep Courier Specialist",
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        toast({
+          type: "info",
+          title: "Gate Refusal Logged ➔ RTO Initiated",
+          description: `Consignment ${orderNumber} reverse logistics triggered back to origin warehouse.`,
+        });
+        setHubTab("rto");
+      } else {
+        toast({
+          type: "error",
+          title: "Failed to Record Rejection",
+          description: data.error || "Could not log gate exception.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: err?.message || "Failed to contact logistics server.",
+      });
+    } finally {
+      setIsSubmittingGateException(false);
+    }
+  };
+
+  const handleRtoHubAction = async (orderNumber: string, rtoSubAction: string, notes = "") => {
+    setRtoActionLoading(orderNumber);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "rto-hub-action",
+          orderNumber,
+          rtoSubAction,
+          notes,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.orderNumber === data.order.orderNumber ? data.order : o))
+        );
+        toast({
+          type: "success",
+          title: "RTO Lifecycle Advanced",
+          description: `Consignment ${orderNumber} updated in reverse logistics pipeline.`,
+        });
+      } else {
+        toast({
+          type: "error",
+          title: "RTO Action Failed",
+          description: data.error || "Could not advance RTO status.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: err?.message || "Failed to contact logistics server.",
+      });
+    } finally {
+      setRtoActionLoading(null);
     }
   };
 
@@ -5403,115 +5579,139 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Hub Operational KPI Strip: 6 Real-World Queues + Gate Delivery */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1">
+                {/* Hub Operational KPI Strip: 7 Real-World Queues (Forward Logistics + Gate Delivery + RTO Returns) */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => setHubTab("incoming")}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "incoming"
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "incoming"
                       ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
-                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
                       <span>1. INCOMING</span>
                       <ArrowDownLeft className="w-3.5 h-3.5 text-blue-400" />
                     </div>
-                    <div className="text-2xl font-bold font-mono text-white">
+                    <div className="text-xl font-bold font-mono text-white">
                       {hubQueue.totals.incoming}
                     </div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5">En route to dock</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">En route to dock</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setHubTab("received")}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "received"
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "received"
                       ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
-                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
                       <span>2. RECEIVED</span>
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                     </div>
-                    <div className="text-2xl font-bold font-mono text-emerald-400">
+                    <div className="text-xl font-bold font-mono text-emerald-400">
                       {hubQueue.totals.received}
                     </div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5">Scanned at dock</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">Scanned at dock</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setHubTab("sorting")}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "sorting"
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "sorting"
                       ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
-                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
                       <span>3. SORTING</span>
                       <Boxes className="w-3.5 h-3.5 text-amber-400" />
                     </div>
-                    <div className="text-2xl font-bold font-mono text-amber-400">
+                    <div className="text-xl font-bold font-mono text-amber-400">
                       {hubQueue.totals.sorting}
                     </div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5">Fleet routing bay</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">Fleet routing bay</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setHubTab("loading")}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "loading"
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "loading"
                       ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
-                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
                       <span>4. LOADING</span>
                       <PackagePlus className="w-3.5 h-3.5 text-cyan-400" />
                     </div>
-                    <div className="text-2xl font-bold font-mono text-cyan-400">
+                    <div className="text-xl font-bold font-mono text-cyan-400">
                       {hubQueue.totals.loading}
                     </div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5">Vehicle bay staging</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">Vehicle bay staging</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setHubTab("outgoing")}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "outgoing"
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "outgoing"
                       ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
-                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
-                      <span>5. OUTGOING [ON WAY]</span>
+                    <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
+                      <span>5. OUTGOING</span>
                       <ArrowUpRight className="w-3.5 h-3.5 text-purple-400" />
                     </div>
-                    <div className="text-2xl font-bold font-mono text-purple-400">
+                    <div className="text-xl font-bold font-mono text-purple-400">
                       {hubQueue.totals.outgoing}
                     </div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5">Active fleet in transit</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">Fleet on the way</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setHubTab("gate")}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "gate"
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "gate"
                       ? "bg-blue-600/20 border-blue-500/50 shadow-lg shadow-blue-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
-                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
-                      <span>6. GATE OTP</span>
+                    <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
+                      <span>6. GATE STAGE</span>
                       <Key className="w-3.5 h-3.5 text-blue-400" />
                     </div>
-                    <div className="text-2xl font-bold font-mono text-blue-400">
+                    <div className="text-xl font-bold font-mono text-blue-400">
                       {hubQueue.totals.gateHandover}
                     </div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5">Doorstep & PoD</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">OTP & Exceptions</div>
                   </button>
+
+                  {/* 7. RTO (Reverse Logistics / Return to Origin) */}
+                  {(() => {
+                    const rtoCount = orders.filter((o) => String(o.deliveryStatus || "").startsWith("rto_") || Boolean(o.gateException)).length;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setHubTab("rto")}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "rto"
+                          ? "bg-rose-600/20 border-rose-500/50 shadow-lg shadow-rose-600/10"
+                          : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
+                          }`}
+                      >
+                        <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
+                          <span className="text-rose-400">7. RTO RETURNS</span>
+                          <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+                        </div>
+                        <div className="text-xl font-bold font-mono text-rose-400">
+                          {rtoCount}
+                        </div>
+                        <div className="text-[9px] text-zinc-500 mt-0.5">Reverse to Origin</div>
+                      </button>
+                    );
+                  })()}
                 </div>
 
                 {/* Waybill Fast Scanner & Destination Filter Toolbar */}
@@ -5766,7 +5966,65 @@ export default function AdminPage() {
                     </div>
 
                     {/* Active Fleet Transport Selector & Container Staging Grid */}
-                    <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
+                    <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+                      {/* Whiteboard Core Logic: Address Close to Hub Toggle (Default: FALSE) */}
+                      <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-zinc-200">
+                              Is Destination Address Close to this Hub?
+                            </span>
+                            <span
+                              className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
+                                isAddressCloseToHub
+                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                  : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                              }`}
+                            >
+                              address close to hub [{isAddressCloseToHub ? "true" : "false"}]
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-zinc-400">
+                            {isAddressCloseToHub
+                              ? "✓ Final delivery hub confirmed. Enabling Last-Mile Doorstep Out For Delivery with local rider/van fleet (Arriving afternoon/evening)."
+                              : "Default (False): Hub is an intermediate transit station. Assigning next connecting transit hub."}
+                          </p>
+                        </div>
+
+                        {/* Interactive Toggle Button */}
+                        <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAddressCloseToHub(false);
+                            }}
+                            className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+                              !isAddressCloseToHub
+                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                                : "text-zinc-500 hover:text-zinc-300"
+                            }`}
+                          >
+                            [false] Next Hub
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAddressCloseToHub(true);
+                              if (transitMode === "train" || transitMode === "plane") {
+                                setTransitMode("van");
+                              }
+                            }}
+                            className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+                              isAddressCloseToHub
+                                ? "bg-emerald-600 text-white border border-emerald-500 shadow-md shadow-emerald-600/30"
+                                : "text-zinc-500 hover:text-zinc-300"
+                            }`}
+                          >
+                            [true] Out for Delivery
+                          </button>
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
                         <div className="sm:col-span-5 space-y-1.5">
                           <label className="text-[11px] font-semibold text-zinc-400 block">Select Transport Fleet Mode</label>
@@ -5803,19 +6061,44 @@ export default function AdminPage() {
                           />
                         </div>
 
+                        {/* Destination Routing Selector: Adapts based on addressCloseToHub */}
                         <div className="sm:col-span-4 space-y-1.5">
-                          <label className="text-[11px] font-semibold text-zinc-400 block">Next Destination Hub</label>
-                          <select
-                            value={targetDestinationHubId}
-                            onChange={(e) => setTargetDestinationHubId(e.target.value)}
-                            className="w-full px-3 py-2 text-xs font-semibold bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-purple-500 cursor-pointer"
-                          >
-                            {STANDARD_HUBS.filter((h) => h.id !== activeHubId).map((h) => (
-                              <option key={h.id} value={h.id}>
-                                {h.name} ({h.region})
-                              </option>
-                            ))}
-                          </select>
+                          {isAddressCloseToHub ? (
+                            <>
+                              <label className="text-[11px] font-semibold text-emerald-400 flex items-center justify-between">
+                                <span>Destination: Customer Doorstep</span>
+                                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase">
+                                  Out For Delivery Enabled
+                                </span>
+                              </label>
+                              <div className="w-full px-3 py-2 text-xs font-semibold bg-emerald-950/40 border border-emerald-500/40 rounded-xl text-emerald-200 flex items-center justify-between">
+                                <div className="truncate">
+                                  <span>Direct to Customer Address</span>
+                                  <span className="block text-[10px] text-emerald-400/90 font-mono font-normal">
+                                    Arrives afternoon/evening window
+                                  </span>
+                                </div>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                                  Gate Handover
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <label className="text-[11px] font-semibold text-zinc-400 block">Next Destination Hub</label>
+                              <select
+                                value={targetDestinationHubId}
+                                onChange={(e) => setTargetDestinationHubId(e.target.value)}
+                                className="w-full px-3 py-2 text-xs font-semibold bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-purple-500 cursor-pointer"
+                              >
+                                {STANDARD_HUBS.filter((h) => h.id !== activeHubId).map((h) => (
+                                  <option key={h.id} value={h.id}>
+                                    {h.name} ({h.region})
+                                  </option>
+                                ))}
+                              </select>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -6131,100 +6414,365 @@ export default function AdminPage() {
                           </div>
                         )}
 
-                        {/* 3. COURIER / ROAD (Van, Bike, Truck, Ship) */}
-                        {transitMode !== "train" && transitMode !== "plane" && (
-                          <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-3">
+                        {/* 3. SHIP: Maritime Container Freight & Ocean Vessel Transit */}
+                        {transitMode === "ship" && (
+                          <div className="p-3.5 rounded-2xl bg-zinc-950 border border-sky-500/30 space-y-3">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-2.5">
                               <div className="flex items-center gap-2">
-                                <Truck className="w-4 h-4 text-purple-400" />
-                                <span className="text-xs font-bold text-zinc-200 font-mono">
-                                  ANC Custom Delivery & Surface Network
+                                <Ship className="w-4 h-4 text-sky-400" />
+                                <span className="text-xs font-bold text-sky-300 font-mono">
+                                  Maritime Freight Cargo System · Ocean Vessel Operations
                                 </span>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold uppercase tracking-wider">
-                                  Strategy Shielded
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30 font-semibold font-mono">
+                                  IMO & Container Verified
                                 </span>
                               </div>
                               <button
                                 type="button"
-                                onClick={() => setShowCourierExtraDetails(!showCourierExtraDetails)}
-                                className="text-[11px] font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1 cursor-pointer transition self-start sm:self-auto"
+                                onClick={() => setShowShipExtraDetails(!showShipExtraDetails)}
+                                className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer transition self-start sm:self-auto"
                               >
-                                <span>{showCourierExtraDetails ? "Hide Details ▲" : "+ Additional Rider Details (Optional) ▼"}</span>
+                                <span>{showShipExtraDetails ? "Hide Additional Details ▲" : "+ Additional Ocean Shipping Details (Optional) ▼"}</span>
                               </button>
                             </div>
 
-                            {/* Strategic Shield Notice when In-House Delivery is Selected */}
-                            {courierProvider === "anc_custom" && (
-                              <div className="flex items-start sm:items-center gap-2 p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/30 text-[11px] text-purple-200 font-mono">
-                                <ShieldAlert className="w-4 h-4 text-purple-400 shrink-0 mt-0.5 sm:mt-0" />
-                                <div>
-                                  <span className="font-bold text-white">Proprietary Strategy Shield: </span>
-                                  <span>Consignments are routed via ANC In-House Priority Fleet. External carrier names and routing mechanics are undisclosed to protect operational strategy and supply-chain advantage.</span>
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Primary Star-Marked Inputs for Ship */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                               <div className="space-y-1">
-                                <label className="text-[11px] font-semibold text-zinc-300 block">Delivery Partner Service</label>
-                                <select
-                                  value={courierProvider}
-                                  onChange={(e) => {
-                                    const prov = e.target.value as any;
-                                    setCourierProvider(prov);
-                                    const meta = COURIER_PROVIDERS_CATALOG.find((c) => c.id === prov);
-                                    if (meta) {
-                                      setCourierTrackingAwb(`${meta.awbPrefix}${Math.floor(10000000 + Math.random() * 90000000)}`);
-                                    }
-                                  }}
-                                  className="w-full px-3 py-2 text-xs font-semibold bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-purple-500 cursor-pointer"
-                                >
-                                  {COURIER_PROVIDERS_CATALOG.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                      {c.id === "anc_custom" ? "★ " : ""}{c.name} · {c.category} ({c.defaultSla})
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div className="space-y-1">
-                                <label className="text-[11px] font-semibold text-zinc-300 block">Tracking AWB Number</label>
+                                <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                  <span>Vessel / Ship Name</span>
+                                  <span className="text-rose-400 font-bold">*</span>
+                                </label>
                                 <input
                                   type="text"
-                                  value={courierTrackingAwb}
-                                  onChange={(e) => setCourierTrackingAwb(e.target.value.toUpperCase())}
-                                  placeholder="e.g. ANC-LOG-78294402"
-                                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                                  value={vesselName}
+                                  onChange={(e) => {
+                                    setVesselName(e.target.value);
+                                    setVehicleNo(e.target.value);
+                                  }}
+                                  placeholder="e.g. MV Ocean Carrier"
+                                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-sky-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
                                 />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                  <span>IMO / MMSI Number</span>
+                                  <span className="text-rose-400 font-bold">*</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={vesselImo}
+                                  onChange={(e) => setVesselImo(e.target.value.toUpperCase())}
+                                  placeholder="e.g. IMO 9382014"
+                                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-sky-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                  <span>Departure Date & Time</span>
+                                  <span className="text-rose-400 font-bold">*</span>
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={shipDateTime}
+                                  onChange={(e) => setShipDateTime(e.target.value)}
+                                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-sky-500/40 rounded-xl text-white focus:outline-none focus:border-sky-400 cursor-pointer"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                  <span>Container ID & Seal</span>
+                                  <span className="text-rose-400 font-bold">*</span>
+                                </label>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={shipContainerId}
+                                    onChange={(e) => setShipContainerId(e.target.value.toUpperCase())}
+                                    placeholder="MSKU-982104"
+                                    title="Container ID"
+                                    className="w-full px-2 py-2 text-[11px] font-mono font-bold bg-zinc-900 border border-sky-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={shipSealNumber}
+                                    onChange={(e) => setShipSealNumber(e.target.value.toUpperCase())}
+                                    placeholder="SEAL-88219"
+                                    title="ISO Seal Number"
+                                    className="w-full px-2 py-2 text-[11px] font-mono font-bold bg-zinc-900 border border-sky-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                  />
+                                </div>
                               </div>
                             </div>
 
-                            {showCourierExtraDetails && (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 animate-in fade-in duration-150">
-                                <div className="space-y-1">
-                                  <label className="text-[10px] text-zinc-400 block font-mono">Assigned Rider Name</label>
-                                  <input
-                                    type="text"
-                                    value={courierRiderName}
-                                    onChange={(e) => setCourierRiderName(e.target.value)}
-                                    placeholder="Rakesh Sharma"
-                                    className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
-                                  />
+                            {/* Additional Ocean Shipping Details (Optional for Hub) */}
+                            {showShipExtraDetails && (
+                              <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2.5 animate-in fade-in duration-150">
+                                <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-400">
+                                  <span className="text-sky-300 font-mono">Optional Maritime Port & Voyage Details:</span>
+                                  <span className="text-[10px] text-zinc-500 font-mono">Can be empty without issue</span>
                                 </div>
-                                <div className="space-y-1">
-                                  <label className="text-[10px] text-zinc-400 block font-mono">Rider Contact / Phone</label>
-                                  <input
-                                    type="text"
-                                    value={courierRiderContact}
-                                    onChange={(e) => setCourierRiderContact(e.target.value)}
-                                    placeholder="+91 98301 23456"
-                                    className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
-                                  />
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Port of Loading (Origin)</label>
+                                    <input
+                                      type="text"
+                                      value={shipSourcePort}
+                                      onChange={(e) => setShipSourcePort(e.target.value)}
+                                      placeholder="INNSA (Nhava Sheva Port, Mumbai)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Port of Discharge (Destination)</label>
+                                    <input
+                                      type="text"
+                                      value={shipDestPort}
+                                      onChange={(e) => setShipDestPort(e.target.value)}
+                                      placeholder="INHAL (Haldia Port, West Bengal)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Voyage Number</label>
+                                    <input
+                                      type="text"
+                                      value={shipVoyageNumber}
+                                      onChange={(e) => setShipVoyageNumber(e.target.value.toUpperCase())}
+                                      placeholder="VOY-2026-09E"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Bill of Lading (B/L #)</label>
+                                    <input
+                                      type="text"
+                                      value={shipBillOfLading}
+                                      onChange={(e) => setShipBillOfLading(e.target.value.toUpperCase())}
+                                      placeholder="BL-MSC-IN-994821"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Shipping Line / Carrier</label>
+                                    <input
+                                      type="text"
+                                      value={shipShippingLine}
+                                      onChange={(e) => setShipShippingLine(e.target.value)}
+                                      placeholder="Maersk Line / MSC"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-zinc-400 block font-mono">Berthing Pier / Terminal</label>
+                                    <input
+                                      type="text"
+                                      value={shipBerthLocation}
+                                      onChange={(e) => setShipBerthLocation(e.target.value)}
+                                      placeholder="Berth 4 / Container Terminal 2"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             )}
                           </div>
                         )}
+
+                        {/* 4. LOCAL DELIVERY & ROAD FLEET (Bike, Van, Truck) - Doorstep Handover Architecture */}
+                        {(transitMode === "bike" || transitMode === "van" || transitMode === "truck") && (() => {
+                          const activeSortingOrder = hubQueue.sorting.find((o) => o.orderNumber === deliverySelectedOrderId) || hubQueue.sorting[0] || orders.find((o) => o.orderNumber === deliverySelectedOrderId) || orders[0];
+                          const activeCustomerAddr = activeSortingOrder?.customer?.address
+                            ? `${activeSortingOrder.customer.address}, ${activeSortingOrder.customer.city} ${activeSortingOrder.customer.zipCode ? `- ${activeSortingOrder.customer.zipCode}` : ""}`
+                            : "Customer Doorstep Delivery Address";
+                          const activeCustomerPhone = activeSortingOrder?.customer?.contact || activeSortingOrder?.customer?.email || "+91 81055 42318";
+                          const activeCustomerName = activeSortingOrder?.customer?.fullName || "Valued Customer";
+                          const activePackageId = activeSortingOrder?.orderNumber || "ANC-914820";
+
+                          return (
+                            <div className="p-3.5 rounded-2xl bg-zinc-950 border border-emerald-500/30 space-y-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-2.5">
+                                <div className="flex items-center gap-2">
+                                  {transitMode === "bike" ? (
+                                    <Bike className="w-4 h-4 text-emerald-400" />
+                                  ) : (
+                                    <Truck className="w-4 h-4 text-emerald-400" />
+                                  )}
+                                  <span className="text-xs font-bold text-emerald-300 font-mono">
+                                    {transitMode === "bike"
+                                      ? "Last-Mile Delivery Bike Fleet · Doorstep Handover"
+                                      : transitMode === "van"
+                                      ? "Local Van Delivery Fleet · Doorstep & Hub Transfer"
+                                      : "Surface Truck Delivery Fleet · Regional Transport"}
+                                  </span>
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold uppercase tracking-wider">
+                                    Direct Fleet Operations
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowLocalFleetExtra(!showLocalFleetExtra)}
+                                  className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer transition self-start sm:self-auto"
+                                >
+                                  <span>{showLocalFleetExtra ? "Hide Additional Details ▲" : "+ Additional Fleet & Run-Sheet Details (Optional) ▼"}</span>
+                                </button>
+                              </div>
+
+                              {/* Primary Operational Fields (No AWB, Real Fleet & Doorstep Dispatch) */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                    <span>Vehicle Number / Plate</span>
+                                    <span className="text-rose-400 font-bold">*</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={deliveryVehiclePlate || vehicleNo}
+                                    onChange={(e) => {
+                                      const val = e.target.value.toUpperCase();
+                                      setDeliveryVehiclePlate(val);
+                                      setVehicleNo(val);
+                                    }}
+                                    placeholder={transitMode === "bike" ? "DL-01-BK-4092" : transitMode === "van" ? "WB-02-VN-8812" : "DL-01-TRK-9000"}
+                                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-emerald-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-400 uppercase"
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                    <span>Package ID (Consignment)</span>
+                                    <span className="text-rose-400 font-bold">*</span>
+                                  </label>
+                                  <div className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900/90 border border-zinc-800 rounded-xl text-amber-300 flex items-center justify-between">
+                                    <span>{activePackageId}</span>
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
+                                      VERIFIED
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                    <span>Driver / Rider Name</span>
+                                    <span className="text-rose-400 font-bold">*</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={deliveryDriverName}
+                                    onChange={(e) => setDeliveryDriverName(e.target.value)}
+                                    placeholder="Rakesh Sharma (ANC Fleet)"
+                                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-emerald-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-400"
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
+                                    <span>Driver Contact / Phone</span>
+                                    <span className="text-rose-400 font-bold">*</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={deliveryDriverContact}
+                                    onChange={(e) => setDeliveryDriverContact(e.target.value)}
+                                    placeholder="+91 98301 23456"
+                                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-emerald-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-400"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Doorstep Destination & Customer Info Bar */}
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-2.5 rounded-xl bg-zinc-900/70 border border-zinc-800 text-xs">
+                                <div className="sm:col-span-2 space-y-0.5 min-w-0">
+                                  <span className="text-[10px] font-mono text-zinc-400 flex items-center gap-1">
+                                    <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
+                                    <span>Delivery Doorstep Address ({activeCustomerName}):</span>
+                                  </span>
+                                  <p className="font-semibold text-zinc-200 truncate text-[11px]" title={activeCustomerAddr}>
+                                    {activeCustomerAddr}
+                                  </p>
+                                </div>
+
+                                <div className="space-y-0.5">
+                                  <span className="text-[10px] font-mono text-zinc-400 flex items-center gap-1">
+                                    <Phone className="w-3 h-3 text-emerald-400 shrink-0" />
+                                    <span>Customer Phone / Contact:</span>
+                                  </span>
+                                  <p className="font-mono font-bold text-emerald-300 text-[11px]">
+                                    {activeCustomerPhone}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Delivery Slot Selection */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-300 block">Next Destination / Delivery Window</label>
+                                  <select
+                                    value={deliverySlot}
+                                    onChange={(e) => setDeliverySlot(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs font-mono font-semibold bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-emerald-400 cursor-pointer"
+                                  >
+                                    <option value="Afternoon Window (14:00 - 18:00)">Afternoon Window (14:00 - 18:00) · Out for Delivery</option>
+                                    <option value="Evening Window (18:00 - 21:00)">Evening Window (18:00 - 21:00) · Evening Delivery</option>
+                                    <option value="Morning Window (09:00 - 13:00)">Morning Window (09:00 - 13:00) · Priority Slot</option>
+                                    <option value="Next Hub Transfer (Line-Haul)">Next Hub Transfer (Line-Haul Regional Route)</option>
+                                  </select>
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-300 block">Fleet Operational Type</label>
+                                  <div className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-zinc-800 rounded-xl text-emerald-400 flex items-center justify-between">
+                                    <span>{transitMode === "bike" ? "2-Wheeler Direct Express Fleet" : transitMode === "van" ? "Multi-Stop Delivery Van" : "Heavy Surface Road Haul"}</span>
+                                    <span className="text-[10px] text-zinc-400">Doorstep Ready</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Additional Local Fleet Details (Optional) */}
+                              {showLocalFleetExtra && (
+                                <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2.5 animate-in fade-in duration-150">
+                                  <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-400">
+                                    <span className="text-emerald-300 font-mono">Optional Delivery Run-Sheet & Fleet Metadata:</span>
+                                    <span className="text-[10px] text-zinc-500 font-mono">Can be empty without issue</span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] text-zinc-400 block font-mono">Delivery Run-Sheet ID</label>
+                                      <input
+                                        type="text"
+                                        value={deliveryRunSheetId}
+                                        onChange={(e) => setDeliveryRunSheetId(e.target.value.toUpperCase())}
+                                        placeholder="DRS-20261029-01"
+                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] text-zinc-400 block font-mono">Assigned Service Provider</label>
+                                      <input
+                                        type="text"
+                                        value={deliveryFleetProvider}
+                                        onChange={(e) => setDeliveryFleetProvider(e.target.value)}
+                                        placeholder="ANC In-House Priority Delivery"
+                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* Direct Comparison Architectural Reference Toggle & Manifest Button */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
@@ -6234,7 +6782,7 @@ export default function AdminPage() {
                             className="text-xs font-mono font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1.5 cursor-pointer transition"
                           >
                             <Sliders className="w-3.5 h-3.5 text-purple-400" />
-                            <span>{showFreightArchitectureRef ? "Hide Architecture Comparison ▲" : "Direct Comparison: Train vs. Plane Systems Architecture ▼"}</span>
+                            <span>{showFreightArchitectureRef ? "Hide Architecture Comparison ▲" : "Direct Comparison: Multi-Modal Systems Architecture (Train vs. Plane vs. Ship vs. Local Fleet) ▼"}</span>
                           </button>
 
                           <div className="flex items-center gap-2">
@@ -6355,67 +6903,113 @@ export default function AdminPage() {
                       <div className="grid grid-cols-1 gap-3">
                         {hubQueue.sorting
                           .filter((ord) => filterDestinationHub === "all" || ord.nextHubId === filterDestinationHub)
-                          .map((ord) => (
-                            <div
-                              key={ord.id}
-                              className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                            >
-                              <div className="space-y-1.5 min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/20">
-                                    {ord.orderNumber}
-                                  </span>
-                                  <span className="text-xs font-semibold text-zinc-200">
-                                    {ord.customer?.fullName} ({ord.customer?.city})
-                                  </span>
-                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-semibold">
-                                    Routing: {getHubById(targetDestinationHubId)?.name || ord.nextHub}
-                                  </span>
-                                </div>
-                                <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                  <span>
-                                    Assigned Mode: <strong className="text-zinc-200 uppercase">{transitMode}</strong>
-                                  </span>
-                                  <span>•</span>
-                                  {transitMode === "train" ? (
-                                    <span>
-                                      Train: <strong className="text-amber-400 font-mono font-bold">#{trainNumber} · {trainDateTime.replace("T", " ")}</strong>
-                                      {railSpaceAllocation && <span className="text-zinc-400 text-[10px] ml-1">[{railSpaceAllocation} · {railFreightScale}]</span>}
+                          .map((ord) => {
+                            const isClose = perOrderAddressClose[ord.orderNumber] ?? isAddressCloseToHub;
+                            return (
+                              <div
+                                key={ord.id}
+                                className={`p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                                  isClose
+                                    ? "bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/70"
+                                    : "bg-zinc-900/80 border-zinc-800 hover:border-zinc-700"
+                                }`}
+                              >
+                                <div className="space-y-1.5 min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/20">
+                                      {ord.orderNumber}
                                     </span>
-                                  ) : transitMode === "plane" ? (
-                                    <span>
-                                      Flight: <strong className="text-cyan-400 font-mono font-bold">#{flightNumber} · {flightDateTime.replace("T", " ")}</strong>
-                                      {airBayLocation && <span className="text-zinc-400 text-[10px] ml-1">[{airBayLocation.split(" ")[0]}]</span>}
+                                    <span className="text-xs font-semibold text-zinc-200">
+                                      {ord.customer?.fullName} ({ord.customer?.city})
                                     </span>
-                                  ) : (
-                                    <span>
-                                      Carrier: <strong className="text-purple-400 font-mono font-bold">{COURIER_PROVIDERS_CATALOG.find((c) => c.id === courierProvider)?.name || "Courier"}</strong> [{courierTrackingAwb}]
-                                    </span>
-                                  )}
-                                  <span>•</span>
-                                  <span>
-                                    Destination: <strong className="text-zinc-200">{ord.customer?.city}, {ord.customer?.state}</strong>
-                                  </span>
-                                </div>
-                              </div>
+                                    {isClose ? (
+                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                                        ✓ Out for Delivery (Afternoon/Evening)
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-semibold">
+                                        Routing: {getHubById(targetDestinationHubId)?.name || ord.nextHub}
+                                      </span>
+                                    )}
 
-                              <div className="flex items-center gap-2 shrink-0">
-                                <button
-                                  type="button"
-                                  disabled={hubActionLoading === ord.orderNumber}
-                                  onClick={() => handleHubQueueAction(ord.orderNumber, "to_loading")}
-                                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50"
-                                >
-                                  {hubActionLoading === ord.orderNumber ? (
-                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <PackagePlus className="w-4 h-4" />
-                                  )}
-                                  <span>Complete Sorting ➔ Move to Loading Bay</span>
-                                </button>
+                                    {/* Whiteboard requirement: Per-order toggle for address close to hub */}
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setPerOrderAddressClose((prev) => ({
+                                          ...prev,
+                                          [ord.orderNumber]: !isClose,
+                                        }))
+                                      }
+                                      className={`text-[10px] font-mono px-2 py-0.5 rounded border transition cursor-pointer font-bold ${
+                                        isClose
+                                          ? "bg-emerald-600 text-white border-emerald-500 shadow-sm"
+                                          : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200"
+                                      }`}
+                                      title="Toggle whether destination address is close to this hub"
+                                    >
+                                      address close to hub [{isClose ? "true" : "false"}]
+                                    </button>
+                                  </div>
+
+                                  <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <span>
+                                      Assigned Mode: <strong className="text-zinc-200 uppercase">{transitMode}</strong>
+                                    </span>
+                                    <span>•</span>
+                                    {transitMode === "train" ? (
+                                      <span>
+                                        Train: <strong className="text-amber-400 font-mono font-bold">#{trainNumber} · {trainDateTime.replace("T", " ")}</strong>
+                                        {railSpaceAllocation && <span className="text-zinc-400 text-[10px] ml-1">[{railSpaceAllocation} · {railFreightScale}]</span>}
+                                      </span>
+                                    ) : transitMode === "plane" ? (
+                                      <span>
+                                        Flight: <strong className="text-cyan-400 font-mono font-bold">#{flightNumber} · {flightDateTime.replace("T", " ")}</strong>
+                                        {airBayLocation && <span className="text-zinc-400 text-[10px] ml-1">[{airBayLocation.split(" ")[0]}]</span>}
+                                      </span>
+                                    ) : transitMode === "ship" ? (
+                                      <span>
+                                        Vessel: <strong className="text-sky-400 font-mono font-bold">{vesselName}</strong> [{vesselImo}] · Container: <strong className="text-zinc-300 font-mono">{shipContainerId}</strong>
+                                      </span>
+                                    ) : (
+                                      <span>
+                                        Fleet: <strong className="text-emerald-400 font-mono font-bold">{deliveryVehiclePlate || vehicleNo}</strong> · Rider: <strong className="text-zinc-300">{deliveryDriverName}</strong>
+                                        <span className="text-zinc-500 font-mono text-[10px] ml-1">({deliveryDriverContact})</span>
+                                      </span>
+                                    )}
+                                    <span>•</span>
+                                    <span>
+                                      Destination: <strong className="text-zinc-200">{ord.customer?.city}, {ord.customer?.state}</strong>
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    disabled={hubActionLoading === ord.orderNumber}
+                                    onClick={() => handleHubQueueAction(ord.orderNumber, "to_loading")}
+                                    className={`px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50 text-white ${
+                                      isClose
+                                        ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20"
+                                        : "bg-purple-600 hover:bg-purple-500 shadow-purple-600/20"
+                                    }`}
+                                  >
+                                    {hubActionLoading === ord.orderNumber ? (
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <PackagePlus className="w-4 h-4" />
+                                    )}
+                                    <span>
+                                      {isClose
+                                        ? "Stage for Last-Mile Loading ➔"
+                                        : "Complete Sorting ➔ Move to Loading Bay"}
+                                    </span>
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                       </div>
                     </div>
                   )}
@@ -6518,23 +7112,40 @@ export default function AdminPage() {
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                type="button"
-                                disabled={hubActionLoading === ord.orderNumber}
-                                onClick={() => handleHubQueueAction(ord.orderNumber, "dispatch")}
-                                className="px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50"
-                              >
-                                {hubActionLoading === ord.orderNumber ? (
-                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                  <ArrowUpRight className="w-4 h-4" />
-                                )}
-                                <span>Mark Loaded & Dispatch [On The Way]</span>
-                              </button>
+                              {(() => {
+                                const currentLeg = ord.route?.find((l) => l.status === "loading" || l.status === "received" || l.status === "sorting");
+                                const isLastMile = Boolean(currentLeg?.isFinalDeliveryHub || perOrderAddressClose[ord.orderNumber] || !ord.nextHubId);
+
+                                return (
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      disabled={hubActionLoading === ord.orderNumber}
+                                      onClick={() => handleHubQueueAction(ord.orderNumber, "dispatch")}
+                                      className={`px-4 py-2.5 rounded-xl text-white font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50 ${
+                                        isLastMile
+                                          ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30 ring-1 ring-emerald-400"
+                                          : "bg-cyan-600 hover:bg-cyan-500 shadow-cyan-600/20"
+                                      }`}
+                                    >
+                                      {hubActionLoading === ord.orderNumber ? (
+                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                      ) : isLastMile ? (
+                                        <Truck className="w-4 h-4 text-emerald-200" />
+                                      ) : (
+                                        <ArrowUpRight className="w-4 h-4" />
+                                      )}
+                                      <span>
+                                        {isLastMile
+                                          ? "Confirm Loading ➔ Mark Out For Delivery [Afternoon/Evening]"
+                                          : "Mark Loaded & Dispatch [On The Way]"}
+                                      </span>
+                                    </button>
+                                  </div>
+                                );
+                              })()}
                             </div>
-                          </div>
-                        ))}
+                          ))}
                       </div>
                     </div>
                   )}
@@ -6710,6 +7321,34 @@ export default function AdminPage() {
                           </span>
                         </div>
 
+                        {/* Dual Condition Selector (Whiteboard: Condition 1 Acceptance vs Condition 2 Refusal/Exception) */}
+                        <div className="grid grid-cols-2 gap-1.5 p-1 bg-zinc-950 rounded-xl border border-zinc-800">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedGateCondition("condition_1_acceptance")}
+                            className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                              selectedGateCondition === "condition_1_acceptance"
+                                ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                                : "text-zinc-400 hover:text-white"
+                            }`}
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>1. Customer Acceptance</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedGateCondition("condition_2_refusal")}
+                            className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                              selectedGateCondition === "condition_2_refusal"
+                                ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
+                                : "text-zinc-400 hover:text-white"
+                            }`}
+                          >
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            <span>2. Refusal / Exception [RTO]</span>
+                          </button>
+                        </div>
+
                         <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800/80 font-mono text-[11px] text-zinc-400 space-y-1.5">
                           <div>[Active Waybill]: <strong className="text-white">{deliverySelectedOrderId}</strong></div>
                           <div>[Courier Terminal]: Edge Handshake Verified · Port 443 OK</div>
@@ -6727,237 +7366,575 @@ export default function AdminPage() {
                           )}
                         </div>
 
-                        {/* Trigger 5-Min Alive OTP Button */}
-                        {deliveryGateStatus !== "delivered" && deliveryGateStatus !== "otp_verified" && (
-                          <button
-                            type="button"
-                            onClick={handleTriggerGateOtp}
-                            className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold tracking-wide uppercase transition-all active:scale-95 cursor-pointer ${otpTriggered || deliveryGateStatus === 'otp_sent'
-                              ? 'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-600/20'
-                              : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20'
-                              }`}
-                          >
-                            {otpTriggered || deliveryGateStatus === 'otp_sent'
-                              ? 'OTP Dispatched via AWS SES ✓ (Resend)'
-                              : 'Reached Gate ... Trigger 5-Min Alive OTP Email'}
-                          </button>
-                        )}
-
-                        {/* Customer 6-Digit OTP Verification Field */}
-                        {deliveryGateStatus === "otp_sent" && (
-                          <div className="p-3.5 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2.5">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-zinc-300 font-medium">Customer Doorstep OTP:</span>
-                              <span className="text-amber-400 font-mono text-[11px]">
-                                Window: {Math.floor(deliveryOtpRemainingSeconds / 60)}:{(deliveryOtpRemainingSeconds % 60).toString().padStart(2, '0')}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="text"
-                                maxLength={6}
-                                value={deliveryOtpValue}
-                                onChange={(e) => setDeliveryOtpValue(e.target.value.replace(/[^0-9]/g, ""))}
-                                placeholder="Enter 6-digit OTP from customer"
-                                className="flex-1 px-3 py-2 text-center text-xs font-mono font-bold tracking-widest bg-zinc-900 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
-                              />
+                        {/* CONDITION 1: CUSTOMER ARRIVES TO MEET PACKAGE (Whiteboard Flow 1) */}
+                        {selectedGateCondition === "condition_1_acceptance" && (
+                          <div className="space-y-4">
+                            {/* Trigger 5-Min Alive OTP Button */}
+                            {deliveryGateStatus !== "delivered" && deliveryGateStatus !== "otp_verified" && (
                               <button
                                 type="button"
-                                onClick={handleVerifyGateOtp}
-                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                                onClick={handleTriggerGateOtp}
+                                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold tracking-wide uppercase transition-all active:scale-95 cursor-pointer ${otpTriggered || deliveryGateStatus === 'otp_sent'
+                                  ? 'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-600/20'
+                                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20'
+                                  }`}
                               >
-                                Verify OTP
+                                {otpTriggered || deliveryGateStatus === 'otp_sent'
+                                  ? 'OTP Dispatched via AWS SES ✓ (Resend)'
+                                  : 'Reached Gate ... Trigger 5-Min Alive OTP Email'}
                               </button>
-                            </div>
+                            )}
+
+                            {/* Customer 6-Digit OTP Verification Field */}
+                            {deliveryGateStatus === "otp_sent" && (
+                              <div className="p-3.5 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-zinc-300 font-medium">Customer Doorstep OTP:</span>
+                                  <span className="text-amber-400 font-mono text-[11px]">
+                                    Window: {Math.floor(deliveryOtpRemainingSeconds / 60)}:{(deliveryOtpRemainingSeconds % 60).toString().padStart(2, '0')}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    maxLength={6}
+                                    value={deliveryOtpValue}
+                                    onChange={(e) => setDeliveryOtpValue(e.target.value.replace(/[^0-9]/g, ""))}
+                                    placeholder="Enter 6-digit OTP from customer"
+                                    className="flex-1 px-3 py-2 text-center text-xs font-mono font-bold tracking-widest bg-zinc-900 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleVerifyGateOtp}
+                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                                  >
+                                    Verify OTP
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Mandatory 2-Image PoD Capture (Unlocked upon OTP verification) */}
+                            {deliveryGateStatus === "otp_verified" && (
+                              <div className="p-4 rounded-2xl bg-zinc-950 border border-purple-500/40 space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2 text-xs font-bold text-purple-300 uppercase tracking-wider">
+                                    <Camera className="w-4 h-4 text-purple-400" />
+                                    <span>MANDATORY PROOF OF DELIVERY (2 IMAGES &lt;10 MB)</span>
+                                  </div>
+                                  <span className="text-[10px] font-mono bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded font-bold">
+                                    Step 2 of 2
+                                  </span>
+                                </div>
+
+                                <p className="text-[11px] text-zinc-400">
+                                  Both photos are strictly required before handover confirmation. Capture with camera or upload image from file system.
+                                </p>
+
+                                {/* Image 1: Shipping Label Sticker */}
+                                <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
+                                  <div className="flex items-center justify-between text-xs font-semibold text-zinc-200">
+                                    <span>1. Shipping Label Sticker (Name & Barcode)</span>
+                                    {labelProof ? (
+                                      <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
+                                        <Check className="w-3 h-3" />
+                                        <span>{(labelProof.size / 1024 / 1024).toFixed(2)} MB ✓</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-rose-400 font-mono font-bold">*Required</span>
+                                    )}
+                                  </div>
+
+                                  {labelProof ? (
+                                    <div className="flex items-center gap-3 bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                                      <img
+                                        src={labelProof.dataUrl || ""}
+                                        alt="Label Proof"
+                                        className="w-14 h-14 object-cover rounded-md border border-zinc-700 shrink-0"
+                                      />
+                                      <div className="min-w-0 flex-1 text-xs text-zinc-300">
+                                        <div className="font-mono text-[11px] truncate">{labelProof.name}</div>
+                                        <div className="text-[10px] text-zinc-500 mt-0.5">
+                                          {(labelProof.size / 1024 / 1024).toFixed(2)} MB (Under 10 MB limit)
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setLabelProof(null)}
+                                        className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-2 gap-2 pt-1">
+                                      <label className="py-2 px-2.5 rounded-lg border border-purple-500/40 bg-purple-600/10 hover:bg-purple-600/20 text-purple-300 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                        <Camera className="w-3.5 h-3.5" />
+                                        <span>Capture Camera</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          capture="environment"
+                                          onChange={(e) => handlePoDImageSelect("label", e)}
+                                          className="hidden"
+                                        />
+                                      </label>
+                                      <label className="py-2 px-2.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                        <Upload className="w-3.5 h-3.5" />
+                                        <span>Upload Image</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          onChange={(e) => handlePoDImageSelect("label", e)}
+                                          className="hidden"
+                                        />
+                                      </label>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Image 2: Product Box & Condition */}
+                                <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
+                                  <div className="flex items-center justify-between text-xs font-semibold text-zinc-200">
+                                    <span>2. Product Box & Sealed Condition</span>
+                                    {productProof ? (
+                                      <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
+                                        <Check className="w-3 h-3" />
+                                        <span>{(productProof.size / 1024 / 1024).toFixed(2)} MB ✓</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-rose-400 font-mono font-bold">*Required</span>
+                                    )}
+                                  </div>
+
+                                  {productProof ? (
+                                    <div className="flex items-center gap-3 bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                                      <img
+                                        src={productProof.dataUrl || ""}
+                                        alt="Product Proof"
+                                        className="w-14 h-14 object-cover rounded-md border border-zinc-700 shrink-0"
+                                      />
+                                      <div className="min-w-0 flex-1 text-xs text-zinc-300">
+                                        <div className="font-mono text-[11px] truncate">{productProof.name}</div>
+                                        <div className="text-[10px] text-zinc-500 mt-0.5">
+                                          {(productProof.size / 1024 / 1024).toFixed(2)} MB (Under 10 MB limit)
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setProductProof(null)}
+                                        className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-2 gap-2 pt-1">
+                                      <label className="py-2 px-2.5 rounded-lg border border-purple-500/40 bg-purple-600/10 hover:bg-purple-600/20 text-purple-300 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                        <Camera className="w-3.5 h-3.5" />
+                                        <span>Capture Camera</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          capture="environment"
+                                          onChange={(e) => handlePoDImageSelect("product", e)}
+                                          className="hidden"
+                                        />
+                                      </label>
+                                      <label className="py-2 px-2.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                        <Upload className="w-3.5 h-3.5" />
+                                        <span>Upload Image</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          onChange={(e) => handlePoDImageSelect("product", e)}
+                                          className="hidden"
+                                        />
+                                      </label>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Finalize Release Button */}
+                                <button
+                                  type="button"
+                                  disabled={isFinalizingPod || !labelProof || !productProof}
+                                  onClick={handleFinalizePod}
+                                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                                >
+                                  {isFinalizingPod ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <CheckCheck className="w-4 h-4" />
+                                  )}
+                                  <span>
+                                    {!labelProof || !productProof
+                                      ? "Attach Both 2 Images to Finalize Handover"
+                                      : "Confirm & Finalize Doorstep Handover (Archive to S3)"}
+                                  </span>
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Delivered Confirmation Card */}
+                            {deliveryGateStatus === "delivered" && (
+                              <div className="p-4 rounded-2xl bg-emerald-950/60 border border-emerald-800 space-y-3">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                    <span>Doorstep Handover Complete & PoD Secured</span>
+                                  </span>
+                                  <span className="text-[10px] font-mono bg-emerald-900/80 px-2 py-0.5 rounded text-emerald-200 font-bold">
+                                    DELIVERED ✓
+                                  </span>
+                                </div>
+                                <p className="text-xs text-zinc-300">
+                                  Customer OTP was verified and 2 high-resolution proof photos (Shipping Label & Sealed Box Condition, &lt;10 MB) have been sealed into AWS S3 proof vault. Live warranty email dispatched.
+                                </p>
+                                <div className="pt-2 flex items-center gap-2 text-[11px] font-mono text-emerald-400">
+                                  <ShieldCheck className="w-4 h-4" />
+                                  <span>2-Point PoD Authentication Archived</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
-                        {/* Mandatory 2-Image PoD Capture (Unlocked upon OTP verification) */}
-                        {deliveryGateStatus === "otp_verified" && (
-                          <div className="p-4 rounded-2xl bg-zinc-950 border border-purple-500/40 space-y-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-xs font-bold text-purple-300 uppercase tracking-wider">
-                                <Camera className="w-4 h-4 text-purple-400" />
-                                <span>MANDATORY PROOF OF DELIVERY (2 IMAGES &lt;10 MB)</span>
+                        {/* CONDITION 2: CUSTOMER REFUSES PACKAGE OR OUT OF STATION (Whiteboard Flow 2 - RTO) */}
+                        {selectedGateCondition === "condition_2_refusal" && (
+                          <div className="space-y-4 p-4 rounded-2xl bg-zinc-950 border border-rose-500/30">
+                            <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                              <div className="flex items-center gap-2 text-xs font-bold text-rose-400 uppercase tracking-wide">
+                                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                                <span>Gate Refusal & Return to Origin (RTO)</span>
                               </div>
-                              <span className="text-[10px] font-mono bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded font-bold">
-                                Step 2 of 2
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">
+                                Exception Handling
                               </span>
                             </div>
 
                             <p className="text-[11px] text-zinc-400">
-                              Both photos are strictly required before handover confirmation. Capture with camera or upload image from file system.
+                              Select from the 3 whiteboard exception cases. The parcel will be returned from the gate back to the local delivery hub returns dock, scheduled on reverse line-haul, and retrieved back to origin warehouse.
                             </p>
 
-                            {/* Image 1: Shipping Label Sticker */}
-                            <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
-                              <div className="flex items-center justify-between text-xs font-semibold text-zinc-200">
-                                <span>1. Shipping Label Sticker (Name & Barcode)</span>
-                                {labelProof ? (
-                                  <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
-                                    <Check className="w-3 h-3" />
-                                    <span>{(labelProof.size / 1024 / 1024).toFixed(2)} MB ✓</span>
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-rose-400 font-mono font-bold">*Required</span>
-                                )}
-                              </div>
-
-                              {labelProof ? (
-                                <div className="flex items-center gap-3 bg-zinc-950 p-2 rounded-lg border border-zinc-800">
-                                  <img
-                                    src={labelProof.dataUrl || ""}
-                                    alt="Label Proof"
-                                    className="w-14 h-14 object-cover rounded-md border border-zinc-700 shrink-0"
-                                  />
-                                  <div className="min-w-0 flex-1 text-xs text-zinc-300">
-                                    <div className="font-mono text-[11px] truncate">{labelProof.name}</div>
-                                    <div className="text-[10px] text-zinc-500 mt-0.5">
-                                      {(labelProof.size / 1024 / 1024).toFixed(2)} MB (Under 10 MB limit)
-                                    </div>
+                            {/* 3 Selectable Whiteboard Exception Reasons */}
+                            <div className="space-y-2">
+                              <label
+                                onClick={() => setGateExceptionReason("damaged_package")}
+                                className={`p-3 rounded-xl border flex items-start gap-2.5 transition cursor-pointer ${
+                                  gateExceptionReason === "damaged_package"
+                                    ? "bg-rose-950/40 border-rose-500 text-rose-200 shadow-sm"
+                                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="gateReasonRadio"
+                                  checked={gateExceptionReason === "damaged_package"}
+                                  onChange={() => setGateExceptionReason("damaged_package")}
+                                  className="mt-0.5"
+                                />
+                                <div className="text-xs">
+                                  <div className="font-bold text-zinc-200">1. Package Damaged / Unstable Condition</div>
+                                  <div className="text-[11px] text-zinc-400 mt-0.5">
+                                    Customer came to conclusion package wanted is in bad shape so asking to refuse acceptance. Delivery partner marks package unstable.
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setLabelProof(null)}
-                                    className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
                                 </div>
-                              ) : (
-                                <div className="grid grid-cols-2 gap-2 pt-1">
-                                  <label className="py-2 px-2.5 rounded-lg border border-purple-500/40 bg-purple-600/10 hover:bg-purple-600/20 text-purple-300 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
-                                    <Camera className="w-3.5 h-3.5" />
-                                    <span>Capture Camera</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      capture="environment"
-                                      onChange={(e) => handlePoDImageSelect("label", e)}
-                                      className="hidden"
-                                    />
-                                  </label>
-                                  <label className="py-2 px-2.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
-                                    <Upload className="w-3.5 h-3.5" />
-                                    <span>Upload Image</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      onChange={(e) => handlePoDImageSelect("label", e)}
-                                      className="hidden"
-                                    />
-                                  </label>
+                              </label>
+
+                              <label
+                                onClick={() => setGateExceptionReason("customer_out_of_station")}
+                                className={`p-3 rounded-xl border flex items-start gap-2.5 transition cursor-pointer ${
+                                  gateExceptionReason === "customer_out_of_station"
+                                    ? "bg-amber-950/40 border-amber-500 text-amber-200 shadow-sm"
+                                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="gateReasonRadio"
+                                  checked={gateExceptionReason === "customer_out_of_station"}
+                                  onChange={() => setGateExceptionReason("customer_out_of_station")}
+                                  className="mt-0.5"
+                                />
+                                <div className="text-xs">
+                                  <div className="font-bold text-zinc-200">2. Customer Out of Station</div>
+                                  <div className="text-[11px] text-zinc-400 mt-0.5">
+                                    Customer is out of station or unreachable at destination address. Handover cannot be completed.
+                                  </div>
                                 </div>
-                              )}
+                              </label>
+
+                              <label
+                                onClick={() => setGateExceptionReason("customer_refused")}
+                                className={`p-3 rounded-xl border flex items-start gap-2.5 transition cursor-pointer ${
+                                  gateExceptionReason === "customer_refused"
+                                    ? "bg-rose-950/60 border-red-500 text-red-200 shadow-sm"
+                                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="gateReasonRadio"
+                                  checked={gateExceptionReason === "customer_refused"}
+                                  onChange={() => setGateExceptionReason("customer_refused")}
+                                  className="mt-0.5"
+                                />
+                                <div className="text-xs">
+                                  <div className="font-bold text-red-300 flex items-center gap-1.5">
+                                    <span>3. Customer Bad Treatment Exception</span>
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-red-600 text-white font-mono uppercase font-bold">
+                                      Red Flag Customer
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-zinc-400 mt-0.5">
+                                    Customer bad treatment exception just refusing and scolding. Abort delivery and tag customer with RED FLAG.
+                                  </div>
+                                </div>
+                              </label>
                             </div>
 
-                            {/* Image 2: Product Box & Condition */}
-                            <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
-                              <div className="flex items-center justify-between text-xs font-semibold text-zinc-200">
-                                <span>2. Product Box & Sealed Condition</span>
-                                {productProof ? (
-                                  <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
-                                    <Check className="w-3 h-3" />
-                                    <span>{(productProof.size / 1024 / 1024).toFixed(2)} MB ✓</span>
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-rose-400 font-mono font-bold">*Required</span>
-                                )}
+                            {/* Red Flag Warning Box */}
+                            {gateExceptionReason === "customer_refused" && (
+                              <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/50 text-[11px] text-red-200 font-mono flex items-start gap-2">
+                                <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                                <div>
+                                  <strong className="text-white uppercase font-bold">[RED FLAG CUSTOMER WARNING]: </strong>
+                                  <span>Customer profile will be tagged as RED FLAG across all store orders due to aggressive refusal.</span>
+                                </div>
                               </div>
+                            )}
 
-                              {productProof ? (
-                                <div className="flex items-center gap-3 bg-zinc-950 p-2 rounded-lg border border-zinc-800">
-                                  <img
-                                    src={productProof.dataUrl || ""}
-                                    alt="Product Proof"
-                                    className="w-14 h-14 object-cover rounded-md border border-zinc-700 shrink-0"
-                                  />
-                                  <div className="min-w-0 flex-1 text-xs text-zinc-300">
-                                    <div className="font-mono text-[11px] truncate">{productProof.name}</div>
-                                    <div className="text-[10px] text-zinc-500 mt-0.5">
-                                      {(productProof.size / 1024 / 1024).toFixed(2)} MB (Under 10 MB limit)
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setProductProof(null)}
-                                    className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="grid grid-cols-2 gap-2 pt-1">
-                                  <label className="py-2 px-2.5 rounded-lg border border-purple-500/40 bg-purple-600/10 hover:bg-purple-600/20 text-purple-300 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
-                                    <Camera className="w-3.5 h-3.5" />
-                                    <span>Capture Camera</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      capture="environment"
-                                      onChange={(e) => handlePoDImageSelect("product", e)}
-                                      className="hidden"
-                                    />
-                                  </label>
-                                  <label className="py-2 px-2.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
-                                    <Upload className="w-3.5 h-3.5" />
-                                    <span>Upload Image</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      onChange={(e) => handlePoDImageSelect("product", e)}
-                                      className="hidden"
-                                    />
-                                  </label>
-                                </div>
-                              )}
+                            <div className="space-y-1">
+                              <label className="text-[11px] text-zinc-400 font-mono">Courier Exception Note (Optional):</label>
+                              <textarea
+                                rows={2}
+                                value={gateExceptionNote}
+                                onChange={(e) => setGateExceptionNote(e.target.value)}
+                                placeholder="e.g. Box compressed on side, customer rejected delivery without opening..."
+                                className="w-full px-3 py-2 text-xs font-mono bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-200 focus:outline-none focus:border-rose-500 resize-none"
+                              />
                             </div>
 
-                            {/* Finalize Release Button */}
                             <button
                               type="button"
-                              disabled={isFinalizingPod || !labelProof || !productProof}
-                              onClick={handleFinalizePod}
-                              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                              disabled={isSubmittingGateException}
+                              onClick={() => handleGateExceptionRto(deliverySelectedOrderId, gateExceptionReason, gateExceptionNote)}
+                              className="w-full py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 transition active:scale-95 cursor-pointer disabled:opacity-50"
                             >
-                              {isFinalizingPod ? (
+                              {isSubmittingGateException ? (
                                 <RefreshCw className="w-4 h-4 animate-spin" />
                               ) : (
-                                <CheckCheck className="w-4 h-4" />
+                                <RotateCcw className="w-4 h-4" />
                               )}
-                              <span>
-                                {!labelProof || !productProof
-                                  ? "Attach Both 2 Images to Finalize Handover"
-                                  : "Confirm & Finalize Doorstep Handover (Archive to S3)"}
-                              </span>
+                              <span>Confirm Gate Refusal ➔ Initiate Return to Origin (RTO)</span>
                             </button>
-                          </div>
-                        )}
-
-                        {/* Delivered Confirmation Card */}
-                        {deliveryGateStatus === "delivered" && (
-                          <div className="p-4 rounded-2xl bg-emerald-950/60 border border-emerald-800 space-y-3">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-emerald-300 flex items-center gap-1.5">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                                <span>Doorstep Handover Complete & PoD Secured</span>
-                              </span>
-                              <span className="text-[10px] font-mono bg-emerald-900/80 px-2 py-0.5 rounded text-emerald-200 font-bold">
-                                DELIVERED ✓
-                              </span>
-                            </div>
-                            <p className="text-xs text-zinc-300">
-                              Customer OTP was verified and 2 high-resolution proof photos (Shipping Label & Sealed Box Condition, &lt;10 MB) have been sealed into AWS S3 proof vault. Live warranty email dispatched.
-                            </p>
-                            <div className="pt-2 flex items-center gap-2 text-[11px] font-mono text-emerald-400">
-                              <ShieldCheck className="w-4 h-4" />
-                              <span>2-Point PoD Authentication Archived</span>
-                            </div>
                           </div>
                         )}
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* TAB 7: RTO REVERSE LOGISTICS & ORIGIN RETRIEVAL DOCK */}
+              {hubTab === "rto" && (
+                <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-6 text-white">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+                    <div className="flex items-center gap-2.5">
+                      <RotateCcw className="w-5 h-5 text-rose-400" />
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">
+                          Return to Origin (RTO) Reverse Logistics & Origin Retrieval Console
+                        </h3>
+                        <p className="text-xs text-zinc-400">
+                          Complete reverse supply-chain retrieval: Gate Refusal ➔ Local Hub Returns Dock ➔ Reverse Line-Haul ➔ Origin Fulfillment Center QA & Restock / Refund.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono text-rose-400 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20">
+                      {orders.filter((o) => String(o.deliveryStatus || "").startsWith("rto_") || Boolean(o.gateException)).length} consignments in reverse pipeline
+                    </span>
+                  </div>
+
+                  {/* Architecture Diagram: Where Returned Packages Go */}
+                  <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
+                    <div className="flex items-center justify-between text-xs font-bold font-mono text-rose-300 uppercase">
+                      <span>Reverse Logistics Physical Retrieval Route (How Packages Return to Origin)</span>
+                      <span className="text-[10px] text-zinc-400 font-mono">Chain of Custody Preserved</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2 pt-1 font-mono text-xs">
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-rose-500/30 space-y-1">
+                        <div className="text-[10px] text-rose-400 font-bold uppercase">Stage 1: Gate Refusal</div>
+                        <div className="font-semibold text-zinc-200">Customer Entrance</div>
+                        <p className="text-[10px] text-zinc-400">Handover rejected. Delivery agent flags exception & transports back to local hub.</p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-rose-500/30 space-y-1">
+                        <div className="text-[10px] text-amber-400 font-bold uppercase">Stage 2: Local Returns Dock</div>
+                        <div className="font-semibold text-zinc-200">HUB-ASN-01 (Returns Dock)</div>
+                        <p className="text-[10px] text-zinc-400">Returned parcel checked in, barcode verified, and grouped into reverse transit manifest.</p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-rose-500/30 space-y-1">
+                        <div className="text-[10px] text-purple-400 font-bold uppercase">Stage 3: Reverse Line-Haul</div>
+                        <div className="font-semibold text-zinc-200">Connecting Hubs ➔ Origin</div>
+                        <p className="text-[10px] text-zinc-400">Traverses reverse path (HUB-ASN-01 ➔ HUB-CCU-01 ➔ HUB-DEL-01) on freight carriers.</p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-emerald-500/30 space-y-1">
+                        <div className="text-[10px] text-emerald-400 font-bold uppercase">Stage 4: Origin QA & Restock</div>
+                        <div className="font-semibold text-zinc-200">HUB-DEL-01 (Origin Center)</div>
+                        <p className="text-[10px] text-zinc-400">Package inspected. Quarantined if damaged, or restocked into inventory with auto-refund.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Orders In RTO Pipeline */}
+                  {(() => {
+                    const rtoOrders = orders.filter((o) => String(o.deliveryStatus || "").startsWith("rto_") || Boolean(o.gateException));
+
+                    if (rtoOrders.length === 0) {
+                      return (
+                        <div className="py-12 text-center space-y-3">
+                          <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600 mx-auto flex items-center justify-center">
+                            <RotateCcw className="w-6 h-6 text-zinc-500" />
+                          </div>
+                          <div className="text-sm font-semibold text-zinc-300">RTO Pipeline Clear</div>
+                          <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                            No packages currently undergoing reverse logistics. Trigger Condition 2 in the Gate Stage to simulate a refusal.
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="text-xs text-zinc-400 font-mono flex items-center justify-between">
+                          <span>Active Consignments Returning to Origin ({rtoOrders.length})</span>
+                          <span className="text-[10px] text-zinc-500">Interactive Reverse Stepper Available</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {rtoOrders.map((ord) => {
+                            const rto = ord.rtoDetails;
+                            const exc = ord.gateException;
+                            const returnStatus = rto?.returnStatus || "dock_received";
+
+                            return (
+                              <div
+                                key={ord.id}
+                                className="p-5 rounded-2xl bg-zinc-900/90 border border-rose-500/30 hover:border-rose-500/50 transition space-y-4"
+                              >
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-mono text-xs font-bold text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded border border-rose-500/20">
+                                      {ord.orderNumber}
+                                    </span>
+                                    <span className="text-xs font-semibold text-zinc-200">
+                                      {ord.customer?.fullName} ({ord.customer?.city})
+                                    </span>
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-rose-300 border border-zinc-700 font-bold uppercase">
+                                      RTO Status: {returnStatus.replace("_", " ")}
+                                    </span>
+                                    {ord.isRedFlagCustomer && (
+                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-600/20 text-red-300 border border-red-500/50 font-bold flex items-center gap-1">
+                                        <ShieldAlert className="w-3 h-3 text-red-400" />
+                                        <span>RED FLAG CUSTOMER</span>
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="text-xs font-mono text-zinc-400 flex items-center gap-2">
+                                    <span>Reverse AWB:</span>
+                                    <strong className="text-rose-300">{rto?.returnTrackingNumber || `RTO-${ord.orderNumber}`}</strong>
+                                  </div>
+                                </div>
+
+                                {/* Exception Details Box */}
+                                <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800/80 text-xs text-zinc-300 font-mono space-y-1">
+                                  <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                                    <span>[Gate Rejection Reason]:</span>
+                                    <span>Reported: {exc?.reportedAt ? new Date(exc.reportedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Today"}</span>
+                                  </div>
+                                  <div className="text-rose-300 font-semibold">
+                                    {exc?.reason === "damaged_package"
+                                      ? "Package Damaged / Unstable Condition (Customer Refused)"
+                                      : exc?.reason === "customer_out_of_station"
+                                      ? "Customer Out of Station / Unreachable"
+                                      : "Customer Hostile Refusal / Bad Treatment Exception"}
+                                  </div>
+                                  {exc?.reasonNote && (
+                                    <div className="text-zinc-400 text-[11px]">Note: &quot;{exc.reasonNote}&quot;</div>
+                                  )}
+                                </div>
+
+                                {/* Reverse Stepper Buttons: Advance through Return Stages */}
+                                <div className="pt-1 flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-[11px] text-zinc-400 font-mono">Advance Reverse Logistics Lifecycle:</span>
+
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={rtoActionLoading === ord.orderNumber}
+                                      onClick={() => handleRtoHubAction(ord.orderNumber, "dock_received", "Scanned at local returns dock")}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-mono transition cursor-pointer ${
+                                        returnStatus === "dock_received"
+                                          ? "bg-amber-600 text-white shadow-sm"
+                                          : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                                      }`}
+                                    >
+                                      1. Check-in Local Returns Dock
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={rtoActionLoading === ord.orderNumber}
+                                      onClick={() => handleRtoHubAction(ord.orderNumber, "reverse_transit", "Loaded on return line-haul")}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-mono transition cursor-pointer ${
+                                        returnStatus === "reverse_transit"
+                                          ? "bg-purple-600 text-white shadow-sm"
+                                          : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                                      }`}
+                                    >
+                                      2. Dispatch Reverse Line-Haul
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={rtoActionLoading === ord.orderNumber}
+                                      onClick={() => handleRtoHubAction(ord.orderNumber, "origin_received", "Received at origin center")}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-mono transition cursor-pointer ${
+                                        returnStatus === "origin_received"
+                                          ? "bg-cyan-600 text-white shadow-sm"
+                                          : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                                      }`}
+                                    >
+                                      3. Arrive at Origin Warehouse
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={rtoActionLoading === ord.orderNumber}
+                                      onClick={() => handleRtoHubAction(ord.orderNumber, "qa_restock_refund", "QA inspection completed")}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-mono transition cursor-pointer ${
+                                        returnStatus === "qa_quarantined" || returnStatus === "restocked_refunded"
+                                          ? "bg-emerald-600 text-white shadow-sm"
+                                          : "bg-zinc-800 text-zinc-300 hover:bg-emerald-700 hover:text-white"
+                                      }`}
+                                    >
+                                      4. Complete QA & Restock / Refund
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -7044,15 +8021,28 @@ export default function AdminPage() {
                               )}
                             </div>
                           )}
-                          {auditWaybillModalOrder.courierService && (
+                          {auditWaybillModalOrder.transitMode === "ship" && (
+                            <div className="text-sky-400 font-mono text-[11px] pt-1 font-semibold space-y-0.5">
+                              <div>Vessel: {auditWaybillModalOrder.oceanFreight?.vesselName || auditWaybillModalOrder.vehicleNo} [{auditWaybillModalOrder.oceanFreight?.imoNumber || "IMO 9382014"}]</div>
+                              <div className="text-zinc-400 text-[10px]">Container: {auditWaybillModalOrder.oceanFreight?.containerId || auditWaybillModalOrder.containerId || "MSKU-982104-7"} · Seal: {auditWaybillModalOrder.oceanFreight?.sealNumber || "SEAL-88219"}</div>
+                              {auditWaybillModalOrder.oceanFreight?.sourcePortCode && (
+                                <div className="text-zinc-500 text-[10px]">Port: {auditWaybillModalOrder.oceanFreight.sourcePortCode} ➔ {auditWaybillModalOrder.oceanFreight.destPortCode} (Voyage: {auditWaybillModalOrder.oceanFreight.voyageNumber || "VOY-2026-09E"})</div>
+                              )}
+                            </div>
+                          )}
+                          {(auditWaybillModalOrder.transitMode === "bike" || auditWaybillModalOrder.transitMode === "van" || auditWaybillModalOrder.transitMode === "truck") && (
+                            <div className="text-emerald-400 font-mono text-[11px] pt-1 font-semibold space-y-0.5">
+                              <div>Fleet: {auditWaybillModalOrder.localDelivery?.vehicleNumber || auditWaybillModalOrder.vehicleNo || "Active Vehicle"} · Rider: {auditWaybillModalOrder.localDelivery?.driverName || "Rakesh Sharma"}</div>
+                              <div className="text-zinc-400 text-[10px]">Rider Phone: {auditWaybillModalOrder.localDelivery?.driverContact || "+91 98301 23456"} · Pkg: {auditWaybillModalOrder.localDelivery?.packageId || auditWaybillModalOrder.orderNumber}</div>
+                              {auditWaybillModalOrder.localDelivery?.deliverySlot && (
+                                <div className="text-zinc-500 text-[10px]">Slot: {auditWaybillModalOrder.localDelivery.deliverySlot} · Doorstep Handover</div>
+                              )}
+                            </div>
+                          )}
+                          {auditWaybillModalOrder.courierService && !auditWaybillModalOrder.localDelivery && (
                             <div className="text-purple-400 font-mono text-[11px] pt-1 font-semibold space-y-0.5">
                               <div>{auditWaybillModalOrder.courierService.providerName}</div>
                               <div className="text-zinc-400 text-[10px]">AWB: {auditWaybillModalOrder.courierService.trackingAwb}</div>
-                            </div>
-                          )}
-                          {auditWaybillModalOrder.transitMode === "ship" && auditWaybillModalOrder.containerId && (
-                            <div className="text-amber-400 font-mono text-[11px] pt-1 font-bold">
-                              Container ID: {auditWaybillModalOrder.containerId}
                             </div>
                           )}
                         </div>
@@ -7094,6 +8084,37 @@ export default function AdminPage() {
                           <span className="text-zinc-500 text-[10px] block">PING LATENCY</span>
                           <span className="text-cyan-400 font-bold">180ms · OK</span>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Whiteboard In/Out Paired Journey Logs */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-zinc-300 uppercase tracking-wide flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-purple-400" />
+                          <span>Whiteboard In/Out Hub Cycle Logs</span>
+                        </span>
+                        <span className="text-[10px] font-mono text-purple-400 px-2 py-0.5 rounded bg-purple-950/60 border border-purple-800">
+                          Structured Lifecycle
+                        </span>
+                      </div>
+                      <div className="p-3 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-2 max-h-48 overflow-y-auto">
+                        {formatLogisticsJourneyLogs(auditWaybillModalOrder).map((step, sIdx) => (
+                          <div key={sIdx} className="p-2 rounded-xl bg-zinc-950/70 border border-zinc-800 text-xs font-mono">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-zinc-200">{step.title}</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                                step.status === "completed" ? "bg-emerald-950 text-emerald-400 border border-emerald-800" :
+                                step.status === "in_progress" ? "bg-purple-950 text-purple-300 border border-purple-700" :
+                                step.status === "failed" ? "bg-rose-950 text-rose-300 border border-rose-800" :
+                                "bg-zinc-800 text-zinc-400"
+                              }`}>
+                                {step.badge}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-zinc-400 mt-0.5">{step.details}</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -8057,235 +9078,178 @@ export default function AdminPage() {
                                                       </span>
                                                     </button>
 
-                                                    {/* Button 2: Order Dispatched */}
-                                                    <button
-                                                      type="button"
-                                                      disabled={edits.isSaving || isDispatched}
-                                                      onClick={() => handleQuickStatusUpdate(ord.orderNumber, "dispatched", "Order Dispatched")}
-                                                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer disabled:cursor-default ${
-                                                        isDispatched
-                                                          ? "bg-emerald-50/80 border-emerald-300 text-zinc-900 shadow-2xs"
-                                                          : isPacked
-                                                          ? "bg-blue-50/60 border-blue-200 hover:bg-blue-100/70 hover:border-blue-400 text-zinc-800"
-                                                          : "bg-zinc-50 border-zinc-200 text-zinc-400 opacity-70"
-                                                      }`}
-                                                    >
-                                                      <div className="flex items-center justify-between w-full mb-1">
-                                                        <div className="flex items-center gap-1.5">
-                                                          <div
-                                                            className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${
-                                                              isDispatched
-                                                                ? "bg-emerald-600 text-white"
-                                                                : isPacked
-                                                                ? "bg-blue-600 text-white"
-                                                                : "bg-zinc-300 text-zinc-600"
-                                                            }`}
-                                                          >
-                                                            {isDispatched ? <Check className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
-                                                          </div>
-                                                          <span className="text-xs font-bold">Order Dispatched</span>
-                                                        </div>
-                                                        <div>
-                                                          {isSavingDispatched ? (
-                                                            <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-blue-700 animate-pulse">
-                                                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                                                              <span>Saving...</span>
-                                                            </span>
-                                                          ) : isDispatched ? (
-                                                            <span className="text-[10px] font-mono font-bold text-emerald-700 flex items-center gap-0.5">
-                                                              Done ✓
-                                                            </span>
-                                                          ) : (
-                                                            <span className="text-[10px] font-mono font-bold text-blue-700 underline">
-                                                              Click to Dispatch →
-                                                            </span>
-                                                          )}
-                                                        </div>
-                                                      </div>
-                                                      <span className="text-[10px] text-zinc-500 leading-tight">
-                                                        {isDispatched
-                                                          ? "Departed origin for logistics hub network"
-                                                          : "Click when carrier takes consignment"}
-                                                      </span>
-                                                    </button>
-                                                  </div>
-                                                </div>
-
-                                                {/* 2. Hub, On-Way & Delivered Milestones (Auto-Updated by Full Hub Controls) */}
-                                                <div className="space-y-2 pt-2 border-t border-zinc-100">
-                                                  <div className="flex items-center justify-between text-[10px] font-mono uppercase font-semibold">
-                                                    <span className="text-zinc-600 font-bold flex items-center gap-1">
-                                                      <Sparkles className="w-3 h-3 text-purple-600" />
-                                                      <span>Hub & Transit Controls</span>
-                                                    </span>
-                                                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-bold">
-                                                      Auto-Updated by Full Hub Controls
-                                                    </span>
-                                                  </div>
-
-                                                  <div className="flex flex-col gap-1.5">
-                                                    {/* Milestone 1: Marked Locations Arrive */}
-                                                    <div
-                                                      className={`p-2.5 rounded-xl border flex items-center justify-between transition-colors ${
-                                                        hasHubArrived
-                                                          ? "bg-teal-50/70 border-teal-200 text-zinc-900"
-                                                          : "bg-zinc-50/80 border-zinc-200/80 text-zinc-500"
-                                                      }`}
-                                                    >
-                                                      <div className="flex items-center gap-2.5 min-w-0">
-                                                        <div
-                                                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                                                            hasHubArrived
-                                                              ? "bg-teal-600 text-white"
-                                                              : "bg-zinc-200 text-zinc-400"
-                                                          }`}
-                                                        >
-                                                          {hasHubArrived ? <Check className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
-                                                        </div>
-                                                        <div className="min-w-0">
+                                                    {/* Action 2: Hub Routing / Dispatched Flow */}
+                                                    {isDispatched ? (
+                                                      <div className="p-2.5 rounded-xl border border-emerald-300 bg-emerald-50/80 text-zinc-900 flex flex-col justify-between shadow-2xs">
+                                                        <div className="flex items-center justify-between w-full mb-1">
                                                           <div className="flex items-center gap-1.5">
-                                                            <span className="text-xs font-bold text-zinc-900">Marked Locations Arrive</span>
-                                                            {hasHubArrived && (
-                                                              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 font-bold">
-                                                                Hub Docked
-                                                              </span>
-                                                            )}
+                                                            <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-bold">
+                                                              <Check className="w-3.5 h-3.5" />
+                                                            </div>
+                                                            <span className="text-xs font-bold">Order Dispatched</span>
                                                           </div>
-                                                          <div className="text-[10px] text-zinc-500 truncate">
-                                                            {hasHubArrived
-                                                              ? `Dock scanned at ${ord.currentHub || "Regional Fulfillment Hub"}`
-                                                              : "Auto-updates when scanned at hub dock in Hub Console"}
-                                                          </div>
+                                                          <span className="text-[10px] font-mono font-bold text-emerald-700">Done ✓</span>
                                                         </div>
+                                                        <span className="text-[10px] text-zinc-500 leading-tight">
+                                                          Dispatched to {ord.nextHub || "Next Transit Hub"} via {ord.transitMode?.toUpperCase() || "FLEET"} [{ord.vehicleNo || "Active"}]
+                                                        </span>
                                                       </div>
-                                                      <div className="shrink-0 pl-2">
-                                                        {hasHubArrived ? (
-                                                          <span className="text-[10px] font-mono text-teal-700 font-semibold">Arrived ✓</span>
-                                                        ) : (
-                                                          <span className="text-[10px] font-mono text-zinc-400">Auto-Pending</span>
-                                                        )}
-                                                      </div>
-                                                    </div>
-
-                                                    {/* Milestone 2: On Way (In-Transit) */}
-                                                    <div
-                                                      className={`p-2.5 rounded-xl border flex items-center justify-between transition-colors ${
-                                                        isOnWay
-                                                          ? "bg-indigo-50/70 border-indigo-200 text-zinc-900"
-                                                          : "bg-zinc-50/80 border-zinc-200/80 text-zinc-500"
-                                                      }`}
-                                                    >
-                                                      <div className="flex items-center gap-2.5 min-w-0">
-                                                        <div
-                                                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                                                            isOnWay
-                                                              ? "bg-indigo-600 text-white"
-                                                              : "bg-zinc-200 text-zinc-400"
-                                                          }`}
-                                                        >
-                                                          {isOnWay ? <Truck className="w-3.5 h-3.5" /> : <Truck className="w-3.5 h-3.5" />}
-                                                        </div>
-                                                        <div className="min-w-0">
+                                                    ) : isPacked ? (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                          setDeliverySelectedOrderId(ord.orderNumber);
+                                                          setWaybillScanInput(ord.orderNumber);
+                                                          if (ord.currentHubId) setActiveHubId(ord.currentHubId);
+                                                          setHubTab("sorting");
+                                                          setActiveTab("delivery");
+                                                        }}
+                                                        className="p-2.5 rounded-xl border border-purple-400 bg-purple-600 hover:bg-purple-700 text-white font-bold text-left transition-all flex flex-col justify-between cursor-pointer shadow-md shadow-purple-600/20 active:scale-98 animate-pulse"
+                                                      >
+                                                        <div className="flex items-center justify-between w-full mb-1">
                                                           <div className="flex items-center gap-1.5">
-                                                            <span className="text-xs font-bold text-zinc-900">On The Way</span>
-                                                            {isOnWay && (
-                                                              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 font-bold">
-                                                                Line-Haul Active
-                                                              </span>
-                                                            )}
+                                                            <div className="w-6 h-6 rounded-lg bg-white/20 text-white flex items-center justify-center text-xs font-bold">
+                                                              <Boxes className="w-3.5 h-3.5" />
+                                                            </div>
+                                                            <span className="text-xs font-bold text-white">Open Hub Sorting</span>
                                                           </div>
-                                                          <div className="text-[10px] text-zinc-500 truncate">
-                                                            {isOnWay
-                                                              ? `En route via ${ord.transitMode?.toUpperCase() || "CARRIER"} [${ord.vehicleNo || "Transit Fleet"}]`
-                                                              : "Auto-updates when hub dispatches vehicle/train/flight in Hub Console"}
-                                                          </div>
+                                                          <span className="text-[10px] font-mono text-purple-200 flex items-center gap-0.5">
+                                                            Assign Hub →
+                                                          </span>
                                                         </div>
-                                                      </div>
-                                                      <div className="shrink-0 pl-2">
-                                                        {isOnWay ? (
-                                                          <span className="text-[10px] font-mono text-indigo-700 font-semibold">On Way 🚀</span>
-                                                        ) : (
-                                                          <span className="text-[10px] font-mono text-zinc-400">Auto-Pending</span>
-                                                        )}
-                                                      </div>
-                                                    </div>
-
-                                                    {/* Milestone 3: Delivered (Doorstep Handover) */}
-                                                    <div
-                                                      className={`p-2.5 rounded-xl border flex items-center justify-between transition-colors ${
-                                                        isDelivered
-                                                          ? "bg-emerald-50 border-emerald-300 text-zinc-900"
-                                                          : "bg-zinc-50/80 border-zinc-200/80 text-zinc-500"
-                                                      }`}
-                                                    >
-                                                      <div className="flex items-center gap-2.5 min-w-0">
-                                                        <div
-                                                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                                                            isDelivered
-                                                              ? "bg-emerald-600 text-white"
-                                                              : "bg-zinc-200 text-zinc-400"
-                                                          }`}
-                                                        >
-                                                          {isDelivered ? <Check className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                                                        </div>
-                                                        <div className="min-w-0">
+                                                        <span className="text-[10px] text-purple-100 leading-tight">
+                                                          Assign next destination hub & fleet in Sorting Dock (auto-marks dispatched)
+                                                        </span>
+                                                      </button>
+                                                    ) : (
+                                                      <div className="p-2.5 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-400 flex flex-col justify-between opacity-70">
+                                                        <div className="flex items-center justify-between w-full mb-1">
                                                           <div className="flex items-center gap-1.5">
-                                                            <span className="text-xs font-bold text-zinc-900">Delivered</span>
-                                                            {isDelivered && (
-                                                              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
-                                                                Doorstep Verified
-                                                              </span>
-                                                            )}
+                                                            <div className="w-6 h-6 rounded-lg bg-zinc-200 text-zinc-500 flex items-center justify-center text-xs font-bold">
+                                                              <ArrowUpRight className="w-3.5 h-3.5" />
+                                                            </div>
+                                                            <span className="text-xs font-bold text-zinc-500">Order Dispatch</span>
                                                           </div>
-                                                          <div className="text-[10px] text-zinc-500 truncate">
-                                                            {isDelivered
-                                                              ? "Verified doorstep handover completed with OTP"
-                                                              : "Auto-updates upon doorstep Gate OTP verification in Hub Console"}
-                                                          </div>
+                                                          <span className="text-[10px] font-mono text-zinc-400">Locked</span>
                                                         </div>
+                                                        <span className="text-[10px] text-zinc-400 leading-tight">
+                                                          Awaiting packing before sorting destination can be assigned
+                                                        </span>
                                                       </div>
-                                                      <div className="shrink-0 pl-2">
-                                                        {isDelivered ? (
-                                                          <span className="text-[10px] font-mono text-emerald-700 font-semibold">Delivered ✓</span>
-                                                        ) : (
-                                                          <span className="text-[10px] font-mono text-zinc-400">Auto-Pending</span>
-                                                        )}
-                                                      </div>
-                                                    </div>
+                                                    )}
                                                   </div>
                                                 </div>
 
                                                 {/* 3. Telemetry Log Stream Below ("and those are just logged here below") */}
-                                                <div className="pt-2 border-t border-zinc-100 space-y-1.5">
+                                                <div className="pt-2 border-t border-zinc-100 space-y-2">
                                                   <div className="flex items-center justify-between text-[10px] font-mono uppercase text-zinc-500 font-semibold">
-                                                    <span className="flex items-center gap-1 text-zinc-600 font-bold">
-                                                      <Clock className="w-3 h-3 text-zinc-400" />
+                                                    <span className="flex items-center gap-1 text-zinc-700 font-bold">
+                                                      <Clock className="w-3 h-3 text-purple-600" />
                                                       <span>Hub Telemetry & Transit Logs</span>
                                                     </span>
-                                                    <span className="text-[9px] text-zinc-400">Live Stream</span>
+                                                    <span className="text-[9px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                                                      Paired In/Out Hub Cycle
+                                                    </span>
                                                   </div>
 
-                                                  {hubEvents.length > 0 ? (
-                                                    <div className="space-y-1 bg-zinc-50/70 p-2 rounded-xl border border-zinc-100">
-                                                      {hubEvents.map((ev, i) => (
-                                                        <div key={i} className="flex items-start justify-between gap-2 text-[10px] font-mono">
-                                                          <div className="flex items-start gap-1.5 min-w-0">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0 mt-1" />
-                                                            <div className="min-w-0">
-                                                              <div className="font-semibold text-zinc-800 truncate">{ev.title}</div>
-                                                              <div className="text-[9px] text-zinc-400 truncate">{ev.description}</div>
+                                                  {/* Whiteboard In/Out Paired Steps */}
+                                                  {(() => {
+                                                    const pairedSteps = formatLogisticsJourneyLogs(ord);
+                                                    return (
+                                                      <div className="space-y-1.5 bg-zinc-50/90 p-2.5 rounded-xl border border-zinc-200/80">
+                                                        {pairedSteps.map((step, sIdx) => {
+                                                          const isDone = step.status === "completed";
+                                                          const isActive = step.status === "in_progress";
+                                                          const isFailed = step.status === "failed";
+
+                                                          return (
+                                                            <div
+                                                              key={sIdx}
+                                                              className={`p-2 rounded-lg border text-[10px] font-mono transition-all ${
+                                                                isFailed
+                                                                  ? "bg-rose-50/90 border-rose-300 text-rose-950 shadow-xs"
+                                                                  : isActive
+                                                                  ? "bg-white border-purple-300 text-purple-950 shadow-xs ring-1 ring-purple-500/20"
+                                                                  : isDone
+                                                                  ? "bg-white border-zinc-200 text-zinc-800"
+                                                                  : "bg-zinc-100/50 border-zinc-200/50 text-zinc-400"
+                                                              }`}
+                                                            >
+                                                              <div className="flex items-start justify-between gap-1.5">
+                                                                <div className="flex items-center gap-1.5 font-bold min-w-0">
+                                                                  <span
+                                                                    className={`w-2 h-2 rounded-full shrink-0 ${
+                                                                      isFailed
+                                                                        ? "bg-rose-600 animate-pulse"
+                                                                        : isActive
+                                                                        ? "bg-purple-600 animate-ping"
+                                                                        : isDone
+                                                                        ? "bg-emerald-500"
+                                                                        : "bg-zinc-300"
+                                                                    }`}
+                                                                  />
+                                                                  <span
+                                                                    className={`truncate ${
+                                                                      isActive
+                                                                        ? "text-purple-700 font-bold"
+                                                                        : isFailed
+                                                                        ? "text-rose-700 font-bold"
+                                                                        : isDone
+                                                                        ? "text-zinc-900"
+                                                                        : "text-zinc-500"
+                                                                    }`}
+                                                                  >
+                                                                    {step.title}
+                                                                  </span>
+                                                                </div>
+                                                                <span
+                                                                  className={`text-[8px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                                                    isFailed
+                                                                      ? "bg-rose-600 text-white"
+                                                                      : isActive
+                                                                      ? "bg-purple-600 text-white"
+                                                                      : isDone
+                                                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                                                      : "bg-zinc-200 text-zinc-500"
+                                                                  }`}
+                                                                >
+                                                                  {step.badge}
+                                                                </span>
+                                                              </div>
+                                                              <div className="text-[9px] text-zinc-500 mt-1 pl-3.5 leading-snug font-sans">
+                                                                {step.details}
+                                                              </div>
                                                             </div>
+                                                          );
+                                                        })}
+                                                      </div>
+                                                    );
+                                                  })()}
+
+                                                  {/* Expandable Raw Telemetry Stream */}
+                                                  {hubEvents.length > 0 && (
+                                                    <details className="text-[9px] font-mono text-zinc-500 pt-0.5 group">
+                                                      <summary className="cursor-pointer hover:text-zinc-700 font-semibold select-none flex items-center justify-between text-zinc-400">
+                                                        <span>▸ Raw Hub Checkpoint Entries ({hubEvents.length})</span>
+                                                        <span className="group-open:rotate-180 transition-transform text-[8px]">▼</span>
+                                                      </summary>
+                                                      <div className="mt-1 space-y-1 bg-zinc-50/70 p-2 rounded-lg border border-zinc-200 max-h-36 overflow-y-auto">
+                                                        {hubEvents.map((ev, i) => (
+                                                          <div key={i} className="flex items-start justify-between gap-2 text-[9px] font-mono">
+                                                            <div className="flex items-start gap-1 min-w-0">
+                                                              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0 mt-1" />
+                                                              <div className="min-w-0">
+                                                                <div className="font-semibold text-zinc-700 truncate">{ev.title}</div>
+                                                                <div className="text-[8px] text-zinc-400 truncate">{ev.description}</div>
+                                                              </div>
+                                                            </div>
+                                                            <span className="text-[8px] text-zinc-400 shrink-0">
+                                                              {new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                            </span>
                                                           </div>
-                                                          <span className="text-[9px] text-zinc-400 shrink-0">
-                                                            {new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                                          </span>
-                                                        </div>
-                                                      ))}
-                                                    </div>
-                                                  ) : (
-                                                    <div className="text-[10px] text-zinc-400 font-mono bg-zinc-50/50 p-2 rounded-xl border border-dashed border-zinc-200 text-center">
-                                                      No hub checkpoints logged yet. Check-ins in Full Hub Console will appear here automatically.
-                                                    </div>
+                                                        ))}
+                                                      </div>
+                                                    </details>
                                                   )}
 
                                                   <div className="pt-1 flex items-center justify-between text-[10px] text-zinc-500 font-mono">

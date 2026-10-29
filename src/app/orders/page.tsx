@@ -42,6 +42,7 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/components/Toaster";
 import { downloadOrderInvoicePdf } from "@/lib/invoice-generator";
 import { generateRazorpayOrderEmail, CustomRazorpayEmailData } from "@/lib/email-service";
+import { formatLogisticsJourneyLogs } from "@/lib/logistics-service";
 
 function MyOrdersContent() {
   const searchParams = useSearchParams();
@@ -1398,99 +1399,126 @@ function MyOrdersContent() {
               )}
             </div>
 
-            {/* Dynamic Events Timeline */}
-            <div className="flex-1 overflow-y-auto space-y-5 pr-1">
-              {Array.isArray(selectedOrderForTracking.events) && selectedOrderForTracking.events.length > 0 ? (
-                [...selectedOrderForTracking.events]
-                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                  .map((ev, evIdx) => {
-                  const evDate = `${new Date(ev.timestamp).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })} · ${new Date(ev.timestamp).toLocaleTimeString("en-US", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}`;
+            {/* Whiteboard Industrial Transit Lifecycle Logs */}
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {(() => {
+                const journeySteps = formatLogisticsJourneyLogs(selectedOrderForTracking);
+                const rawEvents = [...(selectedOrderForTracking.events || [])].sort(
+                  (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                );
 
-                  const isRefund = ev.type === "refund";
-                  const isCancel = ev.type === "cancellation";
-                  const isDelivery = ev.type === "delivery";
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs font-mono uppercase tracking-wider text-zinc-500 font-bold border-b border-zinc-100 pb-2">
+                      <span className="flex items-center gap-1.5 text-zinc-700">
+                        <Clock className="w-3.5 h-3.5 text-purple-600" />
+                        <span>TRANSIT LOGS & HUB DISPATCH TIMELINE</span>
+                      </span>
+                      <span className="text-[10px] text-purple-600 font-semibold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                        In / Out Pair Cycle
+                      </span>
+                    </div>
 
-                  return (
-                    <div key={ev.id || evIdx} className="flex items-start gap-3.5 relative">
-                      {evIdx !== (selectedOrderForTracking.events?.length || 1) - 1 && (
-                        <div className="absolute left-4 top-8 bottom-0 w-px bg-zinc-200 -mb-5" />
-                      )}
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 ${isRefund
-                            ? "bg-emerald-100 text-emerald-700"
-                            : isCancel
-                              ? "bg-rose-100 text-rose-700"
-                              : isDelivery
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-zinc-100 text-zinc-700"
-                          }`}
-                      >
-                        {isRefund ? (
-                          <CheckCircle2 className="w-4 h-4" />
-                        ) : isCancel ? (
-                          <AlertTriangle className="w-4 h-4" />
-                        ) : isDelivery ? (
-                          <Truck className="w-4 h-4" />
-                        ) : (
-                          <Package className="w-4 h-4" />
-                        )}
-                      </div>
+                    {/* Step-by-Step Paired Hub Lifecycle */}
+                    <div className="space-y-2 bg-zinc-50/70 p-3 rounded-2xl border border-zinc-200">
+                      {journeySteps.map((step, sIdx) => {
+                        const isDone = step.status === "completed";
+                        const isActive = step.status === "in_progress";
+                        const isFailed = step.status === "failed";
 
-                      <div className="space-y-1 min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <h4 className="text-xs font-bold text-zinc-900 truncate">
-                            {ev.title}
-                          </h4>
-                          <span className="text-[10px] font-mono text-zinc-400 shrink-0">
-                            {evDate}
+                        return (
+                          <div
+                            key={sIdx}
+                            className={`p-3 rounded-xl border text-xs font-mono transition-all ${
+                              isFailed
+                                ? "bg-rose-50/90 border-rose-300 text-rose-950 shadow-xs"
+                                : isActive
+                                ? "bg-white border-purple-300 text-purple-950 shadow-xs ring-1 ring-purple-500/20"
+                                : isDone
+                                ? "bg-white border-zinc-200 text-zinc-800"
+                                : "bg-zinc-100/60 border-zinc-200/60 text-zinc-400"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 font-bold min-w-0">
+                                <span
+                                  className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                    isFailed
+                                      ? "bg-rose-600 animate-pulse"
+                                      : isActive
+                                      ? "bg-purple-600 animate-ping"
+                                      : isDone
+                                      ? "bg-emerald-500"
+                                      : "bg-zinc-300"
+                                  }`}
+                                />
+                                <span
+                                  className={`text-xs ${
+                                    isActive
+                                      ? "text-purple-700 font-bold"
+                                      : isFailed
+                                      ? "text-rose-700 font-bold"
+                                      : isDone
+                                      ? "text-zinc-900"
+                                      : "text-zinc-500"
+                                  }`}
+                                >
+                                  {step.title}
+                                </span>
+                              </div>
+                              <span
+                                className={`text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded shrink-0 ${
+                                  isFailed
+                                    ? "bg-rose-600 text-white"
+                                    : isActive
+                                    ? "bg-purple-600 text-white"
+                                    : isDone
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                    : "bg-zinc-200 text-zinc-500"
+                                }`}
+                              >
+                                {step.badge}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-zinc-600 mt-1.5 pl-4 leading-relaxed font-sans">
+                              {step.details}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Expandable Raw Telemetry Stream */}
+                    {rawEvents.length > 0 && (
+                      <details className="mt-3 group border border-zinc-200 rounded-xl bg-white p-2.5">
+                        <summary className="text-[11px] font-mono text-zinc-600 font-semibold cursor-pointer flex items-center justify-between select-none">
+                          <span className="flex items-center gap-1.5">
+                            <Clock className="w-3 h-3 text-zinc-400" />
+                            <span>Detailed Checkpoint Audit Trail ({rawEvents.length} events)</span>
                           </span>
+                          <span className="text-[10px] text-purple-600 group-open:rotate-180 transition-transform">▼</span>
+                        </summary>
+                        <div className="mt-2.5 pt-2 border-t border-zinc-100 space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {rawEvents.map((ev, evIdx) => (
+                            <div key={ev.id || evIdx} className="text-xs font-mono p-2 rounded-lg bg-zinc-50 border border-zinc-100">
+                              <div className="flex items-center justify-between text-zinc-800 font-semibold">
+                                <span className="truncate">{ev.title}</span>
+                                <span className="text-[10px] text-zinc-400 shrink-0">
+                                  {new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-zinc-500 font-sans mt-0.5">{ev.description}</div>
+                              {ev.actor && (
+                                <div className="text-[9px] text-zinc-400 font-mono mt-1">Logged by: {ev.actor}</div>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                        <p className="text-[11px] text-zinc-600 leading-relaxed">
-                          {ev.description}
-                        </p>
-                        {ev.actor && (
-                          <span className="inline-block px-1.5 py-0.5 rounded bg-zinc-100 text-[10px] font-mono text-zinc-500">
-                            Logged by: {ev.actor}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="space-y-6 pt-2">
-                  <div className="flex items-start gap-4">
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                      <CheckCircle2 className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-zinc-900">Payment Authorized via Razorpay</h4>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">
-                        Transaction ID {selectedOrderForTracking.razorpayPaymentId || "pay_verified"}. Amount captured successfully.
-                      </p>
-                    </div>
+                      </details>
+                    )}
                   </div>
-
-                  <div className="flex items-start gap-4">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                      <Package className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-zinc-900">Quality Inspection & Packaging</h4>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">
-                        Acoustic drivers tested and serialized at our Portland assembly facility.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             <button

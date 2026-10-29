@@ -845,6 +845,36 @@ export interface AirCargoDetails {
   flightManifestId?: string;
 }
 
+export interface OceanFreightDetails {
+  vesselName?: string; // e.g. MV Ocean Carrier
+  imoNumber?: string; // IMO 9382014
+  departureDate?: string;
+  departureTime?: string;
+  containerId?: string; // MSKU-982104-7
+  sealNumber?: string; // Seal #88219
+  sourcePortCode?: string; // e.g. INNSA, INCCU
+  sourcePortName?: string;
+  destPortCode?: string; // e.g. INHAL, INMAA
+  destPortName?: string;
+  voyageNumber?: string;
+  billOfLading?: string; // B/L Number
+  shippingLine?: string; // Maersk, MSC, SCI
+  berthLocation?: string;
+  shippingManifestId?: string;
+}
+
+export interface LocalDeliveryDetails {
+  vehicleType?: "bike" | "van" | "truck";
+  vehicleNumber?: string; // Vehicle Plate e.g. DL-01-BK-4092
+  packageId?: string; // e.g. ANC-914820
+  deliveryAddress?: string; // Customer's address
+  customerContact?: string; // Customer's phone
+  driverName?: string; // Rider/Driver name
+  driverContact?: string; // Rider/Driver phone
+  deliverySlot?: string; // Afternoon/Evening
+  runSheetId?: string;
+}
+
 export interface CourierServiceDetails {
   provider: "anc_custom" | "bluedart" | "delhivery" | "shiprocket" | "shadowfax" | "indiapost" | "xpressbees" | "dtdc";
   providerName: string;
@@ -870,9 +900,34 @@ export interface ShipmentRouteLeg {
   dispatchCategory?: DispatchCategory;
   railFreight?: RailFreightDetails;
   airCargo?: AirCargoDetails;
+  oceanFreight?: OceanFreightDetails;
+  localDelivery?: LocalDeliveryDetails;
   courierService?: CourierServiceDetails;
   dispatchedAt?: string;
   receivedAt?: string;
+  inHubAt?: string;
+  outHubAt?: string;
+  isFinalDeliveryHub?: boolean;
+  isReturnLeg?: boolean;
+}
+
+export interface GateExceptionDetails {
+  reason: "damaged_package" | "customer_out_of_station" | "customer_refused";
+  reasonNote?: string;
+  isRedFlagCustomer?: boolean;
+  reportedAt: string;
+  carrierRider?: string;
+  returnManifestId?: string;
+  returnTrackingNumber?: string;
+}
+
+export interface RtoDetails {
+  initiatedAt: string;
+  currentReturnHubId: string;
+  destinationOriginHubId: string;
+  returnTrackingNumber: string;
+  returnStatus: "dock_received" | "reverse_transit" | "origin_received" | "qa_quarantined" | "restocked_refunded";
+  reverseRoute?: ShipmentRouteLeg[];
 }
 
 export interface LogisticsHub {
@@ -882,6 +937,10 @@ export interface LogisticsHub {
   region: string;
   country: string;
   type: "origin" | "air_transit" | "regional_gateway" | "local_delivery";
+  coverageArea?: string;
+  strategicRole?: string;
+  isDynamic?: boolean;
+  createdAt?: string;
 }
 
 export interface Order {
@@ -910,7 +969,7 @@ export interface Order {
   razorpayRefundId?: string;
   refundAmount?: number;
   refundInitiatedAt?: string;
-  deliveryStatus?: "order_created" | "order_packed" | "locations_arrive" | "processing" | "dispatched" | "in_transit" | "out_for_delivery" | "delivered" | "cancelled";
+  deliveryStatus?: "order_created" | "order_packed" | "locations_arrive" | "processing" | "dispatched" | "in_transit" | "out_for_delivery" | "delivered" | "cancelled" | "rto_initiated" | "rto_in_transit" | "rto_delivered_to_origin";
   currentHub?: string;
   currentHubId?: string;
   currentRegion?: string;
@@ -922,6 +981,8 @@ export interface Order {
   dispatchCategory?: DispatchCategory;
   railFreight?: RailFreightDetails;
   airCargo?: AirCargoDetails;
+  oceanFreight?: OceanFreightDetails;
+  localDelivery?: LocalDeliveryDetails;
   courierService?: CourierServiceDetails;
   route?: ShipmentRouteLeg[];
   trackingNumber?: string;
@@ -930,6 +991,9 @@ export interface Order {
   manifestVerified?: boolean;
   gateOtpSession?: GateOtpSession;
   podImages?: GateOtpPodImages;
+  gateException?: GateExceptionDetails;
+  isRedFlagCustomer?: boolean;
+  rtoDetails?: RtoDetails;
   cancellation?: OrderCancellation;
   events?: OrderEvent[];
   createdAt: string;

@@ -14,6 +14,7 @@ import {
   ensureOrderRoute,
   getHubById,
   STANDARD_HUBS,
+  generateRtoReverseRoute,
 } from "@/lib/logistics-service";
 
 function normalizeOrder(o: any): Order {
@@ -606,7 +607,10 @@ export async function POST(req: NextRequest) {
         dispatchCategory,
         railFreight,
         airCargo,
+        oceanFreight,
+        localDelivery,
         courierService,
+        isDestinationClose = false,
       } = body;
 
       const orderWithRoute = ensureOrderRoute(targetOrder);
@@ -627,13 +631,14 @@ export async function POST(req: NextRequest) {
             ...route[legIndex],
             status: "received",
             receivedAt: now,
+            inHubAt: now,
           };
           for (let i = 0; i < legIndex; i++) {
             route[i] = { ...route[i], status: "completed" };
           }
         }
         eventTitle = `Received at ${targetHub.name}`;
-        eventDesc = `Consignment #${targetOrder.orderNumber} dock scanned and checked in at ${targetHub.name} (${targetHub.region}). Manifest confirmed. Moved to sorting queue.`;
+        eventDesc = `Consignment #${targetOrder.orderNumber} dock scanned and checked in at ${targetHub.name} (${targetHub.region}) [In: ${now}]. Manifest confirmed. Moved to sorting queue.`;
         deliveryStatus = "in_transit";
       } else if (queueAction === "to_sorting") {
         newQueueStatus = "sorting";
@@ -651,7 +656,9 @@ export async function POST(req: NextRequest) {
         newQueueStatus = "loading";
         const nextLeg = legIndex !== -1 ? route[legIndex + 1] : undefined;
         const destHub = destinationHubId ? getHubById(destinationHubId) : (nextLeg ? getHubById(nextLeg.hubId) : undefined);
-        const destName = destHub ? `${destHub.name} (${destHub.region})` : (nextLeg ? `${nextLeg.hubName} (${nextLeg.region})` : "Final Doorstep Gateway");
+        const destName = isDestinationClose
+          ? "Customer Doorstep (Last-Mile)"
+          : (destHub ? `${destHub.name} (${destHub.region})` : (nextLeg ? `${nextLeg.hubName} (${nextLeg.region})` : "Final Doorstep Gateway"));
 
         const effectiveContainerId = (transitMode === "train" || transitMode === "ship")
           ? (containerId || `ISO-${Math.random().toString(36).substring(2, 7).toUpperCase()}`)
@@ -667,9 +674,13 @@ export async function POST(req: NextRequest) {
             dispatchCategory: dispatchCategory || route[legIndex].dispatchCategory,
             railFreight: railFreight || route[legIndex].railFreight,
             airCargo: airCargo || route[legIndex].airCargo,
+            oceanFreight: oceanFreight || route[legIndex].oceanFreight,
+            localDelivery: localDelivery || route[legIndex].localDelivery,
             courierService: courierService || route[legIndex].courierService,
+            isFinalDeliveryHub: isDestinationClose || (!nextLeg),
           };
-          if (destHub && (!nextLeg || nextLeg.hubId.toLowerCase() !== destHub.id.toLowerCase())) {
+
+          if (!isDestinationClose && destHub && (!nextLeg || nextLeg.hubId.toLowerCase() !== destHub.id.toLowerCase())) {
             const existingDestIdx = route.findIndex((l) => l.hubId.toLowerCase() === destHub.id.toLowerCase());
             if (existingDestIdx !== -1) {
               route[existingDestIdx] = {
@@ -696,14 +707,30 @@ export async function POST(req: NextRequest) {
         }
 
         const containerNote = effectiveContainerId ? ` · Container ID: [${effectiveContainerId}]` : "";
-        eventTitle = `Sorted & Staged at Loading Bay: ${targetHub.name} ➔ ${destHub?.name || "Next Gateway"}`;
-        eventDesc = `Consignment #${targetOrder.orderNumber} sorted and assigned to ${destName} via ${String(transitMode).toUpperCase()} [Vehicle: ${vehicleNo}]${containerNote}. Consignment staged at loading bay awaiting vehicle load completion.`;
-        deliveryStatus = "in_transit";
+        if (targetOrder.deliveryStatus === "order_created" || targetOrder.deliveryStatus === "order_packed") {
+          deliveryStatus = "dispatched";
+          eventTitle = `Origin Warehouse Dispatched: Assigned to ${destName}`;
+          eventDesc = `Consignment #${targetOrder.orderNumber} boxed, sealed, and auto-dispatched from inventory. Routed to ${destName} via ${String(transitMode).toUpperCase()} [${vehicleNo}]${containerNote}. Consignment staged at loading bay awaiting vehicle load completion.`;
+          if (legIndex === 0) {
+            route[0].outHubAt = now;
+          }
+        } else if (isDestinationClose) {
+          eventTitle = `Sorted & Staged for Last-Mile Loading: ${targetHub.name} (Address Close to Hub: TRUE)`;
+          eventDesc = `Consignment #${targetOrder.orderNumber} verified close to customer address. Assigned for Out For Delivery prep at loading bay. Scheduled delivery window: Afternoon/Evening.`;
+          deliveryStatus = "in_transit";
+        } else {
+          eventTitle = `Sorted & Staged at Loading Bay: ${targetHub.name} ➔ ${destHub?.name || "Next Gateway"}`;
+          eventDesc = `Consignment #${targetOrder.orderNumber} sorted and assigned to ${destName} via ${String(transitMode).toUpperCase()} [Vehicle: ${vehicleNo}]${containerNote}. Consignment staged at loading bay awaiting vehicle load completion.`;
+          deliveryStatus = "in_transit";
+        }
       } else if (queueAction === "dispatch" || queueAction === "container_dispatch" || queueAction === "loaded_dispatch") {
-        newQueueStatus = "outgoing";
+        const isLastMile = isDestinationClose || (legIndex !== -1 && route[legIndex].isFinalDeliveryHub) || (legIndex === route.length - 1);
+        newQueueStatus = isLastMile ? "gate_handover" : "outgoing";
         const nextLeg = legIndex !== -1 ? route[legIndex + 1] : undefined;
         const destHub = destinationHubId ? getHubById(destinationHubId) : (nextLeg ? getHubById(nextLeg.hubId) : undefined);
-        const destName = destHub ? `${destHub.name} (${destHub.region})` : (nextLeg ? `${nextLeg.hubName} (${nextLeg.region})` : "Final Doorstep Gateway");
+        const destName = isLastMile
+          ? "Customer Doorstep"
+          : (destHub ? `${destHub.name} (${destHub.region})` : (nextLeg ? `${nextLeg.hubName} (${nextLeg.region})` : "Final Doorstep Gateway"));
 
         const effectiveContainerId = (transitMode === "train" || transitMode === "ship")
           ? (containerId || (legIndex !== -1 ? route[legIndex].containerId : undefined) || `ISO-${Math.random().toString(36).substring(2, 7).toUpperCase()}`)
@@ -721,8 +748,10 @@ export async function POST(req: NextRequest) {
             airCargo: airCargo || route[legIndex].airCargo,
             courierService: courierService || route[legIndex].courierService,
             dispatchedAt: now,
+            outHubAt: now,
+            isFinalDeliveryHub: isLastMile,
           };
-          if (destHub && (!nextLeg || nextLeg.hubId.toLowerCase() !== destHub.id.toLowerCase())) {
+          if (!isLastMile && destHub && (!nextLeg || nextLeg.hubId.toLowerCase() !== destHub.id.toLowerCase())) {
             const existingDestIdx = route.findIndex((l) => l.hubId.toLowerCase() === destHub.id.toLowerCase());
             if (existingDestIdx !== -1) {
               route[existingDestIdx] = {
@@ -745,7 +774,7 @@ export async function POST(req: NextRequest) {
                 route[s].sequence = s + 1;
               }
             }
-          } else if (nextLeg) {
+          } else if (nextLeg && !isLastMile) {
             route[legIndex + 1] = {
               ...route[legIndex + 1],
               status: "incoming",
@@ -755,12 +784,31 @@ export async function POST(req: NextRequest) {
 
         const containerNote = effectiveContainerId ? ` · Container: [${effectiveContainerId}]` : "";
 
-        if (transitMode === "train" && railFreight) {
+        if (isLastMile) {
+          eventTitle = `Out for Delivery: Package on the way near location (Arrives Afternoon/Evening)`;
+          eventDesc = `Consignment #${targetOrder.orderNumber} departed final hub ${targetHub.name} with local courier/rider [Vehicle: ${vehicleNo}]. En route to customer address (${targetOrder.customer.address}, ${targetOrder.customer.city}). Scheduled arrival: Afternoon/Evening window.`;
+          deliveryStatus = "out_for_delivery";
+        } else if (transitMode === "train" && railFreight) {
           eventTitle = `Outbound Rail Dispatched (PMS): ${railFreight.sourceStationCode || "HWH"} ➔ ${railFreight.destinationStationCode || "ASN"}`;
           eventDesc = `Consignment #${targetOrder.orderNumber} loaded and departing via Indian Railways (PMS): Train #${railFreight.trainNumber || "12302"} (${railFreight.trainName || "Express"}) [${railFreight.sourceStationCode || "HWH"} Dep: ${railFreight.departureTime || "14:05"} ➔ ${railFreight.destinationStationCode || "ASN"} Arr: ${railFreight.arrivalTime || "17:15"}] · PWB/PRR: ${railFreight.pwbNumber || "PWB-74829"} · Coach: ${railFreight.spaceAllocationId || "F-SLR"} (${railFreight.freightScale || "Scale-R"}) · Date: ${railFreight.departureDate} · Loading Manifest: ${railFreight.loadingManifestId || "LMF-001"}. Electronic FOIS Rake Tracking Active.`;
+          deliveryStatus = "in_transit";
         } else if (transitMode === "plane" && airCargo) {
           eventTitle = `Outbound Air Cargo Dispatched (IATA): ${airCargo.sourceAirportCode || "DEL"} ➔ ${airCargo.destAirportCode || "CCU"}`;
           eventDesc = `Consignment #${targetOrder.orderNumber} loaded and departing via Air Cargo (IATA): Flight #${airCargo.flightNumber || "6E-204"} (${airCargo.airline || "Cargo Fleet"}) [${airCargo.sourceAirportCode || "DEL"} ➔ ${airCargo.destAirportCode || "CCU"}] · Master AWB: ${airCargo.awbNumber || "098-84729103"} · ULD Box: ${airCargo.uldId || "AKE-14920"} · Stowage: ${airCargo.bayLocation || "Forward Hold"} · Flight Manifest: ${airCargo.flightManifestId || "FLM-001"}. ADS-B FlightAware Telemetry Active.`;
+          deliveryStatus = "in_transit";
+        } else if (transitMode === "ship" && oceanFreight) {
+          eventTitle = `Outbound Ocean Freight Dispatched: ${oceanFreight.sourcePortCode || "INNSA"} ➔ ${oceanFreight.destPortCode || "INHAL"}`;
+          eventDesc = `Consignment #${targetOrder.orderNumber} stowed in Container [${oceanFreight.containerId || effectiveContainerId || "MSKU-982104-7"}] (Seal #${oceanFreight.sealNumber || "SEAL-88219"}) aboard Vessel ${oceanFreight.vesselName || "MV Ocean Carrier"} (${oceanFreight.imoNumber || "IMO 9382014"}) [${oceanFreight.sourcePortName || "Origin Port"} ➔ ${oceanFreight.destPortName || "Destination Port"}] · Voyage: ${oceanFreight.voyageNumber || "VOY-2026-09E"} · Bill of Lading: ${oceanFreight.billOfLading || "BL-MSC-IN-994821"} · Carrier: ${oceanFreight.shippingLine || "Maersk Line"}. Marine AIS Vessel Tracking Active.`;
+          deliveryStatus = "in_transit";
+        } else if ((transitMode === "bike" || transitMode === "van" || transitMode === "truck") && localDelivery) {
+          const isDoorstep = isLastMile || isDestinationClose;
+          eventTitle = isDoorstep
+            ? `Out For Delivery [Doorstep Handover]: ${localDelivery.vehicleType?.toUpperCase() || "VAN"} [${localDelivery.vehicleNumber || vehicleNo}]`
+            : `Outbound ${String(transitMode).toUpperCase()} Dispatched: ${targetHub.name} ➔ ${destHub?.name || "Next Hub"}`;
+          eventDesc = isDoorstep
+            ? `Package #${targetOrder.orderNumber} en route to customer destination address: ${localDelivery.deliveryAddress || targetOrder.customer.address} (Contact: ${localDelivery.customerContact || targetOrder.customer.contact || targetOrder.customer.email || "+91 81055 42318"}). Driver: ${localDelivery.driverName || "Delivery Specialist"} (${localDelivery.driverContact || "+91 98301 23456"}). Scheduled window: Afternoon/Evening. 5-Min Alive Gate OTP Handover active.`
+            : `Consignment #${targetOrder.orderNumber} loaded and departed via ${String(transitMode).toUpperCase()} [Plate: ${localDelivery.vehicleNumber || vehicleNo}]. Driver: ${localDelivery.driverName || "Fleet Driver"} (${localDelivery.driverContact || "+91 98301 23456"}).`;
+          deliveryStatus = isDoorstep ? "out_for_delivery" : "in_transit";
         } else if (dispatchCategory === "b2c_individual_courier" && courierService) {
           const isAncCustom = courierService.provider === "anc_custom";
           eventTitle = isAncCustom
@@ -769,11 +817,12 @@ export async function POST(req: NextRequest) {
           eventDesc = isAncCustom
             ? `Consignment #${targetOrder.orderNumber} dispatched via ANC Custom Delivery (In-House Priority Fleet) · Waybill/AWB: ${courierService.trackingAwb} · Secure direct chain-of-custody. Dedicated Rider: ${courierService.riderName || "ANC Fleet Specialist"} (${courierService.riderContact || "+91 98301 23456"}). Supply chain strategy shielded.`
             : `Consignment #${targetOrder.orderNumber} dispatched via Courier Partner: ${courierService.providerName || "Courier"} · Tracking AWB: ${courierService.trackingAwb} · Service: ${courierService.serviceType.toUpperCase()} (SLA: ${courierService.estimatedDeliveryDays || 1} day). Rider: ${courierService.riderName || "Courier Agent"}.`;
+          deliveryStatus = "in_transit";
         } else {
           eventTitle = `Outbound Dispatched [On The Way]: ${targetHub.name} ➔ ${destHub?.name || "Next Gateway"}`;
           eventDesc = `Consignment #${targetOrder.orderNumber} loaded and departed ${targetHub.name} en route to ${destName} via ${String(transitMode).toUpperCase()} [Plate/ID: ${vehicleNo}]${containerNote}. Active telematics tracking initiated.`;
+          deliveryStatus = nextLeg ? "in_transit" : "out_for_delivery";
         }
-        deliveryStatus = nextLeg ? "in_transit" : "out_for_delivery";
       }
 
       const updatedEvents: OrderEvent[] = [
@@ -806,6 +855,8 @@ export async function POST(req: NextRequest) {
         dispatchCategory: dispatchCategory || (legIndex !== -1 ? route[legIndex]?.dispatchCategory : undefined),
         railFreight: railFreight || (legIndex !== -1 ? route[legIndex]?.railFreight : undefined),
         airCargo: airCargo || (legIndex !== -1 ? route[legIndex]?.airCargo : undefined),
+        oceanFreight: oceanFreight || (legIndex !== -1 ? route[legIndex]?.oceanFreight : undefined),
+        localDelivery: localDelivery || (legIndex !== -1 ? route[legIndex]?.localDelivery : undefined),
         courierService: courierService || (legIndex !== -1 ? route[legIndex]?.courierService : undefined),
         manifestVerified,
         deliveryStatus,
@@ -817,6 +868,161 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         message: `Consignment #${targetOrder.orderNumber} successfully processed at ${targetHub.name}.`,
+        order: updated,
+      });
+    }
+
+    // Action 4B-RTO: Gate Refusal / Exception Handling & Reverse Logistics Initiation (Whiteboard Condition 2)
+    if (action === "gate-exception-rto") {
+      const {
+        reason = "damaged_package",
+        reasonNote = "",
+        carrierRider = "Delivery Partner Agent",
+      } = body;
+
+      const now = new Date().toISOString();
+      const isRedFlag = reason === "customer_refused";
+      const returnTrackingNumber = `RTO-${targetOrder.orderNumber}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const reverseRoute = generateRtoReverseRoute(targetOrder);
+
+      let reasonTitle = "Package Damaged / Unstable Condition";
+      let reasonDetail = "Customer concluded the package is in bad shape / unstable condition and requested refusal. Delivery courier confirmed and marked package unstable.";
+
+      if (reason === "customer_out_of_station") {
+        reasonTitle = "Customer Out of Station / Unreachable";
+        reasonDetail = "Customer is out of station or unreachable at the registered delivery address. Delivery could not be completed.";
+      } else if (reason === "customer_refused") {
+        reasonTitle = "Customer Hostile Refusal [Red Flag Customer]";
+        reasonDetail = "Customer exhibited bad treatment exception, refusing acceptance and scolding delivery partner. Consignment rejected and customer account marked with RED FLAG.";
+      }
+
+      if (reasonNote) {
+        reasonDetail += ` Courier Note: "${reasonNote}".`;
+      }
+
+      const rtoEvent: OrderEvent = {
+        id: "ev-rto-" + Math.random().toString(36).substring(2, 9),
+        title: `Gate Exception: ${reasonTitle} ➔ RTO Initiated`,
+        description: `${reasonDetail} Return to Origin initiated. Consignment returning to local hub returns dock (${reverseRoute[0]?.hubName || "HUB-ASN-01"}).`,
+        timestamp: now,
+        type: "cancellation",
+        actor: carrierRider,
+      };
+
+      const updatedEvents = [...(targetOrder.events || []), rtoEvent];
+
+      const updates: Partial<Order> = {
+        deliveryStatus: "rto_initiated",
+        hubQueueStatus: "incoming",
+        isRedFlagCustomer: isRedFlag || targetOrder.isRedFlagCustomer,
+        gateOtpSession: {
+          active: false,
+          verified: false,
+        },
+        gateException: {
+          reason,
+          reasonNote,
+          isRedFlagCustomer: isRedFlag,
+          reportedAt: now,
+          carrierRider,
+          returnManifestId: `MNF-RTO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+          returnTrackingNumber,
+        },
+        rtoDetails: {
+          initiatedAt: now,
+          currentReturnHubId: reverseRoute[0]?.hubId || "HUB-ASN-01",
+          destinationOriginHubId: reverseRoute[reverseRoute.length - 1]?.hubId || "HUB-DEL-01",
+          returnTrackingNumber,
+          returnStatus: "dock_received",
+          reverseRoute,
+        },
+        events: updatedEvents,
+      };
+
+      const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
+
+      return NextResponse.json({
+        success: true,
+        message: `Gate rejection recorded (${reasonTitle}). Return to Origin (RTO) initiated with tracking #${returnTrackingNumber}.`,
+        order: updated,
+      });
+    }
+
+    // Action 4B-RTO-HUB: Reverse Logistics Hub Processing (Return to Origin Lifecycle)
+    if (action === "rto-hub-action") {
+      const { rtoSubAction = "dock_received", notes = "" } = body;
+      const now = new Date().toISOString();
+      const currentRto = targetOrder.rtoDetails || {
+        initiatedAt: now,
+        currentReturnHubId: "HUB-ASN-01",
+        destinationOriginHubId: "HUB-DEL-01",
+        returnTrackingNumber: `RTO-${targetOrder.orderNumber}`,
+        returnStatus: "dock_received" as const,
+        reverseRoute: generateRtoReverseRoute(targetOrder),
+      };
+
+      let newStatus: any = currentRto.returnStatus;
+      let newDeliveryStatus: any = targetOrder.deliveryStatus;
+      let evTitle = "";
+      let evDesc = "";
+
+      if (rtoSubAction === "dock_received") {
+        newStatus = "dock_received";
+        newDeliveryStatus = "rto_initiated";
+        evTitle = `RTO Parcel Scanned at Local Hub Returns Dock (${currentRto.currentReturnHubId})`;
+        evDesc = `Returned parcel checked in at local delivery hub returns dock. Barcode verified. Preparing reverse line-haul transit towards origin warehouse (${currentRto.destinationOriginHubId}).`;
+      } else if (rtoSubAction === "reverse_transit") {
+        newStatus = "reverse_transit";
+        newDeliveryStatus = "rto_in_transit";
+        evTitle = `RTO In Reverse Line-Haul Transit: ${currentRto.currentReturnHubId} ➔ ${currentRto.destinationOriginHubId}`;
+        evDesc = `Consignment #${targetOrder.orderNumber} loaded on reverse freight carrier. Traveling back through intermediate gateways towards origin fulfillment center.`;
+      } else if (rtoSubAction === "origin_received") {
+        newStatus = "origin_received";
+        newDeliveryStatus = "rto_in_transit";
+        evTitle = `RTO Parcel Arrived at Origin Fulfillment Center (${currentRto.destinationOriginHubId})`;
+        evDesc = `Returned consignment received at origin fulfillment center dock. Handed over to QA & Inventory Inspection division.`;
+      } else if (rtoSubAction === "qa_restock_refund") {
+        const isDamaged = targetOrder.gateException?.reason === "damaged_package";
+        newStatus = isDamaged ? "qa_quarantined" : "restocked_refunded";
+        newDeliveryStatus = "rto_delivered_to_origin";
+        evTitle = isDamaged
+          ? `Origin QA Inspection Complete: Package Damaged ➔ Quarantined`
+          : `Origin QA Verified ➔ Restocked to Inventory & Customer Refund Auto-Triggered`;
+        evDesc = isDamaged
+          ? `Package confirmed damaged/unstable in transit. Moved to salvage quarantine. Transit damage insurance claim logged.`
+          : `Package contents verified intact. Returned to warehouse shelf stock. Customer payment of $${targetOrder.total} refunded via Razorpay.`;
+      }
+
+      const rtoHubEvent: OrderEvent = {
+        id: "ev-rto-hub-" + Math.random().toString(36).substring(2, 9),
+        title: evTitle,
+        description: `${evDesc} ${notes ? `Operator note: ${notes}` : ""}`,
+        timestamp: now,
+        type: rtoSubAction === "qa_restock_refund" ? "refund" : "delivery",
+        actor: "Origin Logistics QA",
+      };
+
+      const updatedEvents = [...(targetOrder.events || []), rtoHubEvent];
+      const updates: Partial<Order> = {
+        deliveryStatus: newDeliveryStatus,
+        rtoDetails: {
+          ...currentRto,
+          returnStatus: newStatus,
+        },
+        paymentStatus: (rtoSubAction === "qa_restock_refund" && targetOrder.gateException?.reason !== "damaged_package")
+          ? "refunded"
+          : targetOrder.paymentStatus,
+        refundAmount: (rtoSubAction === "qa_restock_refund" && targetOrder.gateException?.reason !== "damaged_package")
+          ? targetOrder.total
+          : targetOrder.refundAmount,
+        events: updatedEvents,
+      };
+
+      const updated = await saveOrder(targetOrder.orderNumber, updates, targetOrder);
+
+      return NextResponse.json({
+        success: true,
+        message: `RTO lifecycle updated to ${newStatus}.`,
         order: updated,
       });
     }
