@@ -3,7 +3,9 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProductBySlug, sampleCatalog } from "@/lib/store";
 import { ProductDetailView } from "@/components/ProductDetailView";
-import { ProductData, ColorVariant } from "@/types";
+import { ProductData, ColorVariant, normalizeProductData } from "@/types";
+import { connectDB } from "@/lib/db";
+import { ProductModel } from "@/lib/models";
 
 export const instant = false;
 
@@ -11,15 +13,46 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-export async function generateStaticParams() {
-  return sampleCatalog.map((product) => ({
-    slug: product.slug,
-  }));
+async function fetchProduct(slug: string): Promise<ProductData | null> {
+  try {
+    const db = await connectDB();
+    if (db) {
+      const doc = await ProductModel.findOne({
+        $or: [{ slug }, { productId: slug }, { id: slug }],
+      }).lean();
+      if (doc) {
+        return normalizeProductData(doc as any);
+      }
+    }
+  } catch (err) {
+    console.warn("DB product lookup notice:", err);
+  }
+  const fallback = getProductBySlug(slug);
+  return fallback ? normalizeProductData(fallback) : null;
+}
+
+async function fetchRelatedProducts(currentSlug: string): Promise<ProductData[]> {
+  try {
+    const db = await connectDB();
+    if (db) {
+      const docs = await ProductModel.find({
+        $and: [{ slug: { $ne: currentSlug } }, { productId: { $ne: currentSlug } }],
+      })
+        .limit(4)
+        .lean();
+      if (docs && docs.length > 0) {
+        return docs.map((d: any) => normalizeProductData(d));
+      }
+    }
+  } catch (err) {
+    console.warn("DB related products notice:", err);
+  }
+  return sampleCatalog.filter((p) => p.slug !== currentSlug).map(normalizeProductData);
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = getProductBySlug(slug);
+  const product = await fetchProduct(slug);
 
   if (!product) {
     return {
@@ -69,7 +102,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function ProductSlugPage({ params }: PageProps) {
   const { slug } = await params;
 
-  const rawProduct = getProductBySlug(slug);
+  const rawProduct = await fetchProduct(slug);
 
   if (!rawProduct) {
     notFound();
@@ -78,9 +111,7 @@ export default async function ProductSlugPage({ params }: PageProps) {
   const product: ProductData = JSON.parse(JSON.stringify(rawProduct));
 
   // Filter other products for the "More from ancwave Acoustics" lineup recommendations
-  const relatedProducts: ProductData[] = JSON.parse(
-    JSON.stringify(sampleCatalog.filter((p) => p.slug !== product.slug))
-  );
+  const relatedProducts: ProductData[] = await fetchRelatedProducts(product.slug);
 
   // Structured JSON-LD SEO Schema per specification
   const productJsonLd = {

@@ -17,6 +17,7 @@ import {
   Sparkles,
   ArrowRight,
   Headphones,
+  PlusCircle,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -34,6 +35,7 @@ export default function ProductsCatalogPage() {
   const { addItem } = useCart();
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
   const [sortOption, setSortOption] = useState<SortOption>("featured");
+  const [isLoading, setIsLoading] = useState(true);
   const [catalogProducts, setCatalogProducts] = useState<ProductData[]>(() =>
     sampleCatalog.map(normalizeProductData)
   );
@@ -44,14 +46,23 @@ export default function ProductsCatalogPage() {
 
   // Fetch updated catalog products from database
   useEffect(() => {
+    setIsLoading(true);
     fetch("/api/product?all=true")
       .then((res) => res.json())
       .then((data) => {
         if (data.products && Array.isArray(data.products)) {
           setCatalogProducts(data.products.map(normalizeProductData));
+        } else {
+          setCatalogProducts([]);
         }
       })
-      .catch(() => { });
+      .catch((err) => {
+        console.warn("Failed to fetch catalog products:", err);
+        setCatalogProducts([]);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   // Compute category tabs
@@ -200,11 +211,11 @@ export default function ProductsCatalogPage() {
             {/* Right Stat Widget */}
             <div className="flex items-center gap-3 shrink-0 self-start md:self-auto pt-2 md:pt-0">
               <span className="text-4xl sm:text-5xl font-bold font-mono text-blue-600 tracking-tight">
-                {String(catalogProducts.length).padStart(2, "0")}
+                {isLoading ? "--" : String(catalogProducts.length).padStart(2, "0")}
               </span>
               <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 leading-snug">
                 <span className="block font-semibold text-zinc-600">HARDWARE PLATFORMS</span>
-                <span className="block">ZERO COMPROMISE</span>
+                <span className="block">{catalogProducts.length > 0 ? "ZERO COMPROMISE" : "CATALOG STANDBY"}</span>
               </div>
             </div>
           </div>
@@ -212,69 +223,166 @@ export default function ProductsCatalogPage() {
       </section>
 
       {/* Catalog Controls Bar */}
-      <section className="sticky top-16 z-30 bg-[#FBFBFA]/95 backdrop-blur-md border-b border-[#EAEAE5] py-3.5">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
-            {categoryTabs.map((cat) => {
-              const isActive = selectedCategory === cat.slug;
-              return (
-                <button
-                  key={cat.slug}
-                  onClick={() => setSelectedCategory(cat.slug)}
-                  className={`px-4 py-2 rounded-full text-xs font-medium transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${isActive
-                    ? "bg-blue-600 text-white shadow-xs font-semibold"
-                    : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300 hover:text-zinc-900"
-                    }`}
-                >
-                  <span>{cat.label}</span>
-                  <span className={`text-[10px] font-mono ${isActive ? "text-blue-100" : "text-zinc-400"}`}>
-                    ({cat.count})
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+      {!isLoading && catalogProducts.length > 0 && (
+        <section className="sticky top-16 z-30 bg-[#FBFBFA]/95 backdrop-blur-md border-b border-[#EAEAE5] py-3.5">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
+              {categoryTabs.map((cat) => {
+                const isActive = selectedCategory === cat.slug;
+                return (
+                  <button
+                    key={cat.slug}
+                    onClick={() => setSelectedCategory(cat.slug)}
+                    className={`px-4 py-2 rounded-full text-xs font-medium transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${isActive
+                      ? "bg-blue-600 text-white shadow-xs font-semibold"
+                      : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300 hover:text-zinc-900"
+                      }`}
+                  >
+                    <span>{cat.label}</span>
+                    <span className={`text-[10px] font-mono ${isActive ? "text-blue-100" : "text-zinc-400"}`}>
+                      ({cat.count})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
-          {/* Sort Control */}
-          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 text-xs">
-            <span className="text-zinc-400 font-medium hidden xs:inline">Sort by</span>
-            <div className="relative">
-              <select
-                value={sortOption}
-                onChange={(e) => setSortOption(e.target.value as SortOption)}
-                aria-label="Sort product catalog"
-                className="pl-3 pr-8 py-2 rounded-full border border-zinc-200 bg-white text-xs font-medium text-zinc-800 focus:outline-none focus:border-blue-600 appearance-none cursor-pointer"
-              >
-                <option value="featured">Featured acoustics</option>
-                <option value="price-asc">Price: Low to high</option>
-                <option value="price-desc">Price: High to low</option>
-                <option value="rating">Highest customer rating</option>
-              </select>
-              <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            {/* Sort Control */}
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 text-xs">
+              <span className="text-zinc-400 font-medium hidden xs:inline">Sort by</span>
+              <div className="relative">
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value as SortOption)}
+                  aria-label="Sort product catalog"
+                  className="pl-3 pr-8 py-2 rounded-full border border-zinc-200 bg-white text-xs font-medium text-zinc-800 focus:outline-none focus:border-blue-600 appearance-none cursor-pointer"
+                >
+                  <option value="featured">Featured acoustics</option>
+                  <option value="price-asc">Price: Low to high</option>
+                  <option value="price-desc">Price: High to low</option>
+                  <option value="rating">Highest customer rating</option>
+                </select>
+                <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Catalog Inventory Meta Strip */}
       <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-10 pt-8 flex items-center justify-between text-xs text-zinc-400 font-medium">
-        <span>{filteredProducts.length} products. One uncompromising sound.</span>
+        {isLoading ? (
+          <span className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+            <span>Connecting to ancwave inventory...</span>
+          </span>
+        ) : catalogProducts.length > 0 ? (
+          <span>{filteredProducts.length} product{filteredProducts.length === 1 ? "" : "s"}. One uncompromising sound.</span>
+        ) : (
+          <span className="font-mono text-[11px] text-zinc-500">Catalog Inventory: 0 Active Models</span>
+        )}
         <span className="flex items-center gap-1.5 text-zinc-500">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          All models in stock · Ready to ship
+          {isLoading ? (
+            <span className="text-zinc-400 font-mono text-[11px]">Syncing...</span>
+          ) : catalogProducts.length > 0 ? (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              All models in stock · Ready to ship
+            </>
+          ) : (
+            <span className="flex items-center gap-1.5 text-amber-600 font-mono text-[11px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Catalog standby · Ready for product registration
+            </span>
+          )}
         </span>
       </div>
 
-      {/* Product Cards Grid */}
+      {/* Product Cards Grid & Empty State */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {catalogProducts.length === 0 ? (
-            Array.from({ length: 6 }).map((_, i) => (
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
               <ProductCardSkeleton key={i} />
-            ))
-          ) : (
-            filteredProducts.map((product, pIdx) => (
+            ))}
+          </div>
+        ) : catalogProducts.length === 0 ? (
+          <div className="py-12 sm:py-20 text-center max-w-2xl mx-auto px-4">
+            <div className="bg-white border border-zinc-200/90 rounded-3xl p-8 sm:p-12 shadow-sm space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-mono font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>MongoDB Connected · Pure Production Catalog</span>
+              </div>
+
+              <div className="w-16 h-16 rounded-2xl bg-zinc-50 border border-zinc-200/80 flex items-center justify-center mx-auto text-zinc-400 shadow-2xs">
+                <Headphones className="w-8 h-8 stroke-[1.5] text-zinc-400" />
+              </div>
+
+              <div className="space-y-2">
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight font-sans">
+                  No Products Available in Catalog
+                </h2>
+                <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-lg mx-auto">
+                  All mock products, demo reviews, and test models have been cleared. Your store is in its authentic, pure state connected directly to <strong className="font-mono text-zinc-800">ancwaveDB</strong>. Add your first hardware model in the Admin Console to launch it here.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 grid grid-cols-3 gap-2 text-left">
+                <div>
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase font-bold block">CATALOG</span>
+                  <span className="text-sm font-bold font-mono text-zinc-900">0 Active</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase font-bold block">STATUS</span>
+                  <span className="text-sm font-bold font-mono text-amber-600">Standby</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase font-bold block">DATABASE</span>
+                  <span className="text-sm font-bold font-mono text-emerald-600">Atlas Live</span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <Link
+                  href="/admin"
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Enter Admin Console & Add Product</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href="/"
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Return to Home</span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="py-16 sm:py-20 text-center max-w-md mx-auto px-4">
+            <div className="w-14 h-14 rounded-2xl bg-zinc-100 border border-zinc-200 flex items-center justify-center mx-auto mb-4 text-zinc-400">
+              <SlidersHorizontal className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-zinc-900">
+              No products found in this category
+            </h3>
+            <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
+              No audio hardware matches the "{selectedCategory}" category filter.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSelectedCategory("all")}
+              className="mt-6 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Show all products ({catalogProducts.length})
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredProducts.map((product, pIdx) => (
               <ProductCatalogCard
                 key={`cat-card-${product.id || product.slug || pIdx}-${pIdx}`}
                 product={product}
@@ -282,25 +390,28 @@ export default function ProductsCatalogPage() {
                 isCompared={comparedSlugs.includes(product.slug)}
                 onToggleCompare={() => toggleCompare(product.slug)}
               />
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Footer Subline & Quick Link to Comparison Matrix */}
-        <div className="mt-8 pt-4 border-t border-zinc-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
-          <span>Prices in USD. Concept pricing and specifications shown for this catalog.</span>
-          <a
-            href="#compare-matrix"
-            className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 transition-colors group cursor-pointer"
-          >
-            <span>Compare the lineup</span>
-            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-          </a>
-        </div>
+        {!isLoading && catalogProducts.length > 0 && (
+          <div className="mt-8 pt-4 border-t border-zinc-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
+            <span>Prices in USD. Concept pricing and specifications shown for this catalog.</span>
+            <a
+              href="#compare-matrix"
+              className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 transition-colors group cursor-pointer"
+            >
+              <span>Compare the lineup</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+            </a>
+          </div>
+        )}
       </main>
 
       {/* Lineup Comparison Matrix Section */}
-      <section id="compare-matrix" className="py-16 sm:py-20 bg-white border-t border-[#EAEAE5] scroll-mt-20">
+      {!isLoading && catalogProducts.length > 0 && (
+        <section id="compare-matrix" className="py-16 sm:py-20 bg-white border-t border-[#EAEAE5] scroll-mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div className="space-y-1.5">
@@ -541,6 +652,7 @@ export default function ProductsCatalogPage() {
           </p>
         </div>
       </section>
+      )}
 
       {/* Brand Guarantees Strip */}
       <section className="bg-[#FBFBFA] border-t border-[#EAEAE5] py-12">

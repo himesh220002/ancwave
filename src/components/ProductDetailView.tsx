@@ -1322,6 +1322,13 @@ export function ProductDetailView({
                   <ReviewCardSkeleton />
                   <ReviewCardSkeleton />
                 </>
+              ) : filteredReviews.length === 0 ? (
+                <div className="col-span-full py-10 text-center bg-white rounded-3xl border border-[#EAEAE5] p-8 space-y-2">
+                  <p className="text-xs font-semibold text-zinc-900">No verified reviews submitted yet</p>
+                  <p className="text-[11px] text-zinc-500 max-w-sm mx-auto">
+                    Be the first verified customer to test and publish acoustic feedback for this audio platform.
+                  </p>
+                </div>
               ) : (
                 filteredReviews.map((review, rIdx) => (
                 <div
@@ -1708,6 +1715,7 @@ export function ProductDetailView({
           SECTION E: CROSS-LINKING & BRAND LINEUP CAROUSEL
           "More from ancwave Acoustics"
           ========================================================================= */}
+      {relatedProducts && relatedProducts.length > 0 && (
       <section className="py-16 sm:py-20 bg-white border-b border-[#EAEAE5]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-8">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -1787,6 +1795,7 @@ export function ProductDetailView({
           </div>
         </div>
       </section>
+      )}
 
       {/* Cart Drawer & Minimalist Global Footer */}
       <CartDrawer />
