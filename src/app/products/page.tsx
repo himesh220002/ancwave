@@ -500,11 +500,19 @@ export default function ProductsCatalogPage() {
                           <div className="text-sm font-mono font-bold text-blue-600">
                             ${Number(p.price).toFixed(2)}
                           </div>
-                          <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-500">
-                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                            <span>{p.averageRating || p.rating || 4.9}</span>
-                            <span className="text-zinc-400 font-mono">({p.reviewCount || 128})</span>
-                          </div>
+                          {(p.reviewCount || 0) > 0 ? (
+                            <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-500">
+                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                              <span>{Number(p.averageRating || p.rating || 0).toFixed(1)}</span>
+                              <span className="text-zinc-400 font-mono">({p.reviewCount})</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-400">
+                              <Star className="w-3 h-3 text-zinc-300" />
+                              <span>0/0</span>
+                              <span className="font-mono">(0)</span>
+                            </div>
+                          )}
 
                           <button
                             type="button"
@@ -1048,9 +1056,19 @@ function ProductCatalogCard({
 
         {/* Rating Badge */}
         <div className="absolute bottom-4 right-4 flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md text-xs font-semibold text-zinc-900 border border-zinc-200 shadow-2xs">
-          <Star className="w-3.5 h-3.5  text-blue-400" />
-          <span>{product.averageRating || product.rating}</span>
-          <span className="text-[10px] text-zinc-400 font-normal">({product.reviewCount})</span>
+          {(product.reviewCount || 0) > 0 ? (
+            <>
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span>{Number(product.averageRating || product.rating || 0).toFixed(1)}</span>
+              <span className="text-[10px] text-zinc-400 font-normal">({product.reviewCount})</span>
+            </>
+          ) : (
+            <>
+              <Star className="w-3.5 h-3.5 text-zinc-300" />
+              <span className="text-zinc-500">0/0</span>
+              <span className="text-[10px] text-zinc-400 font-normal">(0)</span>
+            </>
+          )}
         </div>
       </div>
 

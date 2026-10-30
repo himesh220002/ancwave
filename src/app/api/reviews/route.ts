@@ -17,8 +17,9 @@ export async function GET(req: NextRequest) {
     const db = await connectDB();
     if (db) {
       try {
+        const queryIds = Array.from(new Set([productId, productId.toLowerCase()])).filter(Boolean);
         const dbReviews = await ReviewModel.find({
-          productId: { $in: [productId, productId.toLowerCase(), "form-01", "ANC-FORM-01"] },
+          productId: { $in: queryIds },
         }).sort({ createdAt: -1 });
 
         if (dbReviews && dbReviews.length > 0) {
@@ -47,8 +48,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Fallback to in-memory store ONLY if DB is offline
-    if (!db && (!reviews || reviews.length === 0)) {
+    // Fallback to in-memory store ONLY if DB is offline and specifically for form-01
+    if (!db && productId.toLowerCase() === "form-01" && (!reviews || reviews.length === 0)) {
       reviews = store.getReviews(productId);
     }
 
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
       reviewCount > 0
         ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
         : 0;
-    const averageRating = Math.round(avg * 10) / 10;
+    const averageRating = reviewCount > 0 ? Math.round(avg * 10) / 10 : 0;
 
     // Star distribution (1 to 5)
     const distribution: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };

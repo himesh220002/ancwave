@@ -147,6 +147,11 @@ export async function PATCH(req: NextRequest) {
       type,
       baseDiscount,
       globalSpecs,
+      explodedView,
+      primaryValueCallouts,
+      tabbedSpecs,
+      hygienePolicy,
+      qna,
     } = body;
 
     const targetSlug = slug || "form-01";
@@ -201,6 +206,11 @@ export async function PATCH(req: NextRequest) {
         baseDiscount: typeof baseDiscount === "number" ? baseDiscount : updatedProduct.baseDiscount,
         globalSpecs: globalSpecs || updatedProduct.globalSpecs,
         variantGroups: variantGroups as IVariantGroup[],
+        explodedView: explodedView !== undefined ? explodedView : updatedProduct.explodedView,
+        primaryValueCallouts: primaryValueCallouts !== undefined ? primaryValueCallouts : updatedProduct.primaryValueCallouts,
+        tabbedSpecs: tabbedSpecs !== undefined ? tabbedSpecs : updatedProduct.tabbedSpecs,
+        hygienePolicy: hygienePolicy !== undefined ? hygienePolicy : updatedProduct.hygienePolicy,
+        qna: qna !== undefined ? qna : updatedProduct.qna,
       });
     }
     // 6. Full child variants list or metadata
@@ -221,6 +231,11 @@ export async function PATCH(req: NextRequest) {
         baseDiscount: typeof baseDiscount === "number" ? baseDiscount : updatedProduct.baseDiscount,
         globalSpecs: globalSpecs || updatedProduct.globalSpecs,
         childVariants: childVariants as IVariant[],
+        explodedView: explodedView !== undefined ? explodedView : updatedProduct.explodedView,
+        primaryValueCallouts: primaryValueCallouts !== undefined ? primaryValueCallouts : updatedProduct.primaryValueCallouts,
+        tabbedSpecs: tabbedSpecs !== undefined ? tabbedSpecs : updatedProduct.tabbedSpecs,
+        hygienePolicy: hygienePolicy !== undefined ? hygienePolicy : updatedProduct.hygienePolicy,
+        qna: qna !== undefined ? qna : updatedProduct.qna,
       });
     }
     // 7. Simple master stock / price adjustment
@@ -234,6 +249,15 @@ export async function PATCH(req: NextRequest) {
         newPrice
       );
     }
+
+    // Direct section updates if passed
+    if (explodedView !== undefined) updatedProduct.explodedView = explodedView;
+    if (primaryValueCallouts !== undefined) updatedProduct.primaryValueCallouts = primaryValueCallouts;
+    if (tabbedSpecs !== undefined) updatedProduct.tabbedSpecs = tabbedSpecs;
+    if (hygienePolicy !== undefined) updatedProduct.hygienePolicy = hygienePolicy;
+    if (qna !== undefined) updatedProduct.qna = qna;
+    if (name && !updatedProduct.name) updatedProduct.name = name;
+    if (description && !updatedProduct.description) updatedProduct.description = description;
 
     if (typeof isFlashSale === "boolean") {
       updatedProduct.isFlashSale = isFlashSale;
@@ -257,6 +281,11 @@ export async function PATCH(req: NextRequest) {
               colorVariants: cleanProduct.variants,
               childVariants: cleanProduct.childVariants,
               variantGroups: cleanProduct.variantGroups,
+              explodedView: cleanProduct.explodedView,
+              primaryValueCallouts: cleanProduct.primaryValueCallouts,
+              tabbedSpecs: cleanProduct.tabbedSpecs,
+              hygienePolicy: cleanProduct.hygienePolicy,
+              qna: cleanProduct.qna,
             },
           },
           { upsert: true, returnDocument: "after" }

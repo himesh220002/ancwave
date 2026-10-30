@@ -94,8 +94,9 @@ export function ProductDetailView({
       .then((data) => {
         if (isMounted && data.success && data.product) {
           setLiveProduct(data.product);
-          if (data.product.averageRating) setLiveRating(data.product.averageRating);
-          if (typeof data.product.reviewCount === "number") setLiveReviewCount(data.product.reviewCount);
+          const count = typeof data.product.reviewCount === "number" ? data.product.reviewCount : 0;
+          setLiveReviewCount(count);
+          setLiveRating(count > 0 ? (data.product.averageRating || data.product.rating || 0) : 0);
         }
       })
       .catch(() => {});
@@ -107,9 +108,11 @@ export function ProductDetailView({
   const p = liveProduct || product;
 
   // Dynamic reviews & live rating state
-  const [reviewsList, setReviewsList] = useState<(Review & IReview)[]>(sampleReviews);
-  const [liveRating, setLiveRating] = useState<number>(p.averageRating || p.rating);
-  const [liveReviewCount, setLiveReviewCount] = useState<number>(p.reviewCount);
+  const [reviewsList, setReviewsList] = useState<(Review & IReview)[]>([]);
+  const [liveRating, setLiveRating] = useState<number>(
+    (p.reviewCount || 0) > 0 ? (p.averageRating || p.rating || 0) : 0
+  );
+  const [liveReviewCount, setLiveReviewCount] = useState<number>(p.reviewCount || 0);
   const [eligibility, setEligibility] = useState<{
     eligible: boolean;
     reason?: string;
@@ -328,11 +331,10 @@ export function ProductDetailView({
       const res = await fetch(`/api/reviews?productId=${targetId}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.reviews && data.reviews.length > 0) {
-          setReviewsList(data.reviews);
-          if (typeof data.averageRating === "number") setLiveRating(data.averageRating);
-          if (typeof data.reviewCount === "number") setLiveReviewCount(data.reviewCount);
-        }
+        setReviewsList(data.reviews || []);
+        const count = typeof data.reviewCount === "number" ? data.reviewCount : 0;
+        setLiveReviewCount(count);
+        setLiveRating(count > 0 && typeof data.averageRating === "number" ? data.averageRating : 0);
       }
 
       // 2. Query conditional review validation (LoggedIn + Bought)
@@ -709,11 +711,19 @@ export function ProductDetailView({
                   <span className="text-[11px] font-mono tracking-widest text-blue-600 uppercase font-semibold">
                     {product.category}
                   </span>
-                  <div className="flex items-center gap-1 text-xs font-semibold text-zinc-900">
-                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    <span>{liveRating}</span>
-                    <span className="text-zinc-400 font-normal">({liveReviewCount} verified reviews)</span>
-                  </div>
+                  {liveReviewCount > 0 ? (
+                    <div className="flex items-center gap-1 text-xs font-semibold text-zinc-900">
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      <span>{Number(liveRating).toFixed(1)}</span>
+                      <span className="text-zinc-400 font-normal">({liveReviewCount} verified reviews)</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-xs font-semibold text-zinc-500">
+                      <Star className="w-3.5 h-3.5 text-zinc-300" />
+                      <span>0/0</span>
+                      <span className="text-zinc-400 font-normal">(0 verified reviews)</span>
+                    </div>
+                  )}
                 </div>
 
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-[#111111]">
@@ -993,20 +1003,20 @@ export function ProductDetailView({
           </div>
 
           {/* Interactive X-Ray Exploded View Card */}
-          {product.explodedView && (
+          {p.explodedView && (
             <div className="rounded-3xl bg-white border border-[#EAEAE5] overflow-hidden p-6 sm:p-10 shadow-xs">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
                 {/* Exploded Visual Diagram */}
                 <div className="lg:col-span-7 relative aspect-4/3 sm:aspect-16/10 rounded-2xl bg-[#F0EFEA] overflow-hidden flex items-center justify-center border border-zinc-200/70">
                   <Image
-                    src={product.explodedView.image}
-                    alt={product.explodedView.caption}
+                    src={p.explodedView.image}
+                    alt={p.explodedView.caption}
                     fill
                     className="object-contain p-4"
                     sizes="(max-width: 1024px) 100vw, 55vw"
                   />
                   <div className="absolute top-4 left-4 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-md text-white text-[10px] font-mono tracking-wider font-semibold">
-                    {product.explodedView.badge}
+                    {p.explodedView.badge}
                   </div>
                 </div>
 
@@ -1017,12 +1027,12 @@ export function ProductDetailView({
                       Precision Component Assembly
                     </h3>
                     <p className="text-xs text-zinc-500">
-                      {product.explodedView.caption} Click any numbered stage to inspect acoustic engineering details:
+                      {p.explodedView.caption} Click any numbered stage to inspect acoustic engineering details:
                     </p>
                   </div>
 
                   <div className="space-y-2.5">
-                    {product.explodedView.callouts.map((c, idx) => (
+                    {p.explodedView.callouts.map((c, idx) => (
                       <button
                         key={c.number}
                         type="button"
@@ -1059,9 +1069,9 @@ export function ProductDetailView({
           )}
 
           {/* Primary Category Value Callouts */}
-          {product.primaryValueCallouts && (
+          {p.primaryValueCallouts && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {product.primaryValueCallouts.map((callout, idx) => (
+              {p.primaryValueCallouts.map((callout, idx) => (
                 <div
                   key={callout.title}
                   className="rounded-3xl bg-white border border-[#EAEAE5] p-6 sm:p-7 space-y-3 hover:border-zinc-400 transition-colors shadow-2xs"
@@ -1104,7 +1114,7 @@ export function ProductDetailView({
             </div>
 
             {/* 3 Tabs Toggle if tabbedSpecs available */}
-            {product.tabbedSpecs && (
+            {p.tabbedSpecs && (
               <div className="flex items-center p-1 bg-zinc-100 rounded-xl">
                 <button
                   type="button"
@@ -1147,9 +1157,9 @@ export function ProductDetailView({
           </div>
 
           {/* Tabbed Specs Table */}
-          {product.tabbedSpecs && (
+          {p.tabbedSpecs && (
             <div className="rounded-2xl border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
-              {product.tabbedSpecs[activeSpecTab].map((row, idx) => (
+              {p.tabbedSpecs[activeSpecTab]?.map((row, idx) => (
                 <div
                   key={row.label}
                   className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
@@ -1175,8 +1185,8 @@ export function ProductDetailView({
           )}
 
           {/* Dynamic Global & Variant-Overridden Specifications (Category-Agnostic with Spec Diversion) */}
-          {(!product.tabbedSpecs && (product.globalSpecs || currentChildVariant?.variantSpecs)) && (() => {
-            const global = product.globalSpecs || {};
+          {(!p.tabbedSpecs && (p.globalSpecs || currentChildVariant?.variantSpecs)) && (() => {
+            const global = p.globalSpecs || {};
             const overrides = currentChildVariant?.variantSpecs || {};
             const allKeys = Array.from(new Set([...Object.keys(global), ...Object.keys(overrides)]));
 
@@ -1262,23 +1272,23 @@ export function ProductDetailView({
       <section id="reviews" className="py-16 sm:py-24 bg-[#FBFBFA] border-b border-[#EAEAE5]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-12">
           {/* Sanitation & Return Policy Warning Banner */}
-          {product.hygienePolicy && (
+          {p.hygienePolicy && (
             <div className="rounded-3xl bg-amber-50/70 border border-amber-200/80 p-6 sm:p-8 space-y-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                 <span className="text-[11px] font-mono tracking-widest text-amber-800 font-bold uppercase">
-                  {product.hygienePolicy.badge}
+                  {p.hygienePolicy.badge}
                 </span>
               </div>
               <h3 className="text-base sm:text-lg font-bold text-zinc-900">
-                {product.hygienePolicy.title}
+                {(p.hygienePolicy.title || "Hygiene Assurance").replace(/Form 01/gi, p.name)}
               </h3>
               <p className="text-xs text-zinc-600 leading-relaxed max-w-4xl">
-                {product.hygienePolicy.description}
+                {(p.hygienePolicy.description || "").replace(/Form 01/gi, p.name)}
               </p>
               <div className="pt-2 text-xs font-medium text-amber-900 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{product.hygienePolicy.exemptionNotice}</span>
+                <span>{p.hygienePolicy.exemptionNotice}</span>
               </div>
             </div>
           )}
@@ -1295,9 +1305,19 @@ export function ProductDetailView({
                 </h2>
               </div>
               <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
-                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                <span className="font-bold text-zinc-900">{liveRating} / 5.0</span>
-                <span>(Based on {liveReviewCount} customer reviews)</span>
+                {liveReviewCount > 0 ? (
+                  <>
+                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                    <span className="font-bold text-zinc-900">{Number(liveRating).toFixed(1)} / 5.0</span>
+                    <span>(Based on {liveReviewCount} customer reviews)</span>
+                  </>
+                ) : (
+                  <>
+                    <Star className="w-4 h-4 text-zinc-300" />
+                    <span className="font-bold text-zinc-500">0 / 0</span>
+                    <span>(0 customer reviews)</span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1664,7 +1684,7 @@ export function ProductDetailView({
           </div>
 
           {/* Interactive Q&A Accordion */}
-          {product.qna && product.qna.length > 0 && (
+          {p.qna && p.qna.length > 0 && (
             <div className="rounded-3xl bg-white border border-[#EAEAE5] p-6 sm:p-8 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
                 <div className="flex items-center gap-2">
@@ -1674,12 +1694,12 @@ export function ProductDetailView({
                   </h3>
                 </div>
                 <span className="text-xs text-zinc-400 font-mono">
-                  {product.qna.length} answered
+                  {p.qna.length} answered
                 </span>
               </div>
 
               <div className="space-y-3">
-                {product.qna.map((item) => {
+                {p.qna.map((item) => {
                   const isOpen = openQnaId === item.id;
                   return (
                     <div
@@ -1692,7 +1712,7 @@ export function ProductDetailView({
                         className="w-full p-4 text-left flex items-center justify-between gap-3 bg-zinc-50/50 hover:bg-zinc-50 transition-colors"
                       >
                         <span className="text-xs sm:text-sm font-bold text-zinc-900">
-                          Q: {item.question}
+                          Q: {(item.question || "").replace(/Form 01/gi, p.name)}
                         </span>
                         <span className="text-xs font-mono text-blue-600 shrink-0">
                           {isOpen ? "− Hide" : "+ Expand"}
@@ -1700,7 +1720,7 @@ export function ProductDetailView({
                       </button>
                       {isOpen && (
                         <div className="p-4 bg-white border-t border-zinc-100 text-xs text-zinc-600 leading-relaxed space-y-2">
-                          <p>{item.answer}</p>
+                          <p>{(item.answer || "").replace(/Form 01/gi, p.name)}</p>
                           <div className="text-[10px] font-mono text-zinc-400 flex items-center gap-2">
                             <span>Answered by {item.author}</span>
                             <span>·</span>

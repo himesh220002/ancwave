@@ -57,7 +57,7 @@ const ProductSchema = new Schema(
     variants: { type: Schema.Types.Mixed, default: [] },
     childVariants: { type: Schema.Types.Mixed, default: [] },
     variantGroups: { type: Schema.Types.Mixed, default: [] },
-    averageRating: { type: Number, default: 5.0 },
+    averageRating: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
 
     // E-Commerce Storefront Compatibility
@@ -76,7 +76,7 @@ const ProductSchema = new Schema(
     warrantyYears: { type: Number, default: 2 },
     returnDays: { type: Number, default: 30 },
     deliveryEstimate: { type: String, default: "Ready to ship · US delivery in 3–5 business days" },
-    rating: { type: Number, default: 5.0 },
+    rating: { type: Number, default: 0 },
     sku: { type: String, default: "ANC-MASTER-01" },
 
     colorVariants: { type: Schema.Types.Mixed, default: [] },

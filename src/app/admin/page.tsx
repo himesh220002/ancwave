@@ -86,6 +86,9 @@ import {
   Compass,
   Calendar,
   GripVertical,
+  BatteryCharging,
+  HelpCircle,
+  FileQuestion,
 } from "lucide-react";
 import {
   ProductData,
@@ -106,6 +109,12 @@ import {
   CourierServiceDetails,
   DispatchCategory,
   LogisticsHub,
+  ExplodedViewData,
+  ValueCallout,
+  TabbedSpecs,
+  TabbedSpecRow,
+  HygienePolicyData,
+  ProductQnA,
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/components/Toaster";
@@ -745,6 +754,79 @@ export default function AdminPage() {
   const [variantGroups, setVariantGroups] = useState<IVariantGroup[]>([]);
   const [isSavingVariants, setIsSavingVariants] = useState<boolean>(false);
 
+  // 5 Dynamic Product Detail Sections State
+  const [explodedView, setExplodedView] = useState<ExplodedViewData>({
+    image: "/images/exploded-view.png",
+    badge: "EXPLODED ARCHITECTURE",
+    caption: "Precision Component Assembly",
+    callouts: [
+      { number: "01", title: "Acoustic Tuning Cavity", description: "Dual-port damped enclosure for resonance-free high-frequency extension." },
+      { number: "02", title: "40 mm Bio-Cellulose Cone", description: "Ultra-stiff diaphragm with neodymium N52 magnetic motor." },
+      { number: "03", title: "Quad MEMS ANC Matrix", description: "Feed-forward and feedback sensors for 50,000/sec anti-phase synthesis." },
+      { number: "04", title: "Rotary-Dampened Headband Rod", description: "Tooless step-free extension slider milled from aircraft-grade 6000 series alloy." },
+    ],
+  });
+  const [isUploadingExplodedImage, setIsUploadingExplodedImage] = useState<boolean>(false);
+
+  const [primaryValueCallouts, setPrimaryValueCallouts] = useState<ValueCallout[]>([
+    { tag: "ADAPTIVE SILENCE", title: "-42 dB Adaptive ANC", subtitle: "Feed-Forward and Feedback MEMS Array", description: "Dual-inward and outward MEMS microphones calculate external pressure 50,000 times per second." },
+    { tag: "ERGONOMIC CALIBRATION", title: "4.2 N Clamping Equilibrium", subtitle: "Engineered Memory Foam & Woven Canopy", description: "Balanced force distribution prevents temporal bone fatigue." },
+    { tag: "TRANSDUCER ACOUSTICS", title: "40 mm Bio-Cellulose Drivers", subtitle: "Sub-0.08% Total Harmonic Distortion", description: "Ultra-stiff natural fiber cones deliver lightning-fast transient response." },
+  ]);
+
+  const [tabbedSpecs, setTabbedSpecs] = useState<TabbedSpecs>({
+    core: [
+      { label: "Driver Size & Type", value: "40 mm dynamic bio-cellulose cone with N52 Neodymium magnet" },
+      { label: "Frequency Response", value: "10 Hz – 40,000 Hz (Hi-Res Certified)" },
+      { label: "Total Harmonic Distortion", value: "< 0.08% @ 1 kHz, 100 dB SPL" },
+      { label: "Clamping Force", value: "4.2 N (Optimized pressure dispersal)", badge: "Ease Fat. Spec" },
+      { label: "Passive Noise Isolation", value: "-24 dB physical attenuation with memory foam seal" },
+      { label: "Water Resistance", value: "IPX4 splash & moisture resistant" },
+      { label: "Weight", value: "250 g (8.8 oz)" },
+    ],
+    battery: [
+      { label: "Continuous Playback (ANC On)", value: "Up to 40 hours continuous playback" },
+      { label: "Continuous Playback (ANC Off)", value: "Up to 60 hours extended listening" },
+      { label: "Quick Charge Acceleration", value: "10 minutes charging provides 5 hours playback", badge: "USB-PD Ready" },
+      { label: "Battery Capacity", value: "850 mAh dual-cell lithium-ion rechargeable" },
+      { label: "Full Recharge Duration", value: "100 minutes via USB Type-C high-efficiency bus" },
+      { label: "Standby Efficiency", value: "Up to 300 days low-draw deep standby" },
+    ],
+    connectivity: [
+      { label: "Bluetooth Protocol", value: "Bluetooth 5.3 (LE Audio ready)", badge: "Low Latency" },
+      { label: "Multipoint Pairing", value: "Simultaneous 2-device active handoff (laptop + smartphone)" },
+      { label: "Audio Codecs Supported", value: "LDAC (24-bit/96kHz), AAC, SBC" },
+      { label: "Wired Analog Input", value: "3.5 mm gold-plated auxiliary audio jack (cable included)" },
+      { label: "Gaming Low-Latency Mode", value: "48 ms ultra-low delay synchronization" },
+      { label: "Companion Console", value: "ancwave Web EQ & custom spatial audio configuration" },
+    ],
+  });
+  const [adminActiveSpecTab, setAdminActiveSpecTab] = useState<"core" | "battery" | "connectivity">("core");
+
+  const [hygienePolicy, setHygienePolicy] = useState<HygienePolicyData>({
+    badge: "HYGIENE & RETURN POLICY",
+    title: "Over-Ear Acoustic Comfort & Hygiene Assurance",
+    description: "",
+    exemptionNotice: "Enjoy a 30-day home trial. Items returned in original factory condition with tamper-evident seal intact qualify for full 100% refund.",
+  });
+
+  const [productQna, setProductQna] = useState<ProductQnA[]>([
+    {
+      id: "q1",
+      question: "Can I connect this device to both my PC/console and phone simultaneously?",
+      answer: "Yes! High-speed dual-channel connectivity allows seamless audio and call handling across devices.",
+      author: "Audio Engineering",
+      date: "Jan 2026",
+    },
+    {
+      id: "q2",
+      question: "Can I replace the ear cushions if they wear down after years of use?",
+      answer: "Absolutely. The magnetic snap-fit cushions are fully modular and user-replaceable.",
+      author: "Support Team",
+      date: "Jan 2026",
+    },
+  ]);
+
   // Global Shipping Method Pricing Fixtures
   const [generalDeliveryPriceUsd, setGeneralDeliveryPriceUsd] = useState<number>(0);
   const [generalDeliveryPriceInr, setGeneralDeliveryPriceInr] = useState<number>(0);
@@ -921,6 +1003,118 @@ export default function AdminPage() {
           } else {
             setVariantGroups([]);
             setChildVariants([]);
+          }
+
+          // Hydrate Section 2: Exploded Architecture
+          if (p.explodedView) {
+            setExplodedView({
+              image: p.explodedView.image || "/images/exploded-view.png",
+              badge: p.explodedView.badge || "EXPLODED ARCHITECTURE",
+              caption: p.explodedView.caption || "Precision Component Assembly",
+              callouts: p.explodedView.callouts || [],
+            });
+          } else {
+            setExplodedView({
+              image: "/images/exploded-view.png",
+              badge: "EXPLODED ARCHITECTURE",
+              caption: "Precision Component Assembly",
+              callouts: [
+                { number: "01", title: "Acoustic Tuning Cavity", description: "Dual-port damped enclosure for resonance-free high-frequency extension." },
+                { number: "02", title: "40 mm Bio-Cellulose Cone", description: "Ultra-stiff diaphragm with neodymium N52 magnetic motor." },
+                { number: "03", title: "Quad MEMS ANC Matrix", description: "Feed-forward and feedback sensors for 50,000/sec anti-phase synthesis." },
+                { number: "04", title: "Rotary-Dampened Headband Rod", description: "Tooless step-free extension slider milled from aircraft-grade 6000 series alloy." },
+              ],
+            });
+          }
+
+          // Hydrate Section 2: Primary Value Callouts
+          if (p.primaryValueCallouts && p.primaryValueCallouts.length > 0) {
+            setPrimaryValueCallouts(p.primaryValueCallouts);
+          } else {
+            setPrimaryValueCallouts([
+              { tag: "ADAPTIVE SILENCE", title: "-42 dB Adaptive ANC", subtitle: "Feed-Forward and Feedback MEMS Array", description: "Dual-inward and outward MEMS microphones calculate external pressure 50,000 times per second." },
+              { tag: "ERGONOMIC CALIBRATION", title: "4.2 N Clamping Equilibrium", subtitle: "Engineered Memory Foam & Woven Canopy", description: "Balanced force distribution prevents temporal bone fatigue." },
+              { tag: "TRANSDUCER ACOUSTICS", title: "40 mm Bio-Cellulose Drivers", subtitle: "Sub-0.08% Total Harmonic Distortion", description: "Ultra-stiff natural fiber cones deliver lightning-fast transient response." },
+            ]);
+          }
+
+          // Hydrate Section 3: Tabbed Specs
+          if (p.tabbedSpecs) {
+            setTabbedSpecs({
+              core: p.tabbedSpecs.core || [],
+              battery: p.tabbedSpecs.battery || [],
+              connectivity: p.tabbedSpecs.connectivity || [],
+            });
+          } else {
+            setTabbedSpecs({
+              core: [
+                { label: "Driver Size & Type", value: "40 mm dynamic bio-cellulose cone with N52 Neodymium magnet" },
+                { label: "Frequency Response", value: "10 Hz – 40,000 Hz (Hi-Res Certified)" },
+                { label: "Total Harmonic Distortion", value: "< 0.08% @ 1 kHz, 100 dB SPL" },
+                { label: "Clamping Force", value: "4.2 N (Optimized pressure dispersal)", badge: "Ease Fat. Spec" },
+                { label: "Passive Noise Isolation", value: "-24 dB physical attenuation with memory foam seal" },
+                { label: "Water Resistance", value: "IPX4 splash & moisture resistant" },
+                { label: "Weight", value: "250 g (8.8 oz)" },
+              ],
+              battery: [
+                { label: "Continuous Playback (ANC On)", value: "Up to 40 hours continuous playback" },
+                { label: "Continuous Playback (ANC Off)", value: "Up to 60 hours extended listening" },
+                { label: "Quick Charge Acceleration", value: "10 minutes charging provides 5 hours playback", badge: "USB-PD Ready" },
+                { label: "Battery Capacity", value: "850 mAh dual-cell lithium-ion rechargeable" },
+                { label: "Full Recharge Duration", value: "100 minutes via USB Type-C high-efficiency bus" },
+                { label: "Standby Efficiency", value: "Up to 300 days low-draw deep standby" },
+              ],
+              connectivity: [
+                { label: "Bluetooth Protocol", value: "Bluetooth 5.3 (LE Audio ready)", badge: "Low Latency" },
+                { label: "Multipoint Pairing", value: "Simultaneous 2-device active handoff (laptop + smartphone)" },
+                { label: "Audio Codecs Supported", value: "LDAC (24-bit/96kHz), AAC, SBC" },
+                { label: "Wired Analog Input", value: "3.5 mm gold-plated auxiliary audio jack (cable included)" },
+                { label: "Gaming Low-Latency Mode", value: "48 ms ultra-low delay synchronization" },
+                { label: "Companion Console", value: "ancwave Web EQ & custom spatial audio configuration" },
+              ],
+            });
+          }
+
+          // Hydrate Section 4: Hygiene & Return Policy
+          const prodTitle = p.name || "This Product";
+          if (p.hygienePolicy) {
+            const rawDesc = p.hygienePolicy.description || "";
+            const cleanDesc = prodTitle !== "Form 01" ? rawDesc.replace(/Form 01/gi, prodTitle) : rawDesc;
+            setHygienePolicy({
+              badge: p.hygienePolicy.badge || "HYGIENE & RETURN POLICY",
+              title: p.hygienePolicy.title || "Over-Ear Acoustic Comfort & Hygiene Assurance",
+              description: cleanDesc,
+              exemptionNotice: p.hygienePolicy.exemptionNotice || "Enjoy a 30-day home trial. Items returned in original factory condition with tamper-evident seal intact qualify for full 100% refund.",
+            });
+          } else {
+            setHygienePolicy({
+              badge: "HYGIENE & RETURN POLICY",
+              title: "Over-Ear Acoustic Comfort & Hygiene Assurance",
+              description: `${prodTitle} ear pads feature breathable memory foam covered in woven textile. For your peace of mind and strict personal hygiene standards, every unit is delivered in a hermetically sealed factory barrier.`,
+              exemptionNotice: "Enjoy a 30-day home trial. Items returned in original factory condition with tamper-evident seal intact qualify for full 100% refund.",
+            });
+          }
+
+          // Hydrate Section 5: Product Q&A
+          if (p.qna && p.qna.length > 0) {
+            setProductQna(p.qna);
+          } else {
+            setProductQna([
+              {
+                id: "q1",
+                question: `Can I connect ${prodTitle} to both my PC/console and phone simultaneously?`,
+                answer: "Yes! High-speed dual-channel connectivity allows seamless audio and call handling across devices.",
+                author: "Audio Engineering",
+                date: "Jan 2026",
+              },
+              {
+                id: "q2",
+                question: "Can I replace the ear cushions if they wear down after years of use?",
+                answer: "Absolutely. The magnetic snap-fit cushions are fully modular and user-replaceable.",
+                author: "Support Team",
+                date: "Jan 2026",
+              },
+            ]);
           }
         } else {
           setProduct(null as any);
@@ -1636,7 +1830,205 @@ export default function AdminPage() {
     setGlobalSpecsList(updated);
   };
 
-  // Save full master product & hierarchical variant groups
+  // Section 2: Exploded View Callout Helpers
+  const handleAddExplodedCallout = () => {
+    setExplodedView((prev) => ({
+      ...prev,
+      callouts: [
+        ...prev.callouts,
+        {
+          number: String(prev.callouts.length + 1).padStart(2, "0"),
+          title: "New Acoustic Component",
+          description: "Precision engineered acoustic chamber details.",
+        },
+      ],
+    }));
+  };
+
+  const handleRemoveExplodedCallout = (index: number) => {
+    setExplodedView((prev) => ({
+      ...prev,
+      callouts: prev.callouts.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleUpdateExplodedCallout = (index: number, field: string, val: string) => {
+    setExplodedView((prev) => {
+      const updated = [...prev.callouts];
+      updated[index] = { ...updated[index], [field]: val };
+      return { ...prev, callouts: updated };
+    });
+  };
+
+  // Section 2: Primary Value Callouts Helpers
+  const handleAddValueCallout = () => {
+    setPrimaryValueCallouts((prev) => [
+      ...prev,
+      {
+        tag: "ACOUSTIC PURITY",
+        title: "New Value Proposition",
+        subtitle: "High Fidelity Performance",
+        description: "Engineered driver response delivers exceptional clarity across the frequency spectrum.",
+      },
+    ]);
+  };
+
+  const handleRemoveValueCallout = (index: number) => {
+    setPrimaryValueCallouts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateValueCallout = (index: number, field: string, val: string) => {
+    setPrimaryValueCallouts((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: val };
+      return updated;
+    });
+  };
+
+  // Section 3: Tabbed Specs Helpers
+  const handleAddSpecToActiveTab = () => {
+    setTabbedSpecs((prev) => ({
+      ...prev,
+      [adminActiveSpecTab]: [
+        ...(prev[adminActiveSpecTab] || []),
+        { label: "Specification Attribute", value: "Technical Value", badge: "" },
+      ],
+    }));
+  };
+
+  const handleRemoveSpecFromActiveTab = (index: number) => {
+    setTabbedSpecs((prev) => ({
+      ...prev,
+      [adminActiveSpecTab]: (prev[adminActiveSpecTab] || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleUpdateSpecRow = (index: number, field: string, val: string) => {
+    setTabbedSpecs((prev) => {
+      const list = [...(prev[adminActiveSpecTab] || [])];
+      list[index] = { ...list[index], [field]: val };
+      return { ...prev, [adminActiveSpecTab]: list };
+    });
+  };
+
+  // Section 4: Hygiene Policy Helper
+  const handleAutoInsertProductNameInPolicy = () => {
+    const nameToUse = masterName || product?.name || "This Product";
+    setHygienePolicy((prev) => ({
+      ...prev,
+      title: prev.title ? prev.title.replace(/Form 01/gi, nameToUse) : `${nameToUse} Acoustic Comfort & Hygiene Assurance`,
+      description: prev.description
+        ? prev.description.replace(/Form 01/gi, nameToUse)
+        : `${nameToUse} ear pads feature breathable memory foam covered in woven textile. For your peace of mind and strict personal hygiene standards, every unit is delivered in a hermetically sealed factory barrier.`,
+    }));
+    toast({
+      type: "success",
+      title: "Product Name Substituted",
+      description: `Injected "${nameToUse}" into hygiene & return policy text.`,
+    });
+  };
+
+  // Section 5: Product Q&A Helpers
+  const handleAddQnaItem = () => {
+    const nameToUse = masterName || product?.name || "this headset";
+    setProductQna((prev) => [
+      ...prev,
+      {
+        id: `q-${Date.now()}`,
+        question: `Can I use ${nameToUse} for professional gaming and high-resolution listening?`,
+        answer: "Yes, optimized transient response and ultra-low harmonic distortion ensure competitive precision and studio clarity.",
+        author: "Audio Engineering",
+        date: "Jan 2026",
+      },
+    ]);
+  };
+
+  const handleRemoveQnaItem = (index: number) => {
+    setProductQna((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateQnaItem = (index: number, field: string, val: string) => {
+    setProductQna((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: val };
+      return updated;
+    });
+  };
+
+  // S3 Exploded Architecture Diagram Direct Upload
+  const handleExplodedImageDirectS3Upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingExplodedImage(true);
+
+    const productSlug = (masterName || product?.name || selectedSlug || "product")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || "product";
+
+    const targetFolder = `products/${productSlug}`;
+
+    try {
+      const presignRes = await fetch("/api/aws/s3-presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: `exploded-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`,
+          contentType: file.type || "image/png",
+          folder: targetFolder,
+        }),
+      });
+      const resJson = await presignRes.json();
+      const presignData = resJson.data || resJson;
+      if (!resJson.success || !presignData.uploadUrl) {
+        throw new Error(resJson.error || "Failed to generate presigned S3 upload URL");
+      }
+
+      let uploadedUrl = presignData.publicUrl;
+      try {
+        const uploadRes = await fetch(presignData.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type || "image/png" },
+          body: file,
+        });
+        if (!uploadRes.ok) throw new Error(`Direct S3 upload failed (Status: ${uploadRes.status})`);
+      } catch (directErr) {
+        console.warn("Direct upload notice, falling back to server proxy:", directErr);
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("key", presignData.fileKey || `${targetFolder}/exploded-${Date.now()}-${file.name}`);
+        formData.append("folder", targetFolder);
+        const fallbackRes = await fetch("/api/reviews/mock-upload", {
+          method: "POST",
+          body: formData,
+        });
+        const fallbackData = await fallbackRes.json();
+        if (!fallbackData.success || !fallbackData.publicUrl) {
+          throw new Error(fallbackData.error || "Upload failed");
+        }
+        uploadedUrl = fallbackData.publicUrl;
+      }
+
+      setExplodedView((prev) => ({ ...prev, image: uploadedUrl }));
+      toast({
+        type: "success",
+        title: "Exploded Diagram Uploaded",
+        description: `Uploaded directly to S3: ${uploadedUrl.split("/").pop()}`,
+      });
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Upload Failed",
+        description: err.message || "Failed to upload exploded diagram to S3",
+      });
+    } finally {
+      setIsUploadingExplodedImage(false);
+      e.target.value = "";
+    }
+  };
+
+  // Save full master product & hierarchical variant groups + all 5 detail sections
   const handleSaveVariationEngine = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingVariants(true);
@@ -1666,6 +2058,11 @@ export default function AdminPage() {
           globalSpecs: globalSpecsRecord,
           variantGroups,
           childVariants: syncedChildVariants,
+          explodedView,
+          primaryValueCallouts,
+          tabbedSpecs,
+          hygienePolicy,
+          qna: productQna,
         }),
       });
 
@@ -1678,11 +2075,16 @@ export default function AdminPage() {
         if (data.product.childVariants) {
           setChildVariants(data.product.childVariants);
         }
+        if (data.product.explodedView) setExplodedView(data.product.explodedView);
+        if (data.product.primaryValueCallouts) setPrimaryValueCallouts(data.product.primaryValueCallouts);
+        if (data.product.tabbedSpecs) setTabbedSpecs(data.product.tabbedSpecs);
+        if (data.product.hygienePolicy) setHygienePolicy(data.product.hygienePolicy);
+        if (data.product.qna) setProductQna(data.product.qna);
         setStockInput(data.product.stock);
         toast({
           type: "success",
-          title: "Variation Engine Synced",
-          description: `Saved ${variantGroups.length} architectures with ${data.product.childVariants?.length || 0} colors. Live stock: ${data.product.stock} units. ISR purged.`,
+          title: "All 5 Product Sections Synced",
+          description: `Saved ${variantGroups.length} architectures with ${data.product.childVariants?.length || 0} colors, specs matrix, return policy, and Q&A. Storefront synced & ISR purged.`,
         });
       } else {
         toast({ type: "error", title: "Save Failed", description: data.error || "Could not save variation engine." });
@@ -11053,6 +11455,637 @@ export default function AdminPage() {
                   >
                     <Save className="w-4 h-4" />
                     <span>{isSavingVariants ? "Persisting Changes..." : "Save All & Revalidate Edge ISR"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* SECTION 2: ACOUSTIC X-RAY & VALUE CALLOUTS STUDIO */}
+              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
+                      <Cpu className="w-5 h-5 text-blue-600" />
+                      <span>Section 2: Acoustic X-Ray & Value Callouts (Exploded Architecture)</span>
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Configure the internal hardware exploded diagram with interactive numbered assembly stages, plus the 3 primary engineering value cards.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingVariants}
+                    className="flex items-center gap-1.5 bg-zinc-900 hover:bg-black text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSavingVariants ? "Saving..." : "Save Product"}</span>
+                  </button>
+                </div>
+
+                {/* Exploded Architecture Diagram Settings */}
+                <div className="p-5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-5">
+                  <div className="flex items-center justify-between border-b border-zinc-200/60 pb-3">
+                    <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider font-mono flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-blue-600" />
+                      <span>Exploded View Internal Diagram & Header</span>
+                    </h4>
+                    <span className="text-[11px] font-mono text-zinc-500">S3 Presigned Media Pipeline</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+                    {/* Diagram Preview & S3 Upload */}
+                    <div className="md:col-span-4 space-y-3">
+                      <label className="text-xs font-semibold text-zinc-700 block">
+                        Exploded Hardware Visual
+                      </label>
+                      <div className="relative aspect-4/3 rounded-xl bg-white border border-zinc-300 overflow-hidden flex items-center justify-center p-2 shadow-2xs">
+                        <img
+                          src={explodedView.image || "/images/exploded-view.png"}
+                          alt={explodedView.caption || "Exploded View"}
+                          className="w-full h-full object-contain"
+                        />
+                        {isUploadingExplodedImage && (
+                          <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex items-center justify-center gap-2 text-xs font-semibold text-blue-600 font-mono">
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Uploading to S3...</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs cursor-pointer transition-colors shadow-2xs">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{isUploadingExplodedImage ? "Uploading..." : "Upload Diagram to S3"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleExplodedImageDirectS3Upload}
+                            className="hidden"
+                            disabled={isUploadingExplodedImage}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Metadata fields */}
+                    <div className="md:col-span-8 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-700">Diagram Badge</label>
+                          <input
+                            type="text"
+                            value={explodedView.badge}
+                            onChange={(e) => setExplodedView({ ...explodedView, badge: e.target.value })}
+                            placeholder="e.g. EXPLODED ARCHITECTURE"
+                            className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-zinc-900 bg-white shadow-2xs"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-700">Diagram Caption</label>
+                          <input
+                            type="text"
+                            value={explodedView.caption}
+                            onChange={(e) => setExplodedView({ ...explodedView, caption: e.target.value })}
+                            placeholder="e.g. Precision Component Assembly"
+                            className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-900 bg-white shadow-2xs"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-xs font-semibold text-zinc-700">Image URL (CloudFront / S3 Path)</label>
+                          <input
+                            type="text"
+                            value={explodedView.image}
+                            onChange={(e) => setExplodedView({ ...explodedView, image: e.target.value })}
+                            placeholder="https://... or /images/..."
+                            className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-xs font-mono text-zinc-800 bg-white shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Numbered Callout Stages List */}
+                      <div className="space-y-3 pt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-zinc-800 font-mono">
+                            Interactive Assembly Hotspots ({explodedView.callouts?.length || 0})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleAddExplodedCallout}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Stage</span>
+                          </button>
+                        </div>
+
+                        <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                          {explodedView.callouts?.map((callout, cIdx) => (
+                            <div
+                              key={cIdx}
+                              className="p-3 bg-white rounded-xl border border-zinc-200 flex flex-col sm:flex-row items-start sm:items-center gap-2.5 shadow-2xs"
+                            >
+                              <input
+                                type="text"
+                                value={callout.number}
+                                onChange={(e) => handleUpdateExplodedCallout(cIdx, "number", e.target.value)}
+                                placeholder="01"
+                                className="w-14 px-2 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono font-bold text-center text-blue-700 bg-zinc-50 shrink-0"
+                              />
+                              <input
+                                type="text"
+                                value={callout.title}
+                                onChange={(e) => handleUpdateExplodedCallout(cIdx, "title", e.target.value)}
+                                placeholder="Callout Title"
+                                className="w-full sm:w-1/3 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-900"
+                              />
+                              <input
+                                type="text"
+                                value={callout.description}
+                                onChange={(e) => handleUpdateExplodedCallout(cIdx, "description", e.target.value)}
+                                placeholder="Engineering description..."
+                                className="w-full sm:flex-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs text-zinc-600"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveExplodedCallout(cIdx)}
+                                className="p-1.5 text-zinc-400 hover:text-red-600 rounded-lg hover:bg-zinc-50 shrink-0 transition-colors"
+                                title="Remove callout"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3 Primary Value Callouts Cards */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                    <div>
+                      <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider font-mono">
+                        Primary Value Callout Cards ({primaryValueCallouts.length} Cards)
+                      </h4>
+                      <p className="text-[11px] text-zinc-500">
+                        Displays 3 high-impact marketing and technical superiority badges directly below the X-Ray diagram.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAddValueCallout}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Value Card</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {primaryValueCallouts.map((card, vIdx) => (
+                      <div
+                        key={vIdx}
+                        className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-3 relative group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono font-bold text-blue-600 uppercase">
+                            Card #{vIdx + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveValueCallout(vIdx)}
+                            className="text-zinc-400 hover:text-red-600 p-1 cursor-pointer"
+                            title="Remove card"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-[10px] font-mono text-zinc-500 block uppercase font-semibold">
+                              Tag Header
+                            </label>
+                            <input
+                              type="text"
+                              value={card.tag}
+                              onChange={(e) => handleUpdateValueCallout(vIdx, "tag", e.target.value)}
+                              placeholder="e.g. ADAPTIVE SILENCE"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono font-bold text-zinc-900 bg-white"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-mono text-zinc-500 block uppercase font-semibold">
+                              Main Title
+                            </label>
+                            <input
+                              type="text"
+                              value={card.title}
+                              onChange={(e) => handleUpdateValueCallout(vIdx, "title", e.target.value)}
+                              placeholder="e.g. -42 dB Adaptive ANC"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold text-zinc-900 bg-white"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-mono text-zinc-500 block uppercase font-semibold">
+                              Subtitle
+                            </label>
+                            <input
+                              type="text"
+                              value={card.subtitle}
+                              onChange={(e) => handleUpdateValueCallout(vIdx, "subtitle", e.target.value)}
+                              placeholder="e.g. MEMS Array Architecture"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 bg-white"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-mono text-zinc-500 block uppercase font-semibold">
+                              Detailed Description
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={card.description}
+                              onChange={(e) => handleUpdateValueCallout(vIdx, "description", e.target.value)}
+                              placeholder="Explain acoustic and ergonomic benefit..."
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs text-zinc-600 bg-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 3: DETAILED HARDWARE SPECIFICATIONS MATRIX */}
+              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
+                      <Sliders className="w-5 h-5 text-blue-600" />
+                      <span>Section 3: Detailed Technical Specifications Matrix (3 Tabs)</span>
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Manage the 3-tab technical matrix on the product page. Customize exact lab benchmarks, battery stamina, and wireless protocols.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingVariants}
+                    className="flex items-center gap-1.5 bg-zinc-900 hover:bg-black text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSavingVariants ? "Saving..." : "Save Product"}</span>
+                  </button>
+                </div>
+
+                {/* 3-Tab Selector */}
+                <div className="flex items-center p-1 bg-zinc-100 rounded-2xl w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setAdminActiveSpecTab("core")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      adminActiveSpecTab === "core"
+                        ? "bg-white text-blue-700 shadow-xs"
+                        : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    <Cpu className="w-4 h-4 text-blue-600" />
+                    <span>Core Specs ({(tabbedSpecs.core || []).length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAdminActiveSpecTab("battery")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      adminActiveSpecTab === "battery"
+                        ? "bg-white text-blue-700 shadow-xs"
+                        : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    <BatteryCharging className="w-4 h-4 text-blue-600" />
+                    <span>Battery & Charging ({(tabbedSpecs.battery || []).length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAdminActiveSpecTab("connectivity")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      adminActiveSpecTab === "connectivity"
+                        ? "bg-white text-blue-700 shadow-xs"
+                        : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    <Radio className="w-4 h-4 text-blue-600" />
+                    <span>Connectivity & Intelligence ({(tabbedSpecs.connectivity || []).length})</span>
+                  </button>
+                </div>
+
+                {/* Active Tab Specifications Table Editor */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-800 font-mono uppercase">
+                      Active Tab: {adminActiveSpecTab.toUpperCase()} ATTRIBUTES
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={handleAddSpecToActiveTab}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Spec Row to {adminActiveSpecTab}</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {(tabbedSpecs[adminActiveSpecTab] || []).map((row, rIdx) => (
+                      <div
+                        key={rIdx}
+                        className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+                      >
+                        <div className="sm:w-1/3">
+                          <label className="text-[10px] font-mono text-zinc-400 block sm:hidden">Spec Label</label>
+                          <input
+                            type="text"
+                            value={row.label}
+                            onChange={(e) => handleUpdateSpecRow(rIdx, "label", e.target.value)}
+                            placeholder="e.g. Driver Size & Type"
+                            className="w-full px-3 py-2 text-xs bg-white border border-zinc-200 rounded-lg font-medium text-zinc-900"
+                          />
+                        </div>
+
+                        <div className="sm:flex-1">
+                          <label className="text-[10px] font-mono text-zinc-400 block sm:hidden">Spec Value</label>
+                          <input
+                            type="text"
+                            value={row.value}
+                            onChange={(e) => handleUpdateSpecRow(rIdx, "value", e.target.value)}
+                            placeholder="e.g. 40 mm dynamic bio-cellulose cone..."
+                            className="w-full px-3 py-2 text-xs bg-white border border-zinc-200 rounded-lg text-zinc-800"
+                          />
+                        </div>
+
+                        <div className="sm:w-36">
+                          <label className="text-[10px] font-mono text-zinc-400 block sm:hidden">Badge (optional)</label>
+                          <input
+                            type="text"
+                            value={row.badge || ""}
+                            onChange={(e) => handleUpdateSpecRow(rIdx, "badge", e.target.value)}
+                            placeholder="Badge (optional)"
+                            className="w-full px-2.5 py-2 text-xs bg-white border border-zinc-200 rounded-lg font-mono text-blue-700"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSpecFromActiveTab(rIdx)}
+                          className="p-2 text-zinc-400 hover:text-red-600 rounded-lg hover:bg-zinc-100 transition-colors self-end sm:self-auto cursor-pointer"
+                          title="Remove row"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 4: HYGIENE & RETURN POLICY STUDIO */}
+              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                      <span>Section 4: Hygiene & Return Policy Studio</span>
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Configure the official personal hygiene assurance and return guarantee. The banner displays prominently on the product detail page.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAutoInsertProductNameInPolicy}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-semibold transition-colors cursor-pointer"
+                      title="Insert current product name into text"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Auto-Insert Product Name</span>
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={isSavingVariants}
+                      className="flex items-center gap-1.5 bg-zinc-900 hover:bg-black text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isSavingVariants ? "Saving..." : "Save Product"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-amber-50/50 border border-amber-200/80 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700">Badge Label</label>
+                      <input
+                        type="text"
+                        value={hygienePolicy.badge}
+                        onChange={(e) => setHygienePolicy({ ...hygienePolicy, badge: e.target.value })}
+                        placeholder="HYGIENE & RETURN POLICY"
+                        className="w-full px-3.5 py-2 rounded-xl border border-amber-200 text-xs font-mono font-bold text-amber-900 bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700">Policy Banner Title</label>
+                      <input
+                        type="text"
+                        value={hygienePolicy.title}
+                        onChange={(e) => setHygienePolicy({ ...hygienePolicy, title: e.target.value })}
+                        placeholder="Over-Ear Acoustic Comfort & Hygiene Assurance"
+                        className="w-full px-3.5 py-2 rounded-xl border border-amber-200 text-xs font-bold text-zinc-900 bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-xs font-semibold text-zinc-700 flex items-center justify-between">
+                        <span>Sanitation & Seal Description</span>
+                        <span className="text-[10px] font-mono text-zinc-400">Must reflect {masterName || "this product"}</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={hygienePolicy.description}
+                        onChange={(e) => setHygienePolicy({ ...hygienePolicy, description: e.target.value })}
+                        placeholder="Describe ear-cushion materials, factory seal barrier, and personal hygiene standards..."
+                        className="w-full px-3.5 py-2 rounded-xl border border-amber-200 text-xs text-zinc-800 bg-white leading-relaxed"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-xs font-semibold text-zinc-700">Refund & Exemption Guarantee Notice</label>
+                      <input
+                        type="text"
+                        value={hygienePolicy.exemptionNotice}
+                        onChange={(e) => setHygienePolicy({ ...hygienePolicy, exemptionNotice: e.target.value })}
+                        placeholder="Enjoy a 30-day home trial. Items returned in original factory condition with tamper-evident seal intact qualify for full 100% refund."
+                        className="w-full px-3.5 py-2 rounded-xl border border-amber-200 text-xs text-zinc-800 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 5: PRODUCT QUESTIONS & ANSWERS (ACCORDION) */}
+              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
+                      <HelpCircle className="w-5 h-5 text-blue-600" />
+                      <span>Section 5: Product Questions & Answers Studio ({productQna.length} Items)</span>
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Manage official Q&A displayed in the expandable storefront accordion. Address common compatibility, pairing, and warranty questions.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddQnaItem}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Question</span>
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={isSavingVariants}
+                      className="flex items-center gap-1.5 bg-zinc-900 hover:bg-black text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isSavingVariants ? "Saving..." : "Save Product"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {productQna.map((item, qIdx) => (
+                    <div
+                      key={item.id || qIdx}
+                      className="p-5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-3 relative group"
+                    >
+                      <div className="flex items-center justify-between pb-2 border-b border-zinc-200/60">
+                        <span className="text-[10px] font-mono font-bold text-blue-600 uppercase">
+                          Question #{qIdx + 1}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveQnaItem(qIdx)}
+                          className="text-zinc-400 hover:text-red-600 p-1 transition-colors cursor-pointer"
+                          title="Remove question"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-zinc-700">Question</label>
+                          <input
+                            type="text"
+                            value={item.question}
+                            onChange={(e) => handleUpdateQnaItem(qIdx, "question", e.target.value)}
+                            placeholder="e.g. Can I connect this to my PC and phone simultaneously?"
+                            className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-900 bg-white"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-zinc-700">Answer</label>
+                          <textarea
+                            rows={2}
+                            value={item.answer}
+                            onChange={(e) => handleUpdateQnaItem(qIdx, "answer", e.target.value)}
+                            placeholder="Provide clear technical or support answer..."
+                            className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-xs text-zinc-700 bg-white leading-relaxed"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-mono text-zinc-500 uppercase font-semibold">
+                              Answer Author
+                            </label>
+                            <input
+                              type="text"
+                              value={item.author}
+                              onChange={(e) => handleUpdateQnaItem(qIdx, "author", e.target.value)}
+                              placeholder="e.g. Audio Engineering"
+                              className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 text-xs text-zinc-800 bg-white font-medium"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-mono text-zinc-500 uppercase font-semibold">
+                              Date Tag
+                            </label>
+                            <input
+                              type="text"
+                              value={item.date}
+                              onChange={(e) => handleUpdateQnaItem(qIdx, "date", e.target.value)}
+                              placeholder="e.g. Jan 2026"
+                              className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 text-xs text-zinc-800 bg-white font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Master Sticky / Bottom Save Bar */}
+              <div className="p-6 rounded-3xl bg-zinc-950 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+                <div>
+                  <h4 className="text-base font-bold text-white flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <span>Synchronize All 5 Product Detail Sections</span>
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Persists Master Info, Variant Colorways, X-Ray Diagram, 3-Tab Specs, Return Policy, and Q&A to MongoDB Atlas. Purges Next.js ISR cache instantly.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <Link
+                    href={`/products/${selectedSlug}`}
+                    target="_blank"
+                    className="flex items-center justify-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-xl transition-colors font-semibold"
+                  >
+                    <span>Storefront Preview</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingVariants}
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-md transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSavingVariants ? "Saving All 5 Sections..." : "Save Product & All 5 Sections"}</span>
                   </button>
                 </div>
               </div>

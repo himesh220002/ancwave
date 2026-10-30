@@ -474,9 +474,9 @@ export function normalizeProductData(raw: any): ProductData {
     warrantyYears: Number(clean.warrantyYears) || 2,
     returnDays: Number(clean.returnDays) || 30,
     deliveryEstimate: clean.deliveryEstimate || "Ready to ship · Fast delivery in 2–4 business days",
-    rating: Number(clean.rating) || 5.0,
-    averageRating: Number(clean.averageRating || clean.rating) || 5.0,
     reviewCount: Number(clean.reviewCount) || 0,
+    rating: (Number(clean.reviewCount) || 0) > 0 ? (Number(clean.rating) || 0) : 0,
+    averageRating: (Number(clean.reviewCount) || 0) > 0 ? (Number(clean.averageRating ?? clean.rating) || 0) : 0,
     sku: clean.sku || `${productId}-MASTER`,
     globalSpecs: clean.globalSpecs || {},
     variants: normalizedColorVariants,
@@ -485,6 +485,30 @@ export function normalizeProductData(raw: any): ProductData {
     variantGroups: normalizedVariantGroups,
     lastRevalidatedAt: clean.lastRevalidatedAt || "",
     restockProcess: clean.restockProcess,
+    explodedView: clean.explodedView || undefined,
+    primaryValueCallouts: clean.primaryValueCallouts || undefined,
+    tabbedSpecs: clean.tabbedSpecs || undefined,
+    hygienePolicy: clean.hygienePolicy
+      ? {
+          badge: clean.hygienePolicy.badge || "HYGIENE & RETURN POLICY",
+          title: clean.hygienePolicy.title || "Over-Ear Acoustic Comfort & Hygiene Assurance",
+          description: clean.name && clean.name !== "Form 01"
+            ? (clean.hygienePolicy.description || "").replace(/Form 01/gi, clean.name)
+            : clean.hygienePolicy.description || "",
+          exemptionNotice: clean.hygienePolicy.exemptionNotice || "Enjoy a 30-day home trial. Items returned in original factory condition with tamper-evident seal intact qualify for full 100% refund.",
+        }
+      : undefined,
+    qna: Array.isArray(clean.qna)
+      ? clean.qna.map((q: any) => ({
+          ...q,
+          question: clean.name && clean.name !== "Form 01"
+            ? (q.question || "").replace(/Form 01/gi, clean.name)
+            : q.question || "",
+          answer: clean.name && clean.name !== "Form 01"
+            ? (q.answer || "").replace(/Form 01/gi, clean.name)
+            : q.answer || "",
+        }))
+      : undefined,
   };
 }
 
