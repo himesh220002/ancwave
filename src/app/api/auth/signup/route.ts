@@ -27,18 +27,7 @@ export async function POST(req: NextRequest) {
 
     // Determine target role: Admin passcode validation or standard User
     const correctAdminPass = process.env.DAILY_ADMIN_PASSCODE || "ancwave-ops-secure-2026";
-    let targetRole: "user" | "admin" = "user";
-
-    if (adminPasscode) {
-      if (adminPasscode.trim() !== correctAdminPass.trim()) {
-        return NextResponse.json(
-          { success: false, error: "Invalid Admin Passcode. Cannot register admin account." },
-          { status: 403 }
-        );
-      }
-      targetRole = "admin";
-    }
-
+    let targetRole: "owner" | "admin" | "user" = "user";
     const hashedPassword = await hashPassword(password);
 
     // 1. Try MongoDB Atlas if connected
@@ -52,6 +41,20 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // If database is in raw pure state (0 users), automatically grant Owner status to the founder!
+      const totalUsers = await UserModel.countDocuments();
+      if (totalUsers === 0) {
+        targetRole = "owner";
+      } else if (adminPasscode) {
+        if (adminPasscode.trim() !== correctAdminPass.trim()) {
+          return NextResponse.json(
+            { success: false, error: "Invalid Admin Passcode. Cannot register admin account." },
+            { status: 403 }
+          );
+        }
+        targetRole = "admin";
+      }
+
       const newUserDoc = await UserModel.create({
         email: cleanEmail,
         passwordHash: hashedPassword,
@@ -63,7 +66,7 @@ export async function POST(req: NextRequest) {
         id: newUserDoc._id.toString(),
         email: newUserDoc.email,
         name: newUserDoc.name,
-        role: newUserDoc.role as "user" | "admin",
+        role: newUserDoc.role as "owner" | "admin" | "user",
       };
 
       const token = signJWT({
@@ -75,7 +78,7 @@ export async function POST(req: NextRequest) {
 
       const response = NextResponse.json({
         success: true,
-        message: "Account created successfully with role 'user'.",
+        message: `Account created successfully with role '${userObj.role}'.`,
         user: userObj,
         token,
       });

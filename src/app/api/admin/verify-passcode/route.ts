@@ -31,17 +31,26 @@ export async function POST(req: NextRequest) {
 
       const db = await connectDB();
       if (db) {
-        const dbUser =
-          (await UserModel.findById(payload.userId)) ||
-          (await UserModel.findOne({ email: payload.email.toLowerCase() }));
-        if (dbUser) userRole = dbUser.role as "owner" | "admin" | "user" | "customer";
-      } else {
-        const storeUser =
-          store.findUserById(payload.userId) || store.findUserByEmail(payload.email);
-        if (storeUser) userRole = storeUser.role;
+        let dbUser = null;
+        try {
+          dbUser =
+            (await UserModel.findById(payload.userId)) ||
+            (await UserModel.findOne({ email: payload.email.toLowerCase() }));
+        } catch {
+          dbUser = await UserModel.findOne({ email: payload.email.toLowerCase() });
+        }
+
+        if (dbUser) {
+          userRole = dbUser.role as "owner" | "admin" | "user" | "customer";
+        } else {
+          return NextResponse.json(
+            { success: false, error: "Account not found in database. Please register an admin account first." },
+            { status: 401 }
+          );
+        }
       }
     } catch {
-      // fallback to payload
+      // ignore
     }
 
     // Role check: Only Owner or Admin can request a Day-Token

@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Fallback to in-memory store
-    if (!reviews || reviews.length === 0) {
+    // Fallback to in-memory store ONLY if DB is offline
+    if (!db && (!reviews || reviews.length === 0)) {
       reviews = store.getReviews(productId);
     }
 
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     const avg =
       reviewCount > 0
         ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
-        : 5.0;
+        : 0;
     const averageRating = Math.round(avg * 10) / 10;
 
     // Star distribution (1 to 5)

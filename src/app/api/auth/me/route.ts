@@ -24,24 +24,29 @@ export async function GET(req: NextRequest) {
     let liveRole = payload.role;
     let liveName = payload.name;
 
-    // Check MongoDB for real-time role updates (e.g. manual Atlas modification to 'owner' or teammate promotion)
+    // Check MongoDB for real-time account validity
     try {
       const db = await connectDB();
       if (db) {
-        const dbUser =
-          (await UserModel.findById(payload.userId)) ||
-          (await UserModel.findOne({ email: payload.email.toLowerCase() }));
+        let dbUser = null;
+        try {
+          dbUser =
+            (await UserModel.findById(payload.userId)) ||
+            (await UserModel.findOne({ email: payload.email.toLowerCase() }));
+        } catch {
+          // If payload.userId was an invalid ObjectId format from demo (e.g. 'usr-owner-01')
+          dbUser = await UserModel.findOne({ email: payload.email.toLowerCase() });
+        }
+
         if (dbUser) {
           liveRole = dbUser.role;
           liveName = dbUser.name;
-        }
-      } else {
-        const storeUser =
-          store.findUserById(payload.userId) ||
-          store.findUserByEmail(payload.email);
-        if (storeUser) {
-          liveRole = storeUser.role;
-          liveName = storeUser.name;
+        } else {
+          // Cookie token belongs to a demo/wiped account not found in Atlas! Invalidate session.
+          const res = NextResponse.json({ authenticated: false, user: null }, { status: 200 });
+          res.cookies.delete("ancwave_token");
+          res.cookies.delete("ancwave_day_token");
+          return res;
         }
       }
     } catch {

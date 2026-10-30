@@ -854,79 +854,77 @@ export default function AdminPage() {
       const target = slugToFetch || selectedSlug;
 
       // 1. Fetch all products
+      let fetchedProductsList: ProductData[] = [];
       const allRes = await fetch("/api/product?all=true");
       if (allRes.ok) {
         const allData = await allRes.json();
-        setProducts(allData.products || []);
+        fetchedProductsList = allData.products || [];
+        setProducts(fetchedProductsList);
       }
 
       // 2. Fetch targeted product
       const prodRes = await fetch(`/api/product?slug=${target}`);
       if (prodRes.ok) {
         const data = await prodRes.json();
-        const p: ProductData = data.product;
-        setProduct(p);
-        setStockInput(p.stock);
-        setDiscountInput(p.activeDiscount || 0);
-        setIsFlashSale(p.isFlashSale ?? true);
+        let p: ProductData | null = data.product;
 
-        // Populate Variation Engine
-        setMasterProductId(p.productId || `ANC-${p.id.toUpperCase()}`);
-        setMasterName(p.name);
-        setMasterDescription(p.description);
-        setMasterType(p.type || "Over-Ear Headphones");
-        const effProductPrice = p.basePrice || p.price;
-        setMasterBasePrice(effProductPrice);
-        setQuickPriceInput(effProductPrice);
-        setMasterBaseDiscount(p.baseDiscount || 0);
-
-        if (p.globalSpecs) {
-          setGlobalSpecsList(
-            Object.entries(p.globalSpecs).map(([key, value]) => ({ key, value }))
-          );
-        } else {
-          setGlobalSpecsList([
-            { key: "Acoustic Architecture", value: "Bio-Cellulose Transducer" },
-            { key: "ANC Level", value: "-42 dB Vector Adaptive" },
-            { key: "Battery", value: "38 Hours" },
-          ]);
+        // If target product was not found, but we have products in database, auto-select the first product
+        if (!p && fetchedProductsList.length > 0) {
+          const firstP = fetchedProductsList[0];
+          setSelectedSlug(firstP.slug);
+          try {
+            const retryRes = await fetch(`/api/product?slug=${firstP.slug}`);
+            if (retryRes.ok) {
+              const retryData = await retryRes.json();
+              p = retryData.product;
+            }
+          } catch {
+            // ignore
+          }
         }
 
-        if (p.variantGroups && p.variantGroups.length > 0) {
-          setVariantGroups(p.variantGroups);
-          setChildVariants(
-            p.childVariants && p.childVariants.length > 0
-              ? p.childVariants
-              : variantGroupsToChildVariants(p.variantGroups, effProductPrice)
-          );
-        } else if (p.childVariants && p.childVariants.length > 0) {
-          setChildVariants(p.childVariants);
-          setVariantGroups(childVariantsToVariantGroups(p.childVariants, effProductPrice));
+        if (p) {
+          setProduct(p);
+          setStockInput(p.stock ?? 0);
+          setDiscountInput(p.activeDiscount || 0);
+          setIsFlashSale(p.isFlashSale ?? true);
+
+          // Populate Variation Engine
+          setMasterProductId(p.productId || `ANC-${p.id?.toUpperCase() || "01"}`);
+          setMasterName(p.name || "");
+          setMasterDescription(p.description || "");
+          setMasterType(p.type || "Over-Ear Headphones");
+          const effProductPrice = p.basePrice || p.price || 99;
+          setMasterBasePrice(effProductPrice);
+          setQuickPriceInput(effProductPrice);
+          setMasterBaseDiscount(p.baseDiscount || 0);
+
+          if (p.globalSpecs) {
+            setGlobalSpecsList(
+              Object.entries(p.globalSpecs).map(([key, value]) => ({ key, value }))
+            );
+          } else {
+            setGlobalSpecsList([]);
+          }
+
+          if (p.variantGroups && p.variantGroups.length > 0) {
+            setVariantGroups(p.variantGroups);
+            setChildVariants(
+              p.childVariants && p.childVariants.length > 0
+                ? p.childVariants
+                : variantGroupsToChildVariants(p.variantGroups, effProductPrice)
+            );
+          } else if (p.childVariants && p.childVariants.length > 0) {
+            setChildVariants(p.childVariants);
+            setVariantGroups(childVariantsToVariantGroups(p.childVariants, effProductPrice));
+          } else {
+            setVariantGroups([]);
+            setChildVariants([]);
+          }
         } else {
-          // Initialize fallback variant groups from color variants
-          const fallbackGroups: IVariantGroup[] = [
-            {
-              id: "A1",
-              name: "A1 (Standard Cut)",
-              specOverride: "A1 (Standard Cut)",
-              price: effProductPrice,
-              priceInr: p.priceInr || Math.round(effProductPrice * exchangeRate),
-              discount: 0,
-              colors: (p.variants || []).map((v, i) => ({
-                id: `A1-VAR-${i + 1}`,
-                sku: `${p.productId || "ANC"}-A1-${v.name.toUpperCase().replace(/\s+/g, "")}`,
-                color: v.name,
-                hex: v.hex || "#22252A",
-                price: v.price ?? effProductPrice,
-                priceInr: v.priceInr ?? Math.round((v.price ?? effProductPrice) * exchangeRate),
-                discount: 0,
-                stock: Math.max(1, Math.floor(p.stock / Math.max(1, p.variants.length))),
-                images: [v.image],
-              })),
-            },
-          ];
-          setVariantGroups(fallbackGroups);
-          setChildVariants(variantGroupsToChildVariants(fallbackGroups, effProductPrice));
+          setProduct(null as any);
+          setVariantGroups([]);
+          setChildVariants([]);
         }
       }
 
@@ -4345,6 +4343,16 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
+                      {products.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="text-center py-12 text-zinc-400">
+                            <div className="flex flex-col items-center gap-2">
+                              <span className="text-sm font-semibold text-zinc-700">No products published in ancwaveDB</span>
+                              <p className="text-xs text-zinc-500 max-w-sm">Your database is in a clean raw state. Click &quot;New Product Item&quot; above to create and publish your first product.</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                       {products.map((p) => {
                         const stockNum = Number(p.stock) || 0;
                         const stockPercent = Math.min(100, Math.round((stockNum / 40) * 100));
@@ -4787,7 +4795,27 @@ export default function AdminPage() {
           {/* TAB 1: PRODUCTS & INVENTORY ORCHESTRATION */}
           {activeTab === "inventory" && (
             <div className="space-y-8 animate-in fade-in duration-200">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {!product && products.length === 0 ? (
+                <div className="rounded-3xl bg-white border border-zinc-200 p-12 text-center max-w-xl mx-auto space-y-4 my-8 shadow-xs">
+                  <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-500 mx-auto flex items-center justify-center">
+                    <Package className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-zinc-900">No Products in Inventory</h3>
+                    <p className="text-xs text-zinc-500">ancwaveDB currently has 0 product documents. Create your first product item to begin managing architectures, colors, stock, and pricing.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsNewProductModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition shadow-sm cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create First Product Item</span>
+                  </button>
+                </div>
+              ) : (
+                <>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Left Column: Variant-Aware Restock & Alert Center */}
                 <div className="lg:col-span-6 rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
                   <div className="border-b border-zinc-100 pb-4 flex items-center justify-between">
@@ -5401,6 +5429,8 @@ export default function AdminPage() {
                   </table>
                 </div>
               </div>
+              </>
+              )}
             </div>
           )}
 

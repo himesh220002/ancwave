@@ -20,22 +20,29 @@ export async function GET(req: NextRequest) {
         try {
           const dbProducts = await ProductModel.find({}).lean();
           if (dbProducts && dbProducts.length > 0) {
-            products = dbProducts.map((p: any) => {
-              const formatted = normalizeProductData(p);
-              if (typeof store?.addProduct === "function") {
-                store.addProduct(formatted as any);
-              }
-              return formatted;
-            });
+            products = dbProducts.map((p: any) => normalizeProductData(p));
           }
         } catch (dbErr) {
-          console.warn("DB find failed in /api/product, falling back to store:", dbErr);
+          console.warn("DB find failed in /api/product:", dbErr);
         }
+
+        // When DB is active, return pure DB catalog (empty [] if raw state)
+        return NextResponse.json(
+          {
+            success: true,
+            products,
+            cachedAt: new Date().toISOString(),
+          },
+          {
+            headers: {
+              "Cache-Control": "no-store, no-cache, must-revalidate",
+            },
+          }
+        );
       }
 
-      if (!products.length) {
-        products = store.getAllProducts();
-      }
+      // Only fallback if DB is offline
+      products = store.getAllProducts();
 
       return NextResponse.json(
         {
@@ -51,27 +58,49 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const targetSlug = slug || "form-01";
+    const targetSlug = slug || "";
     let product: any = null;
 
     if (db) {
       try {
-        const doc = await ProductModel.findOne({
-          $or: [{ slug: targetSlug }, { productId: targetSlug }, { id: targetSlug }],
-        }).lean();
-        if (doc) {
-          product = normalizeProductData(doc);
-          if (typeof store?.addProduct === "function") {
-            store.addProduct(product as any);
+        if (targetSlug) {
+          const doc = await ProductModel.findOne({
+            $or: [{ slug: targetSlug }, { productId: targetSlug }, { id: targetSlug }],
+          }).lean();
+          if (doc) {
+            product = normalizeProductData(doc);
+          }
+        } else {
+          // If no specific slug was passed, retrieve the first active product in DB
+          const firstDoc = await ProductModel.findOne({}).lean();
+          if (firstDoc) {
+            product = normalizeProductData(firstDoc);
           }
         }
       } catch (dbErr) {
         console.warn("DB findOne failed in /api/product:", dbErr);
       }
+
+      // Return real DB product or null (pure state)
+      return NextResponse.json(
+        {
+          success: true,
+          product,
+          cachedAt: product?.lastRevalidatedAt || new Date().toISOString(),
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "X-Inventory-Status": (product?.stock ?? 0) <= (product?.lowStockThreshold ?? 5) ? "LOW_STOCK" : "IN_STOCK",
+          },
+        }
+      );
     }
 
-    if (!product) {
-      product = normalizeProductData(store.getProduct(targetSlug));
+    // Only if DB is completely offline
+    if (targetSlug) {
+      const sp = store.getProduct(targetSlug);
+      if (sp) product = normalizeProductData(sp);
     }
 
     return NextResponse.json(

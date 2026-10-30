@@ -180,11 +180,7 @@ export async function findOrder(orderNumberOrId: string): Promise<Order | undefi
   if (!orderNumberOrId) return undefined;
   const q = orderNumberOrId.trim();
 
-  // 1. In-memory store lookup
-  const inStore = findOrderInStore(q);
-  if (inStore) return inStore;
-
-  // 2. MongoDB database lookup
+  // 1. MongoDB database lookup first
   const db = await connectDB();
   if (db) {
     try {
@@ -198,20 +194,17 @@ export async function findOrder(orderNumberOrId: string): Promise<Order | undefi
       }).lean();
 
       if (found) {
-        const normalized = normalizeOrder(found);
-        // Cache to store so subsequent reads are immediate
-        if (typeof (store as any)?.addOrder === "function") {
-          try {
-            store.addOrder(normalized);
-          } catch (e) {
-            // ignore
-          }
-        }
-        return normalized;
+        return normalizeOrder(found);
       }
     } catch (dbErr) {
       console.warn("MongoDB order lookup notice:", dbErr);
     }
+  }
+
+  // 2. Fallback to in-memory store ONLY if DB is offline
+  if (!db) {
+    const inStore = findOrderInStore(q);
+    if (inStore) return inStore;
   }
 
   return undefined;
@@ -325,34 +318,36 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Fallback/Merge with memory store
-    const storeOrders = (
-      typeof (store as any)?.getOrders === "function" ? store.getOrders() : []
-    ).map(normalizeOrder);
-    const existingOrderNumbers = new Set(orders.map((o) => o.orderNumber.toUpperCase()));
+    // If DB is offline, fallback to memory store
+    if (!db) {
+      const storeOrders = (
+        typeof (store as any)?.getOrders === "function" ? store.getOrders() : []
+      ).map(normalizeOrder);
+      const existingOrderNumbers = new Set(orders.map((o) => o.orderNumber.toUpperCase()));
 
-    storeOrders.forEach((so) => {
-      if (!existingOrderNumbers.has(so.orderNumber.toUpperCase())) {
-        let match = true;
-        if (orderNumber && so.orderNumber.toLowerCase() !== orderNumber.toLowerCase()) {
-          match = false;
-        } else if (email && !all && so.customer.email.toLowerCase() !== email.toLowerCase()) {
-          match = false;
-        } else if (
-          userId &&
-          !all &&
-          so.userId !== userId &&
-          (!email || so.customer.email.toLowerCase() !== email.toLowerCase())
-        ) {
-          match = false;
-        }
+      storeOrders.forEach((so) => {
+        if (!existingOrderNumbers.has(so.orderNumber.toUpperCase())) {
+          let match = true;
+          if (orderNumber && so.orderNumber.toLowerCase() !== orderNumber.toLowerCase()) {
+            match = false;
+          } else if (email && !all && so.customer.email.toLowerCase() !== email.toLowerCase()) {
+            match = false;
+          } else if (
+            userId &&
+            !all &&
+            so.userId !== userId &&
+            (!email || so.customer.email.toLowerCase() !== email.toLowerCase())
+          ) {
+            match = false;
+          }
 
-        if (match || all) {
-          orders.push(so);
-          existingOrderNumbers.add(so.orderNumber.toUpperCase());
+          if (match || all) {
+            orders.push(so);
+            existingOrderNumbers.add(so.orderNumber.toUpperCase());
+          }
         }
-      }
-    });
+      });
+    }
 
     // Sort newest first
     orders.sort(

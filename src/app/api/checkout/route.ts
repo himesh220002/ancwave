@@ -159,10 +159,11 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   let orders: Order[] = [];
+  let db: any = null;
 
   // 1. Fetch from MongoDB Atlas
   try {
-    const db = await connectDB();
+    db = await connectDB();
     if (db) {
       const mongoOrders = await OrderModel.find({}).sort({ createdAt: -1 }).lean();
       if (mongoOrders && mongoOrders.length > 0) {
@@ -190,14 +191,16 @@ export async function GET() {
     console.warn("MongoDB orders fetch in /api/checkout notice:", err);
   }
 
-  // 2. Fallback/merge with memory store orders
-  const storeOrders = store.getOrders();
-  const existingOrderNumbers = new Set(orders.map((o) => o.orderNumber?.toUpperCase()));
+  // 2. Fallback to memory store orders ONLY if DB is offline
+  if (!db) {
+    const storeOrders = store.getOrders();
+    const existingOrderNumbers = new Set(orders.map((o) => o.orderNumber?.toUpperCase()));
 
-  for (const so of storeOrders) {
-    if (so.orderNumber && !existingOrderNumbers.has(so.orderNumber.toUpperCase())) {
-      orders.push(so);
-      existingOrderNumbers.add(so.orderNumber.toUpperCase());
+    for (const so of storeOrders) {
+      if (so.orderNumber && !existingOrderNumbers.has(so.orderNumber.toUpperCase())) {
+        orders.push(so);
+        existingOrderNumbers.add(so.orderNumber.toUpperCase());
+      }
     }
   }
 
