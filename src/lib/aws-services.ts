@@ -197,10 +197,12 @@ export async function dispatchOrderPlacedEvent(order: Order): Promise<AWSEventLo
  */
 export async function generateS3PresignedUrl(
   fileName: string,
-  contentType: string
+  contentType: string,
+  folder: string = "products"
 ): Promise<{ uploadUrl: string; fileKey: string; publicUrl: string }> {
   const sanitizedName = fileName.replace(/[^a-zA-Z0-9.-]/g, "-").toLowerCase();
-  const fileKey = `reviews/${Date.now()}-${sanitizedName}`;
+  const cleanFolder = (folder || "products").replace(/^\/+|\/+$/g, "");
+  const fileKey = `${cleanFolder}/${Date.now()}-${sanitizedName}`;
   const bucket = AWS_DEFAULT_CONFIG.s3Bucket;
   const region = AWS_DEFAULT_CONFIG.region;
 

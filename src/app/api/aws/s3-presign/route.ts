@@ -3,7 +3,7 @@ import { generateS3PresignedUrl } from "@/lib/aws-services";
 
 export async function POST(req: NextRequest) {
   try {
-    const { fileName, contentType = "image/jpeg" } = await req.json();
+    const { fileName, contentType = "image/jpeg", folder = "products" } = await req.json();
 
     if (!fileName) {
       return NextResponse.json(
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const presigned = await generateS3PresignedUrl(fileName, contentType);
+    const presigned = await generateS3PresignedUrl(fileName, contentType, folder);
 
     return NextResponse.json({
       success: true,

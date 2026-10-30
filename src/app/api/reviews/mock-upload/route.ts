@@ -7,7 +7,8 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const key = (formData.get("key") as string) || `reviews/${Date.now()}-${file?.name || "upload.jpg"}`;
+    const folder = (formData.get("folder") as string) || "products";
+    const key = (formData.get("key") as string) || `${folder.replace(/^\/+|\/+$/g, "")}/${Date.now()}-${file?.name || "upload.jpg"}`;
 
     if (!file) {
       return NextResponse.json({ success: false, error: "No file provided" }, { status: 400 });

@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { fileName, contentType } = body;
+    const { fileName, contentType, folder = "reviews" } = body;
 
     if (!fileName || !contentType) {
       return NextResponse.json(
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate AWS S3 Presigned URL
-    const presigned = await generateS3PresignedUrl(fileName, contentType);
+    const presigned = await generateS3PresignedUrl(fileName, contentType, folder);
 
     return NextResponse.json({
       success: true,

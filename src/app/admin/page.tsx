@@ -85,6 +85,7 @@ import {
   AlertCircle,
   Compass,
   Calendar,
+  GripVertical,
 } from "lucide-react";
 import {
   ProductData,
@@ -1505,6 +1506,25 @@ export default function AdminPage() {
     setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
   };
 
+  const [draggedImage, setDraggedImage] = useState<{ groupId: string; colorIndex: number; imgIndex: number } | null>(null);
+  const [dragOverImage, setDragOverImage] = useState<{ groupId: string; colorIndex: number; imgIndex: number } | null>(null);
+
+  const handleReorderImagesInColor = (groupId: string, colorIndex: number, fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    const updated = variantGroups.map((g) => {
+      if (g.id !== groupId) return g;
+      const newColors = [...g.colors];
+      const curImages = [...(newColors[colorIndex].images || [])];
+      if (fromIdx < 0 || fromIdx >= curImages.length || toIdx < 0 || toIdx >= curImages.length) return g;
+      const [moved] = curImages.splice(fromIdx, 1);
+      curImages.splice(toIdx, 0, moved);
+      newColors[colorIndex] = { ...newColors[colorIndex], images: curImages };
+      return { ...g, colors: newColors };
+    });
+    setVariantGroups(updated);
+    setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
+  };
+
   const handleColorDirectS3Upload = async (
     groupId: string,
     colorIndex: number,
@@ -1519,17 +1539,19 @@ export default function AdminPage() {
       const uploadedUrls: string[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const presignRes = await fetch("/api/reviews/presigned-url", {
+        const presignRes = await fetch("/api/aws/s3-presign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             fileName: `variant-${groupId}-${colorIndex}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`,
             contentType: file.type || "image/jpeg",
+            folder: "products",
           }),
         });
-        const presignData = await presignRes.json();
-        if (!presignData.success || !presignData.uploadUrl) {
-          throw new Error(presignData.error || "Failed to generate S3 upload signature");
+        const resJson = await presignRes.json();
+        const presignData = resJson.data || resJson;
+        if (!resJson.success || !presignData.uploadUrl) {
+          throw new Error(resJson.error || "Failed to generate S3 upload signature");
         }
 
         let uploadedUrl = presignData.publicUrl;
@@ -10842,38 +10864,148 @@ export default function AdminPage() {
                                   </div>
                                 </div>
 
-                                {/* Thumbnails */}
-                                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                                  {(colorItem.images && colorItem.images.length > 0 ? colorItem.images : ["/images/hero-silver.jpg"]).map(
-                                    (imgUrl, imgIdx) => (
-                                      <div
-                                        key={imgIdx}
-                                        className="p-1.5 rounded-lg bg-zinc-50 border border-zinc-200 space-y-1 relative group"
-                                      >
-                                        <div className="relative aspect-square rounded bg-white overflow-hidden flex items-center justify-center">
-                                          <img
-                                            src={imgUrl}
-                                            alt={`${colorItem.color} angle ${imgIdx + 1}`}
-                                            className="w-full h-full object-contain p-0.5"
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => handleRemoveImageFromColor(group.id, cIdx, imgIdx)}
-                                            className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white p-1 rounded transition-colors"
-                                            title="Remove photo"
+                                {/* Thumbnails with Drag & Drop Reordering */}
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+                                    <span>Drag cards or click arrows to reorder. First photo is the primary cover.</span>
+                                  </div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                                    {(colorItem.images && colorItem.images.length > 0 ? colorItem.images : ["/images/hero-silver.jpg"]).map(
+                                      (imgUrl, imgIdx) => {
+                                        const isDraggingThis =
+                                          draggedImage?.groupId === group.id &&
+                                          draggedImage?.colorIndex === cIdx &&
+                                          draggedImage?.imgIndex === imgIdx;
+                                        const isDragOverThis =
+                                          dragOverImage?.groupId === group.id &&
+                                          dragOverImage?.colorIndex === cIdx &&
+                                          dragOverImage?.imgIndex === imgIdx;
+
+                                        return (
+                                          <div
+                                            key={imgIdx}
+                                            draggable
+                                            onDragStart={(e) => {
+                                              e.dataTransfer.setData("text/plain", `${imgIdx}`);
+                                              setDraggedImage({ groupId: group.id, colorIndex: cIdx, imgIndex: imgIdx });
+                                            }}
+                                            onDragOver={(e) => {
+                                              e.preventDefault();
+                                              e.dataTransfer.dropEffect = "move";
+                                              setDragOverImage({ groupId: group.id, colorIndex: cIdx, imgIndex: imgIdx });
+                                            }}
+                                            onDragLeave={() => {
+                                              if (dragOverImage?.imgIndex === imgIdx) setDragOverImage(null);
+                                            }}
+                                            onDrop={(e) => {
+                                              e.preventDefault();
+                                              if (
+                                                draggedImage &&
+                                                draggedImage.groupId === group.id &&
+                                                draggedImage.colorIndex === cIdx
+                                              ) {
+                                                handleReorderImagesInColor(group.id, cIdx, draggedImage.imgIndex, imgIdx);
+                                              }
+                                              setDraggedImage(null);
+                                              setDragOverImage(null);
+                                            }}
+                                            onDragEnd={() => {
+                                              setDraggedImage(null);
+                                              setDragOverImage(null);
+                                            }}
+                                            className={`p-1.5 rounded-lg border transition-all duration-150 space-y-1 relative group cursor-grab active:cursor-grabbing ${
+                                              isDraggingThis
+                                                ? "opacity-30 border-dashed border-blue-400 bg-blue-50/30"
+                                                : isDragOverThis
+                                                ? "ring-2 ring-blue-500 border-blue-500 bg-blue-50 scale-105 z-10 shadow-md"
+                                                : "bg-zinc-50 border-zinc-200 hover:border-zinc-300"
+                                            }`}
                                           >
-                                            <Trash2 className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                        <input
-                                          type="text"
-                                          value={imgUrl}
-                                          onChange={(e) => handleUpdateImageInColor(group.id, cIdx, imgIdx, e.target.value)}
-                                          className="w-full px-1.5 py-0.5 text-[9px] font-mono bg-white border border-zinc-200 rounded text-zinc-600 focus:outline-none"
-                                        />
-                                      </div>
-                                    )
-                                  )}
+                                            <div className="relative aspect-square rounded bg-white overflow-hidden flex items-center justify-center">
+                                              <img
+                                                src={imgUrl}
+                                                alt={`${colorItem.color} angle ${imgIdx + 1}`}
+                                                className="w-full h-full object-contain p-0.5 pointer-events-none select-none"
+                                              />
+
+                                              {/* Badge: Primary / Order */}
+                                              {imgIdx === 0 ? (
+                                                <span className="absolute top-1 left-1 bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded shadow-2xs select-none pointer-events-none">
+                                                  ★ Cover
+                                                </span>
+                                              ) : (
+                                                <span className="absolute top-1 left-1 bg-black/60 text-white text-[9px] font-mono px-1 py-0.2 rounded select-none pointer-events-none">
+                                                  #{imgIdx + 1}
+                                                </span>
+                                              )}
+
+                                              {/* Remove button */}
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleRemoveImageFromColor(group.id, cIdx, imgIdx);
+                                                }}
+                                                className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white p-1 rounded transition-colors"
+                                                title="Remove photo"
+                                              >
+                                                <Trash2 className="w-3 h-3" />
+                                              </button>
+
+                                              {/* Drag Handle & Arrow Controls */}
+                                              <div className="absolute bottom-1 inset-x-1 flex items-center justify-between pointer-events-auto">
+                                                <span
+                                                  className="p-0.5 rounded bg-white/90 hover:bg-white text-zinc-600 shadow-2xs"
+                                                  title="Drag to rearrange order"
+                                                >
+                                                  <GripVertical className="w-3 h-3" />
+                                                </span>
+
+                                                <div className="flex items-center gap-0.5 bg-white/95 backdrop-blur rounded p-0.5 shadow-2xs border border-zinc-200">
+                                                  {imgIdx > 0 && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleReorderImagesInColor(group.id, cIdx, imgIdx, imgIdx - 1);
+                                                      }}
+                                                      className="hover:bg-zinc-200 p-0.5 rounded text-zinc-700"
+                                                      title="Move left"
+                                                    >
+                                                      <ArrowLeft className="w-2.5 h-2.5" />
+                                                    </button>
+                                                  )}
+                                                  {imgIdx < (colorItem.images?.length || 1) - 1 && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                      }}
+                                                      onMouseDown={(e) => {
+                                                        e.stopPropagation();
+                                                        handleReorderImagesInColor(group.id, cIdx, imgIdx, imgIdx + 1);
+                                                      }}
+                                                      className="hover:bg-zinc-200 p-0.5 rounded text-zinc-700"
+                                                      title="Move right"
+                                                    >
+                                                      <ArrowRight className="w-2.5 h-2.5" />
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            <input
+                                              type="text"
+                                              value={imgUrl}
+                                              onChange={(e) => handleUpdateImageInColor(group.id, cIdx, imgIdx, e.target.value)}
+                                              className="w-full px-1.5 py-0.5 text-[9px] font-mono bg-white border border-zinc-200 rounded text-zinc-600 focus:outline-none"
+                                            />
+                                          </div>
+                                        );
+                                      }
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </div>
