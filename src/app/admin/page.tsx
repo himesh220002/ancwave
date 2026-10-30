@@ -1239,7 +1239,7 @@ export default function AdminPage() {
   };
 
   const handleBasePriceChangeINR = (newInr: number) => {
-    const newUsd = Number((newInr / exchangeRate).toFixed(4));
+    const newUsd = Number((newInr / exchangeRate).toFixed(2));
     setMasterBasePrice(newUsd);
     setQuickPriceInput(newUsd);
     if (autoCascadePrice) {
@@ -1261,7 +1261,7 @@ export default function AdminPage() {
   };
 
   const handleQuickRazorpayTestPreset = (inrAmount: number) => {
-    const usd = Number((inrAmount / exchangeRate).toFixed(4));
+    const usd = Number((inrAmount / exchangeRate).toFixed(2));
     setMasterBasePrice(usd);
     setQuickPriceInput(usd);
     const updated = variantGroups.map((g) => ({
@@ -1445,7 +1445,7 @@ export default function AdminPage() {
         newColors[colorIndex] = {
           ...newColors[colorIndex],
           priceInr: val,
-          price: Number((val / exchangeRate).toFixed(4)),
+          price: Number((val / exchangeRate).toFixed(2)),
         };
       } else {
         newColors[colorIndex] = { ...newColors[colorIndex], [field]: val };
@@ -1532,14 +1532,32 @@ export default function AdminPage() {
           throw new Error(presignData.error || "Failed to generate S3 upload signature");
         }
 
-        const uploadRes = await fetch(presignData.uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": file.type || "image/jpeg" },
-          body: file,
-        });
+        let uploadedUrl = presignData.publicUrl;
+        try {
+          const uploadRes = await fetch(presignData.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": file.type || "image/jpeg" },
+            body: file,
+          });
 
-        if (!uploadRes.ok) throw new Error("Direct S3 upload failed");
-        uploadedUrls.push(presignData.publicUrl);
+          if (!uploadRes.ok) throw new Error(`Direct S3 upload failed (Status: ${uploadRes.status})`);
+        } catch (directErr) {
+          console.warn("Direct S3 upload notice, forwarding via server S3 proxy:", directErr);
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("key", presignData.fileKey);
+          const fallbackRes = await fetch("/api/reviews/mock-upload", {
+            method: "POST",
+            body: formData,
+          });
+          const fallbackData = await fallbackRes.json();
+          if (!fallbackData.success || !fallbackData.publicUrl) {
+            throw new Error(fallbackData.error || "Both direct S3 and server proxy upload failed");
+          }
+          uploadedUrl = fallbackData.publicUrl;
+        }
+
+        uploadedUrls.push(uploadedUrl);
       }
 
       const updated = variantGroups.map((g) => {
@@ -4973,7 +4991,7 @@ export default function AdminPage() {
                               }
                               onChange={(e) => {
                                 const inr = Number(e.target.value);
-                                const usd = Number((inr / exchangeRate).toFixed(4));
+                                const usd = Number((inr / exchangeRate).toFixed(2));
                                 setQuickPriceInput(usd);
                                 setMasterBasePrice(usd);
                                 if (autoCascadePrice) {
@@ -5155,7 +5173,7 @@ export default function AdminPage() {
                                     </span>
                                   </div>
                                   <p className="text-[11px] text-zinc-400 font-mono">
-                                    ${c.price || g.price || product?.price} · {c.stock} units in stock
+                                    ${Number(c.price || g.price || product?.price || 0).toFixed(2)} · {c.stock} units in stock
                                   </p>
                                 </div>
 
@@ -5316,7 +5334,7 @@ export default function AdminPage() {
                             </td>
 
                             <td className="py-3 px-3 font-mono text-xs">
-                              <div className="font-bold text-zinc-900">${p.price}</div>
+                              <div className="font-bold text-zinc-900">${(Number(p.price) || 0).toFixed(2)}</div>
                               <div className="text-[10px] text-zinc-400">₹{p.priceInr || Math.round(p.price * exchangeRate)}</div>
                             </td>
 
@@ -10639,7 +10657,7 @@ export default function AdminPage() {
                                 }
                                 onChange={(e) => {
                                   const inr = Number(e.target.value);
-                                  const usd = Number((inr / exchangeRate).toFixed(4));
+                                  const usd = Number((inr / exchangeRate).toFixed(2));
                                   handleUpdateArchitecturePrice(group.id, usd, inr);
                                 }}
                                 className="w-20 text-xs font-mono font-bold text-blue-900 bg-transparent focus:outline-none"
@@ -11367,7 +11385,7 @@ export default function AdminPage() {
                                       {v.sku}
                                     </span>
                                     <span className="text-[11px] text-zinc-400 font-mono">
-                                      ${v.price}
+                                      ${Number(v.price || 0).toFixed(2)}
                                     </span>
                                     {hasRestockProcess && (
                                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-mono font-bold">

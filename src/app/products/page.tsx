@@ -498,7 +498,7 @@ export default function ProductsCatalogPage() {
                             {p.name}
                           </Link>
                           <div className="text-sm font-mono font-bold text-blue-600">
-                            ${p.price}
+                            ${Number(p.price).toFixed(2)}
                           </div>
                           <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-500">
                             <Star className="w-3 h-3 fill-amber-400 text-amber-400" />

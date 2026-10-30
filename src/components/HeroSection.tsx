@@ -93,7 +93,7 @@ export function HeroSection({
                 </button>
 
                 <span className="text-base font-semibold text-[#111111] font-sans">
-                  ${product.price}
+                  ${Number(product.price).toFixed(2)}
                 </span>
               </div>
 

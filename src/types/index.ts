@@ -135,7 +135,7 @@ export function variantGroupsToChildVariants(groups: IVariantGroup[], defaultPri
   const result: IVariant[] = [];
   (groups || []).forEach((g) => {
     (g.colors || []).forEach((c) => {
-      const effPrice = c.price ?? g.price ?? defaultPrice;
+      const effPrice = Math.round((c.price ?? g.price ?? defaultPrice) * 100) / 100;
       const effPriceInr = c.priceInr ?? g.priceInr ?? (typeof effPrice === "number" ? Math.round(effPrice * DEFAULT_USD_TO_INR_RATE) : undefined);
       result.push({
         sku: c.sku,
@@ -284,10 +284,11 @@ export function normalizeProductData(raw: any): ProductData {
 
   const slug = clean.slug || clean.id || (clean.name ? clean.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") : "product");
   const productId = clean.productId || `PROD-${slug.toUpperCase()}`;
-  const price = Number(clean.price) || Number(clean.basePrice) || 99;
-  const basePrice = Number(clean.basePrice) || price;
+  const rawPrice = Number(clean.price) || Number(clean.basePrice) || 99;
+  const price = Math.round(rawPrice * 100) / 100;
+  const basePrice = Math.round((Number(clean.basePrice) || price) * 100) / 100;
   const priceInr = Number(clean.priceInr) || Math.round(price * DEFAULT_USD_TO_INR_RATE);
-  const originalPrice = Number(clean.originalPrice) || Math.round(price * 1.25);
+  const originalPrice = Math.round((Number(clean.originalPrice) || Math.round(price * 1.25)) * 100) / 100;
 
   const rawVariants: any[] = Array.isArray(clean.variants) ? clean.variants : [];
   const rawColorVariants: any[] = Array.isArray(clean.colorVariants) ? clean.colorVariants : [];
@@ -381,7 +382,7 @@ export function normalizeProductData(raw: any): ProductData {
         ? c.images
         : [primaryImage];
 
-    const varPrice = Number(c.price) || price;
+    const varPrice = Math.round((Number(c.price) || price) * 100) / 100;
     const varPriceInr = Number(c.priceInr) || Math.round(varPrice * DEFAULT_USD_TO_INR_RATE);
     const varStock = typeof c.stock === "number" ? c.stock : 10;
 
@@ -409,7 +410,7 @@ export function normalizeProductData(raw: any): ProductData {
         color: cv.color || normalizedColorVariants[idx % normalizedColorVariants.length]?.name || "Standard",
         specOverride: cv.specOverride || "Standard Architecture",
         variantSpecs: cv.variantSpecs,
-        price: Number(cv.price) || price,
+        price: Math.round((Number(cv.price) || price) * 100) / 100,
         priceInr: Number(cv.priceInr) || Math.round((Number(cv.price) || price) * DEFAULT_USD_TO_INR_RATE),
         discount: Number(cv.discount) || 0,
         stock: typeof cv.stock === "number" ? cv.stock : 10,
@@ -425,7 +426,7 @@ export function normalizeProductData(raw: any): ProductData {
       sku: `${productId}-${v.id.toUpperCase()}-${idx + 1}`,
       color: v.name,
       specOverride: "Standard Architecture",
-      price: v.price || price,
+      price: Math.round((v.price || price) * 100) / 100,
       priceInr: v.priceInr || Math.round((v.price || price) * DEFAULT_USD_TO_INR_RATE),
       discount: 0,
       stock: v.stock || 10,
