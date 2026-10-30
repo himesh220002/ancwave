@@ -649,9 +649,14 @@ export async function POST(req: NextRequest) {
             route[i] = { ...route[i], status: "completed" };
           }
         }
-        eventTitle = `Received at ${targetHub.name}`;
-        eventDesc = `Consignment #${targetOrder.orderNumber} dock scanned and checked in at ${targetHub.name} (${targetHub.region}) [In: ${now}]. Manifest confirmed. Moved to sorting queue.`;
-        deliveryStatus = "in_transit";
+        const isOrigin = targetHub.id === "STOCK-CTR-01" || targetHub.id === "STK-CTR-01";
+        eventTitle = isOrigin
+          ? `Packed & Verified: ${targetHub.name}`
+          : `Received at ${targetHub.name}`;
+        eventDesc = isOrigin
+          ? `Consignment #${targetOrder.orderNumber} picked, packaged with tamper-proof seal, QC-passed, and staged at Central Stock & Fulfillment Center origin dock. Ready for sorting bay.`
+          : `Consignment #${targetOrder.orderNumber} dock scanned and checked in at ${targetHub.name} (${targetHub.region}) [In: ${now}]. Manifest confirmed. Moved to sorting queue.`;
+        deliveryStatus = isOrigin ? "processing" : "in_transit";
       } else if (queueAction === "to_sorting") {
         newQueueStatus = "sorting";
         if (legIndex !== -1) {
@@ -661,8 +666,13 @@ export async function POST(req: NextRequest) {
             containerId: (transitMode === "train" || transitMode === "ship") ? containerId : undefined,
           };
         }
-        eventTitle = `Processing in Sorting Dock: ${targetHub.name}`;
-        eventDesc = `Consignment #${targetOrder.orderNumber} staged in sorting bay at ${targetHub.name}. Destination routing analysis initialized.`;
+        const isOrigin = targetHub.id === "STOCK-CTR-01" || targetHub.id === "STK-CTR-01";
+        eventTitle = isOrigin
+          ? `Staged in Origin Sorting Dock: ${targetHub.name}`
+          : `Processing in Sorting Dock: ${targetHub.name}`;
+        eventDesc = isOrigin
+          ? `Consignment #${targetOrder.orderNumber} staged in origin sorting bay at ${targetHub.name}. Destination routing and trunk fleet assignment initialized.`
+          : `Consignment #${targetOrder.orderNumber} staged in sorting bay at ${targetHub.name}. Destination routing analysis initialized.`;
         deliveryStatus = "in_transit";
       } else if (queueAction === "to_loading") {
         newQueueStatus = "loading";
@@ -718,6 +728,31 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        if (legIndex === -1 && (targetHub.id === "STOCK-CTR-01" || targetHub.id === "STK-CTR-01")) {
+          if (route.length > 0 && destHub && route[0].hubId.toLowerCase() !== destHub.id.toLowerCase()) {
+            const existingDestIdx = route.findIndex((l) => l.hubId.toLowerCase() === destHub.id.toLowerCase());
+            if (existingDestIdx !== -1) {
+              const [item] = route.splice(existingDestIdx, 1);
+              route.unshift(item);
+            } else {
+              route.unshift({
+                sequence: 1,
+                hubId: destHub.id,
+                hubCode: destHub.code,
+                hubName: destHub.name,
+                region: destHub.region,
+                status: "pending",
+                transportMode: transitMode,
+                vehicleNo,
+                containerId: effectiveContainerId,
+              });
+            }
+            for (let s = 0; s < route.length; s++) {
+              route[s].sequence = s + 1;
+            }
+          }
+        }
+
         const containerNote = effectiveContainerId ? ` · Container ID: [${effectiveContainerId}]` : "";
         if (targetOrder.deliveryStatus === "order_created" || targetOrder.deliveryStatus === "order_packed") {
           deliveryStatus = "dispatched";
@@ -735,6 +770,39 @@ export async function POST(req: NextRequest) {
           eventDesc = `Consignment #${targetOrder.orderNumber} sorted and assigned to ${destName} via ${String(transitMode).toUpperCase()} [Vehicle: ${vehicleNo}]${containerNote}. Consignment staged at loading bay awaiting vehicle load completion.`;
           deliveryStatus = "in_transit";
         }
+      } else if (queueAction === "deny_loading" || queueAction === "revert_to_sorting") {
+        newQueueStatus = "sorting";
+        const denialReason = body.denialReason || "Sorting / labeling discrepancy flagged before vehicle load";
+
+        if (legIndex !== -1) {
+          route[legIndex] = {
+            ...route[legIndex],
+            status: "sorting",
+            dispatchedAt: undefined,
+            outHubAt: undefined,
+          };
+
+          // If the next leg was marked incoming during to_loading, revert it to pending
+          if (route[legIndex + 1] && route[legIndex + 1].status === "incoming") {
+            route[legIndex + 1] = {
+              ...route[legIndex + 1],
+              status: "pending",
+            };
+          }
+        }
+
+        // Revert deliveryStatus if it was changed to dispatched during origin to_loading
+        if (
+          targetOrder.deliveryStatus === "dispatched" &&
+          (targetOrder.events?.some((e) => e.title.includes("Origin Warehouse Dispatched")) || legIndex === 0)
+        ) {
+          deliveryStatus = "order_packed";
+        } else if (targetOrder.deliveryStatus === "out_for_delivery" || targetOrder.deliveryStatus === "dispatched") {
+          deliveryStatus = "in_transit";
+        }
+
+        eventTitle = `Vehicle Loading Denied: Returned to Sorting Dock [${targetHub.name}]`;
+        eventDesc = `Consignment #${targetOrder.orderNumber} vehicle loading was denied/rejected at loading bay (${denialReason}). Consignment returned to sorting bay at ${targetHub.name} for re-inspection, routing, and vehicle re-assignment.`;
       } else if (queueAction === "dispatch" || queueAction === "container_dispatch" || queueAction === "loaded_dispatch") {
         const isLastMile = isDestinationClose || (legIndex !== -1 && route[legIndex].isFinalDeliveryHub) || (legIndex === route.length - 1);
         newQueueStatus = isLastMile ? "gate_handover" : "outgoing";
@@ -790,6 +858,23 @@ export async function POST(req: NextRequest) {
             route[legIndex + 1] = {
               ...route[legIndex + 1],
               status: "incoming",
+            };
+          }
+        }
+
+        if (legIndex === -1 && (targetHub.id === "STOCK-CTR-01" || targetHub.id === "STK-CTR-01")) {
+          if (route.length > 0) {
+            route[0] = {
+              ...route[0],
+              status: "incoming",
+              transportMode: transitMode,
+              vehicleNo,
+              containerId: effectiveContainerId,
+              railFreight: railFreight || route[0].railFreight,
+              airCargo: airCargo || route[0].airCargo,
+              oceanFreight: oceanFreight || route[0].oceanFreight,
+              courierService: courierService || route[0].courierService,
+              localDelivery: localDelivery || route[0].localDelivery,
             };
           }
         }
@@ -851,6 +936,7 @@ export async function POST(req: NextRequest) {
 
       const activeLeg = route.find((l) => l.status !== "completed") || route[route.length - 1];
       const nextLeg = activeLeg ? route[route.indexOf(activeLeg) + 1] : undefined;
+      const isDenying = queueAction === "deny_loading" || queueAction === "revert_to_sorting";
 
       const updates: Partial<Order> = {
         route,
@@ -861,8 +947,8 @@ export async function POST(req: NextRequest) {
         nextHubId: nextLeg?.hubId,
         nextHub: nextLeg?.hubName || "Customer Doorstep Delivery Gate",
         nextRegion: nextLeg?.region || `${targetOrder.customer.city}, ${targetOrder.customer.state}`,
-        transitMode,
-        vehicleNo,
+        transitMode: isDenying ? (route[legIndex]?.transportMode || transitMode) : transitMode,
+        vehicleNo: isDenying ? (route[legIndex]?.vehicleNo || vehicleNo) : vehicleNo,
         containerId: (transitMode === "train" || transitMode === "ship") ? (containerId || (legIndex !== -1 ? route[legIndex]?.containerId : undefined)) : undefined,
         dispatchCategory: dispatchCategory || (legIndex !== -1 ? route[legIndex]?.dispatchCategory : undefined),
         railFreight: railFreight || (legIndex !== -1 ? route[legIndex]?.railFreight : undefined),

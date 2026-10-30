@@ -7,6 +7,17 @@ const DYNAMIC_HUBS_FILE = path.join(process.cwd(), "dynamic-hubs.json");
 
 // 9 Strategic Pan-India Master Hubs + Sub-hub & International Hubs
 export const STRATEGIC_MASTER_HUBS: LogisticsHub[] = [
+  // 0. ORIGIN: Central Stock & Packaging Station (National Fulfillment Center)
+  {
+    id: "STOCK-CTR-01",
+    code: "STK",
+    name: "Central Stock & Fulfillment Center",
+    region: "Central Inventory Depot (Nagpur Zero-Mile / National Stock Center)",
+    country: "India",
+    type: "origin",
+    coverageArea: "National central inventory repository and primary packaging center.",
+    strategicRole: "Core central stock warehouse. Receives live orders, performs quality checks, packaging, and assigns 1st regional transit hub based on delivery direction.",
+  },
   // 1. NORTH: Delhi-NCR
   {
     id: "HUB-DEL-01",

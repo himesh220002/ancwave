@@ -1109,6 +1109,24 @@ export function getHubOperationsQueue(orders: Order[], hubId: string): HubFilter
     const thisLegIndex = route.findIndex((l) => l.hubId.toLowerCase() === hub.id.toLowerCase());
 
     if (thisLegIndex === -1) {
+      // 0. Dedicated Handling for Central Stock & Packaging Station (Origin)
+      if (hub.id === "STOCK-CTR-01" || hub.id === "STK-CTR-01") {
+        const isAtOrigin =
+          ord.currentHubId === "STOCK-CTR-01" ||
+          ord.currentHubId === "STK-CTR-01" ||
+          ord.hubQueueStatus === "packaging" ||
+          (!ord.deliveryStatus || ord.deliveryStatus === "processing" || ord.deliveryStatus === "order_created");
+
+        if (isAtOrigin) {
+          if (ord.hubQueueStatus === "received") received.push(ord);
+          else if (ord.hubQueueStatus === "sorting") sorting.push(ord);
+          else if (ord.hubQueueStatus === "loading") loading.push(ord);
+          else if (ord.hubQueueStatus === "outgoing") outgoing.push(ord);
+          else incoming.push(ord); // newly placed orders awaiting packaging & QC
+          continue;
+        }
+      }
+
       // Hub is not in route; check if it matches currentHub name or fallback
       if (ord.currentHub?.toLowerCase().includes(hub.name.toLowerCase())) {
         if (ord.hubQueueStatus === "received") received.push(ord);

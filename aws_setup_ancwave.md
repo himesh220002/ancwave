@@ -596,7 +596,7 @@ Step 6: Add Environment Variables in Lambda Console
 Go to Configuration → Environment variables → Edit and paste your values from .env.local:
 
 Key	Value
-MONGODB_URI	mongodb+srv://satyamhimesh:06452220002Hq@cluster0.ckkeqng.mongodb.net/
+MONGODB_URI	mongodb+srv://satyamhimesh:06452220002Hq@cluster0.ckkeqng.mongodb.net/ancwaveDB
 JWT_SECRET	ancwave-super-secret-jwt-key-2026-production-grade
 DAILY_ADMIN_PASSCODE	ancwave-ops-secure-2026
 NEXT_PUBLIC_RAZORPAY_KEY_ID	rzp_live_ThR51B1sJfYQvr

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   STANDARD_HUBS,
+  CENTRAL_STOCK_CENTER,
   getHubById,
   getHubOperationsQueue,
   COURIER_PROVIDERS_CATALOG,
@@ -17,6 +18,7 @@ import {
   RefreshCw,
   Flame,
   ArrowLeft,
+  ArrowRight,
   AlertTriangle,
   RotateCcw,
   Undo2,
@@ -208,7 +210,7 @@ export default function AdminPage() {
   // Delivery Hub & Doorstep Gate Verification State
   const [deliverySelectedOrderId, setDeliverySelectedOrderId] = useState<string>("ANC-763954");
   const [transitMode, setTransitMode] = useState<TransportMode>("truck");
-  const [vehicleNo, setVehicleNo] = useState<string>("DL-01-TRK-8812");
+  const [vehicleNo, setVehicleNo] = useState<string>("");
   const [hubName, setHubName] = useState<string>("Delhi National Fulfillment Hub");
   const [hubRegion, setHubRegion] = useState<string>("Delhi NCR, IN");
   const [nextHubName, setNextHubName] = useState<string>("Kolkata Eastern Logistics Hub");
@@ -218,60 +220,60 @@ export default function AdminPage() {
   const [otpTriggered, setOtpTriggered] = useState<boolean>(false);
 
   // Train (Indian Railways PMS) Primary & Additional Fields
-  const [trainNumber, setTrainNumber] = useState<string>("12302");
-  const [trainDateTime, setTrainDateTime] = useState<string>("2026-10-28T14:05");
+  const [trainNumber, setTrainNumber] = useState<string>("");
+  const [trainDateTime, setTrainDateTime] = useState<string>(() => new Date().toISOString().slice(0, 16));
   const [showRailExtraDetails, setShowRailExtraDetails] = useState<boolean>(false);
-  const [railParcelId, setRailParcelId] = useState<string>("PRC-ER-20261028-091");
-  const [railPwbNumber, setRailPwbNumber] = useState<string>("PWB-HWH-74829");
-  const [railConsignmentGroupId, setRailConsignmentGroupId] = useState<string>("GRP-KOL-ASN-001");
-  const [railSourceStation, setRailSourceStation] = useState<string>("HWH (Howrah Jn)");
-  const [railDestStation, setRailDestStation] = useState<string>("ASN (Asansol Jn)");
-  const [railArrivalTime, setRailArrivalTime] = useState<string>("17:15");
+  const [railParcelId, setRailParcelId] = useState<string>("");
+  const [railPwbNumber, setRailPwbNumber] = useState<string>("");
+  const [railConsignmentGroupId, setRailConsignmentGroupId] = useState<string>("");
+  const [railSourceStation, setRailSourceStation] = useState<string>("");
+  const [railDestStation, setRailDestStation] = useState<string>("");
+  const [railArrivalTime, setRailArrivalTime] = useState<string>("");
   const [railFreightScale, setRailFreightScale] = useState<"Scale-R" | "Scale-P" | "Scale-S">("Scale-R");
   const [railSpaceAllocation, setRailSpaceAllocation] = useState<"F-SLR" | "R-SLR" | "VPU" | "VP" | "WAGON">("F-SLR");
-  const [railLoadingManifestId, setRailLoadingManifestId] = useState<string>("LMF-HWH-ASN-4402");
+  const [railLoadingManifestId, setRailLoadingManifestId] = useState<string>("");
 
   // Flight (Air Cargo IATA) Primary & Additional Fields
-  const [flightNumber, setFlightNumber] = useState<string>("6E-204");
-  const [flightDateTime, setFlightDateTime] = useState<string>("2026-10-28T09:30");
+  const [flightNumber, setFlightNumber] = useState<string>("");
+  const [flightDateTime, setFlightDateTime] = useState<string>(() => new Date().toISOString().slice(0, 16));
   const [showAirExtraDetails, setShowAirExtraDetails] = useState<boolean>(false);
-  const [airAwbNumber, setAirAwbNumber] = useState<string>("098-84729103");
-  const [airSourceAirport, setAirSourceAirport] = useState<string>("DEL (Delhi Cargo)");
-  const [airDestAirport, setAirDestAirport] = useState<string>("CCU (Kolkata Cargo)");
-  const [airUldId, setAirUldId] = useState<string>("AKE-14920-6E");
+  const [airAwbNumber, setAirAwbNumber] = useState<string>("");
+  const [airSourceAirport, setAirSourceAirport] = useState<string>("");
+  const [airDestAirport, setAirDestAirport] = useState<string>("");
+  const [airUldId, setAirUldId] = useState<string>("");
   const [airBayLocation, setAirBayLocation] = useState<"Forward Hold (FWD-01)" | "Aft Hold (AFT-02)" | "Bulk Cargo Bay" | "Main Deck">("Forward Hold (FWD-01)");
-  const [airFlightManifest, setAirFlightManifest] = useState<string>("FLM-6E-DEL-CCU-88");
+  const [airFlightManifest, setAirFlightManifest] = useState<string>("");
 
   // In-House & Strategic Courier Partner Fields (ANC Custom Delivery at Top)
   const [courierProvider, setCourierProvider] = useState<"anc_custom" | "bluedart" | "delhivery" | "shiprocket" | "shadowfax" | "indiapost" | "xpressbees" | "dtdc">("anc_custom");
-  const [courierTrackingAwb, setCourierTrackingAwb] = useState<string>("ANC-LOG-78294402");
+  const [courierTrackingAwb, setCourierTrackingAwb] = useState<string>("");
   const [showCourierExtraDetails, setShowCourierExtraDetails] = useState<boolean>(false);
-  const [courierRiderName, setCourierRiderName] = useState<string>("Rakesh Sharma (ANC Fleet)");
-  const [courierRiderContact, setCourierRiderContact] = useState<string>("+91 98301 23456");
+  const [courierRiderName, setCourierRiderName] = useState<string>("");
+  const [courierRiderContact, setCourierRiderContact] = useState<string>("");
 
   // Ship (Maritime Ocean Cargo) Primary & Additional Fields
-  const [vesselName, setVesselName] = useState<string>("MV Ocean Carrier");
-  const [vesselImo, setVesselImo] = useState<string>("IMO 9382014");
-  const [shipDateTime, setShipDateTime] = useState<string>("2026-10-30T06:00");
-  const [shipContainerId, setShipContainerId] = useState<string>("MSKU-982104-7");
-  const [shipSealNumber, setShipSealNumber] = useState<string>("SEAL-88219");
+  const [vesselName, setVesselName] = useState<string>("");
+  const [vesselImo, setVesselImo] = useState<string>("");
+  const [shipDateTime, setShipDateTime] = useState<string>(() => new Date().toISOString().slice(0, 16));
+  const [shipContainerId, setShipContainerId] = useState<string>("");
+  const [shipSealNumber, setShipSealNumber] = useState<string>("");
   const [showShipExtraDetails, setShowShipExtraDetails] = useState<boolean>(false);
-  const [shipSourcePort, setShipSourcePort] = useState<string>("INNSA (Nhava Sheva Port, Mumbai)");
-  const [shipDestPort, setShipDestPort] = useState<string>("INHAL (Haldia Port, West Bengal)");
-  const [shipVoyageNumber, setShipVoyageNumber] = useState<string>("VOY-2026-09E");
-  const [shipBillOfLading, setShipBillOfLading] = useState<string>("BL-MSC-IN-994821");
-  const [shipShippingLine, setShipShippingLine] = useState<string>("Maersk Line");
-  const [shipBerthLocation, setShipBerthLocation] = useState<string>("Berth 4 / Container Terminal 2");
-  const [shipManifestId, setShipManifestId] = useState<string>("OCM-KOL-HAL-882");
+  const [shipSourcePort, setShipSourcePort] = useState<string>("");
+  const [shipDestPort, setShipDestPort] = useState<string>("");
+  const [shipVoyageNumber, setShipVoyageNumber] = useState<string>("");
+  const [shipBillOfLading, setShipBillOfLading] = useState<string>("");
+  const [shipShippingLine, setShipShippingLine] = useState<string>("");
+  const [shipBerthLocation, setShipBerthLocation] = useState<string>("");
+  const [shipManifestId, setShipManifestId] = useState<string>("");
 
   // Local Delivery / Out For Delivery Fleet (Bike, Van, Truck)
-  const [deliveryDriverName, setDeliveryDriverName] = useState<string>("Rakesh Sharma (ANC Fleet)");
-  const [deliveryDriverContact, setDeliveryDriverContact] = useState<string>("+91 98301 23456");
-  const [deliveryVehiclePlate, setDeliveryVehiclePlate] = useState<string>("DL-01-BK-4092");
+  const [deliveryDriverName, setDeliveryDriverName] = useState<string>("");
+  const [deliveryDriverContact, setDeliveryDriverContact] = useState<string>("");
+  const [deliveryVehiclePlate, setDeliveryVehiclePlate] = useState<string>("");
   const [deliverySlot, setDeliverySlot] = useState<string>("Afternoon Window (14:00 - 18:00)");
   const [showLocalFleetExtra, setShowLocalFleetExtra] = useState<boolean>(false);
-  const [deliveryFleetProvider, setDeliveryFleetProvider] = useState<string>("ANC In-House Priority Delivery");
-  const [deliveryRunSheetId, setDeliveryRunSheetId] = useState<string>("DRS-20261029-01");
+  const [deliveryFleetProvider, setDeliveryFleetProvider] = useState<string>("");
+  const [deliveryRunSheetId, setDeliveryRunSheetId] = useState<string>("");
 
   // Architecture Comparison Reference Drawer
   const [showFreightArchitectureRef, setShowFreightArchitectureRef] = useState<boolean>(false);
@@ -301,6 +303,11 @@ export default function AdminPage() {
     name?: string;
     size?: number;
   } | null>(null);
+
+  // Deny Loading (Revert to Sorting Dock) Modal State
+  const [denyLoadingModalOrder, setDenyLoadingModalOrder] = useState<Order | null>(null);
+  const [denyLoadingReason, setDenyLoadingReason] = useState<string>("🏷️ Mislabeled Destination / Routing");
+  const [customDenyNotes, setCustomDenyNotes] = useState<string>("");
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -660,6 +667,27 @@ export default function AdminPage() {
       }
     );
   }, [allHubsQueueStats, activeHubId, hubQueue]);
+
+  const isCentralPackingActive = activeHubId === "STOCK-CTR-01" || activeHubId === "STK-CTR-01";
+
+  const centralPackingStats = useMemo(() => {
+    return (
+      allHubsQueueStats.find((s) => s.hub.id === "STOCK-CTR-01" || s.hub.id === "STK-CTR-01") || {
+        hub: CENTRAL_STOCK_CENTER,
+        queue: getHubOperationsQueue(orders, "STOCK-CTR-01"),
+        inCount: 0,
+        recCount: 0,
+        sortCount: 0,
+        loadCount: 0,
+        outCount: 0,
+        gateCount: 0,
+        sum5: 0,
+        totalAll: 0,
+        countsArray: [0, 0, 0, 0, 0, 0],
+        formattedArray: "[0,0,0,0,0,0]",
+      }
+    );
+  }, [allHubsQueueStats, orders]);
 
   // Quick select items for compact button-driven control unit
   const vehicleModes = [
@@ -2812,19 +2840,31 @@ export default function AdminPage() {
     }
   }, [deliverySelectedOrderId, orders]);
 
-  // Enterprise Hub Queue Transition Handler (Scan & Receive, Move to Sorting, Loading Bay, Outbound Dispatch)
+  // Enterprise Hub Queue Transition Handler (Scan & Receive, Move to Sorting, Loading Bay, Outbound Dispatch, Deny Loading)
   const handleHubQueueAction = async (
     orderNumber: string,
-    queueAction: "receive" | "to_sorting" | "to_loading" | "dispatch" | "container_dispatch",
+    queueAction: "receive" | "to_sorting" | "to_loading" | "dispatch" | "container_dispatch" | "deny_loading",
     customDestHubId?: string,
     customTransitMode?: TransportMode,
     customVehicleNo?: string,
-    customContainerId?: string
+    customContainerId?: string,
+    denialReason?: string
   ) => {
     const modeToUse = customTransitMode || transitMode;
     const containerToUse = customContainerId !== undefined ? customContainerId : activeContainerId;
 
-    // Build payload models for Indian Railways PMS, IATA Air Cargo, or B2C Courier
+    // Resolve active vehicle number based on the selected mode
+    const resolvedRoadPlate = deliveryVehiclePlate.trim() || vehicleNo.trim();
+    const resolvedVehicleNo =
+      customVehicleNo ||
+      (modeToUse === "train"
+        ? (trainNumber.trim() ? `IR-${trainNumber.trim()}` : "IR-12302")
+        : modeToUse === "plane"
+        ? (flightNumber.trim() ? `FLT-${flightNumber.trim()}` : "FLT-6E-204")
+        : modeToUse === "ship"
+        ? (vesselName.trim() ? `${vesselName.trim()}${vesselImo.trim() ? ` [${vesselImo.trim()}]` : ""}` : "MV Ocean Carrier")
+        : (resolvedRoadPlate || (modeToUse === "bike" ? "DL-01-BK-4092" : modeToUse === "van" ? "WB-02-VN-8812" : "DL-01-TRK-9000")));
+
     const [trainDate, trainTime] = trainDateTime.includes("T")
       ? trainDateTime.split("T")
       : [trainDateTime, "14:05"];
@@ -2833,18 +2873,18 @@ export default function AdminPage() {
       trainNumber: trainNumber.trim() || "12302",
       departureDate: trainDate || new Date().toISOString().split("T")[0],
       departureTime: trainTime || "14:05",
-      trainName: `Train #${trainNumber.trim() || "12302"} Express`,
-      sourceStationCode: railSourceStation.split(" ")[0] || "HWH",
-      sourceStationName: railSourceStation,
-      destinationStationCode: railDestStation.split(" ")[0] || "ASN",
-      destinationStationName: railDestStation,
-      arrivalTime: railArrivalTime,
-      pwbNumber: railPwbNumber || `PWB-${trainNumber}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-      parcelId: railParcelId,
-      consignementGroupId: railConsignmentGroupId,
+      trainName: trainNumber.trim() ? `Train #${trainNumber.trim()} Express` : "Indian Railways Express Freight",
+      sourceStationCode: railSourceStation ? railSourceStation.split(" ")[0] : undefined,
+      sourceStationName: railSourceStation.trim() || undefined,
+      destinationStationCode: railDestStation ? railDestStation.split(" ")[0] : undefined,
+      destinationStationName: railDestStation.trim() || undefined,
+      arrivalTime: railArrivalTime.trim() || undefined,
+      pwbNumber: railPwbNumber.trim() || undefined,
+      parcelId: railParcelId.trim() || undefined,
+      consignementGroupId: railConsignmentGroupId.trim() || undefined,
       freightScale: railFreightScale,
       spaceAllocationId: railSpaceAllocation,
-      loadingManifestId: railLoadingManifestId,
+      loadingManifestId: railLoadingManifestId.trim() || undefined,
     };
 
     const [flightDate, flightTime] = flightDateTime.includes("T")
@@ -2856,14 +2896,14 @@ export default function AdminPage() {
       flightDate: flightDate || new Date().toISOString().split("T")[0],
       departureTime: flightTime || "09:30",
       airline: "IndiGo Cargo",
-      sourceAirportCode: airSourceAirport.split(" ")[0] || "DEL",
-      sourceAirportName: airSourceAirport,
-      destAirportCode: airDestAirport.split(" ")[0] || "CCU",
-      destAirportName: airDestAirport,
-      awbNumber: airAwbNumber || `098-${Math.floor(10000000 + Math.random() * 90000000)}`,
-      uldId: airUldId || `AKE-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+      sourceAirportCode: airSourceAirport ? airSourceAirport.split(" ")[0] : undefined,
+      sourceAirportName: airSourceAirport.trim() || undefined,
+      destAirportCode: airDestAirport ? airDestAirport.split(" ")[0] : undefined,
+      destAirportName: airDestAirport.trim() || undefined,
+      awbNumber: airAwbNumber.trim() || undefined,
+      uldId: airUldId.trim() || undefined,
       bayLocation: airBayLocation,
-      flightManifestId: airFlightManifest,
+      flightManifestId: airFlightManifest.trim() || undefined,
     };
 
     const courierObj = COURIER_PROVIDERS_CATALOG.find((c) => c.id === courierProvider);
@@ -2871,9 +2911,9 @@ export default function AdminPage() {
       provider: courierProvider,
       providerName: courierObj?.name || "ANC Custom Delivery (In-House Priority Fleet)",
       serviceType: courierProvider === "anc_custom" ? "same_day" : "air_express",
-      trackingAwb: courierTrackingAwb || `ANC-LOG-${Math.floor(10000000 + Math.random() * 90000000)}`,
-      riderName: courierRiderName,
-      riderContact: courierRiderContact,
+      trackingAwb: courierTrackingAwb.trim() || `ANC-LOG-${Math.floor(10000000 + Math.random() * 90000000)}`,
+      riderName: courierRiderName.trim() || undefined,
+      riderContact: courierRiderContact.trim() || undefined,
       estimatedDeliveryDays: 1,
     };
 
@@ -2883,33 +2923,33 @@ export default function AdminPage() {
 
     const oceanFreightPayload: OceanFreightDetails = {
       vesselName: vesselName.trim() || "MV Ocean Carrier",
-      imoNumber: vesselImo.trim() || "IMO 9382014",
+      imoNumber: vesselImo.trim() || undefined,
       departureDate: shipDate || new Date().toISOString().split("T")[0],
       departureTime: shipTime || "06:00",
-      containerId: shipContainerId || containerToUse || "MSKU-982104-7",
-      sealNumber: shipSealNumber || "SEAL-88219",
-      sourcePortCode: shipSourcePort.split(" ")[0] || "INNSA",
-      sourcePortName: shipSourcePort,
-      destPortCode: shipDestPort.split(" ")[0] || "INHAL",
-      destPortName: shipDestPort,
-      voyageNumber: shipVoyageNumber || "VOY-2026-09E",
-      billOfLading: shipBillOfLading || "BL-MSC-IN-994821",
-      shippingLine: shipShippingLine || "Maersk Line",
-      berthLocation: shipBerthLocation,
-      shippingManifestId: shipManifestId,
+      containerId: shipContainerId.trim() || containerToUse || undefined,
+      sealNumber: shipSealNumber.trim() || undefined,
+      sourcePortCode: shipSourcePort ? shipSourcePort.split(" ")[0] : undefined,
+      sourcePortName: shipSourcePort.trim() || undefined,
+      destPortCode: shipDestPort ? shipDestPort.split(" ")[0] : undefined,
+      destPortName: shipDestPort.trim() || undefined,
+      voyageNumber: shipVoyageNumber.trim() || undefined,
+      billOfLading: shipBillOfLading.trim() || undefined,
+      shippingLine: shipShippingLine.trim() || undefined,
+      berthLocation: shipBerthLocation.trim() || undefined,
+      shippingManifestId: shipManifestId.trim() || undefined,
     };
 
     const targetOrderForLocal = orders.find((o) => o.orderNumber === orderNumber);
     const localDeliveryPayload: LocalDeliveryDetails = {
       vehicleType: (modeToUse === "bike" || modeToUse === "van" || modeToUse === "truck") ? modeToUse : "van",
-      vehicleNumber: customVehicleNo || vehicleNo || (modeToUse === "bike" ? "DL-01-BK-4092" : modeToUse === "truck" ? "HR-55-TRK-9000" : "WB-02-VN-8812"),
+      vehicleNumber: resolvedVehicleNo,
       packageId: orderNumber,
       deliveryAddress: targetOrderForLocal ? `${targetOrderForLocal.customer.address}, ${targetOrderForLocal.customer.city}, ${targetOrderForLocal.customer.state} ${targetOrderForLocal.customer.zipCode}` : "Customer Doorstep Address",
       customerContact: targetOrderForLocal?.customer?.contact || targetOrderForLocal?.customer?.email || "+91 81055 42318",
-      driverName: deliveryDriverName || "Rakesh Sharma (ANC Fleet)",
-      driverContact: deliveryDriverContact || "+91 98301 23456",
+      driverName: deliveryDriverName.trim() || undefined,
+      driverContact: deliveryDriverContact.trim() || undefined,
       deliverySlot: deliverySlot || "Afternoon Window (14:00 - 18:00)",
-      runSheetId: deliveryRunSheetId || "DRS-20261029-01",
+      runSheetId: deliveryRunSheetId.trim() || undefined,
     };
 
     setHubActionLoading(orderNumber);
@@ -2923,8 +2963,8 @@ export default function AdminPage() {
           hubId: activeHubId,
           queueAction,
           transitMode: modeToUse,
-          vehicleNo: modeToUse === "train" ? `IR-${trainNumber}` : modeToUse === "plane" ? `FLT-${flightNumber}` : modeToUse === "ship" ? `${vesselName} [${vesselImo}]` : customVehicleNo || vehicleNo,
-          containerId: modeToUse === "train" ? `TRN-${trainNumber}-${trainDate}` : modeToUse === "plane" ? airUldId : modeToUse === "ship" ? shipContainerId : containerToUse,
+          vehicleNo: resolvedVehicleNo,
+          containerId: modeToUse === "train" ? (trainNumber.trim() ? `TRN-${trainNumber.trim()}-${trainDate}` : "TRN-RAIL-01") : modeToUse === "plane" ? (airUldId.trim() || "AKE-AIR-01") : modeToUse === "ship" ? (shipContainerId.trim() || "MSKU-982104") : containerToUse,
           destinationHubId: customDestHubId || targetDestinationHubId,
           manifestVerified,
           dispatchCategory: (modeToUse === "train" || modeToUse === "plane" || modeToUse === "ship") ? "b2b_bulk_freight" : "b2c_individual_courier",
@@ -2934,6 +2974,7 @@ export default function AdminPage() {
           localDelivery: (modeToUse === "bike" || modeToUse === "van" || modeToUse === "truck") ? localDeliveryPayload : undefined,
           courierService: (modeToUse === "van" || modeToUse === "bike") ? courierPayload : undefined,
           isDestinationClose: perOrderAddressClose[orderNumber] ?? isAddressCloseToHub,
+          denialReason,
         }),
       });
 
@@ -2948,12 +2989,23 @@ export default function AdminPage() {
           to_loading: (perOrderAddressClose[orderNumber] ?? isAddressCloseToHub) ? "Sorted for Doorstep Loading" : "Sorted & Moved to Vehicle Loading Bay",
           dispatch: (perOrderAddressClose[orderNumber] ?? isAddressCloseToHub) ? "Out for Delivery [Arrives Afternoon/Evening]" : "Marked Loaded & Dispatched [On The Way]",
           container_dispatch: "Container Dispatched",
+          deny_loading: "Loading Denied ➔ Returned to Sorting Dock",
         };
-        toast({
-          type: "success",
-          title: actionLabels[queueAction] || "Hub Operation Complete",
-          description: `Consignment ${orderNumber} updated at ${hubQueue.hub.name}.`,
-        });
+
+        if (queueAction === "deny_loading") {
+          setHubTab("sorting");
+          toast({
+            type: "info",
+            title: "Loading Denied ➔ Returned to Sorting",
+            description: `Consignment ${orderNumber} reverted to Sorting Dock for re-labeling and destination correction.`,
+          });
+        } else {
+          toast({
+            type: "success",
+            title: actionLabels[queueAction] || "Hub Operation Complete",
+            description: `Consignment ${orderNumber} updated at ${hubQueue.hub.name}.`,
+          });
+        }
       } else {
         toast({
           type: "error",
@@ -5537,18 +5589,150 @@ export default function AdminPage() {
                   </div>
 
                   {/* Active Station Status Indicator */}
-                  <div className="flex items-center gap-2.5 bg-zinc-900/90 border border-purple-500/30 p-2.5 px-3 rounded-2xl shrink-0 backdrop-blur-sm shadow-sm">
+                  <div className={`flex items-center gap-2.5 p-2.5 px-3 rounded-2xl shrink-0 backdrop-blur-sm shadow-sm border transition-all ${
+                    isCentralPackingActive
+                      ? "bg-amber-950/40 border-amber-500/50 shadow-amber-500/10"
+                      : "bg-zinc-900/90 border-purple-500/30"
+                  }`}>
                     <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className={`w-2 h-2 rounded-full animate-pulse ${
+                        isCentralPackingActive ? "bg-amber-400" : "bg-emerald-400"
+                      }`} />
                       <span className="text-zinc-400">Current Station:</span>
-                      <span className="font-mono font-bold text-white bg-zinc-950 border border-zinc-700/80 px-2.5 py-1 rounded-xl">
+                      <span className={`font-mono font-bold px-2.5 py-1 rounded-xl border ${
+                        isCentralPackingActive
+                          ? "text-amber-200 bg-amber-950/70 border-amber-500/40"
+                          : "text-white bg-zinc-950 border-zinc-700/80"
+                      }`}>
                         {activeHubStats.hub.code} · {activeHubStats.hub.name}
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      {isCentralPackingActive && (
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          ORIGIN PACKING
+                        </span>
+                      )}
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold border ${
+                        isCentralPackingActive
+                          ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                          : "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                      }`}>
                         <span>{activeHubStats.sum5} ops</span>
                         <span className="text-zinc-600">·</span>
                         <span className="text-zinc-300 font-mono">{activeHubStats.formattedArray}</span>
                       </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CENTRAL PACKING STATION CONTROL UNIT (ORIGIN FULFILLMENT CENTER) - JUST ABOVE ACTIVE HUB DIRECTORY */}
+                <div
+                  onClick={() => setActiveHubId("STOCK-CTR-01")}
+                  className={`p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer relative overflow-hidden group ${
+                    isCentralPackingActive
+                      ? "bg-gradient-to-r from-amber-950/40 via-zinc-900/90 to-zinc-950 border-amber-500/70 shadow-xl shadow-amber-500/10 ring-1 ring-amber-500/40"
+                      : "bg-zinc-900/70 border-amber-500/30 hover:border-amber-400/60 hover:bg-zinc-900/90 shadow-md"
+                  }`}
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    {/* Left: Origin Identity & Mission */}
+                    <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${
+                        isCentralPackingActive
+                          ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/20"
+                          : "bg-zinc-900 text-amber-400/80 border-amber-500/20 group-hover:text-amber-300 group-hover:border-amber-500/40"
+                      }`}>
+                        <Boxes className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono font-bold text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider">
+                            STK · ORIGIN FULFILLMENT STATION
+                          </span>
+                          <h3 className="text-base sm:text-lg font-bold text-zinc-100 font-sans tracking-tight">
+                            Central Packing Station (Central Stock & Fulfillment Depot)
+                          </h3>
+                          {isCentralPackingActive ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/25 text-amber-200 border border-amber-500/50 shadow-sm animate-pulse">
+                              <span className="w-2 h-2 rounded-full bg-amber-400" />
+                              CURRENT ACTIVE CONSOLE
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">
+                              Click to Open Station
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-zinc-400 max-w-3xl">
+                          National Central Inventory Depot (Nagpur Zero-Mile) · Receives newly placed customer orders, performs quality inspection, tamper-proof packaging, barcode tagging, and dispatches 1st leg multi-modal transit rake/flight/truck.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right: Respective Work Indication & Direct Open Button */}
+                    <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start lg:self-auto">
+                      {/* Real-time Work Indication (5 Origin Operations) */}
+                      <div className="bg-zinc-950/90 border border-zinc-800 p-2 px-3 rounded-2xl flex items-center gap-2 text-xs font-mono">
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">Work Indication</span>
+                          <span className="font-bold text-amber-300 text-xs">
+                            {centralPackingStats.sum5} Active Ops
+                          </span>
+                        </div>
+                        <div className="h-7 w-px bg-zinc-800 mx-1" />
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-zinc-500">1.Pack</span>
+                            <span className={`font-bold ${centralPackingStats.inCount > 0 ? "text-blue-400" : "text-zinc-600"}`}>
+                              {centralPackingStats.inCount}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-zinc-500">2.Recv</span>
+                            <span className={`font-bold ${centralPackingStats.recCount > 0 ? "text-emerald-400" : "text-zinc-600"}`}>
+                              {centralPackingStats.recCount}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-zinc-500">3.Sort</span>
+                            <span className={`font-bold ${centralPackingStats.sortCount > 0 ? "text-amber-400" : "text-zinc-600"}`}>
+                              {centralPackingStats.sortCount}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-zinc-500">4.Load</span>
+                            <span className={`font-bold ${centralPackingStats.loadCount > 0 ? "text-cyan-400" : "text-zinc-600"}`}>
+                              {centralPackingStats.loadCount}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-zinc-500">5.Out</span>
+                            <span className={`font-bold ${centralPackingStats.outCount > 0 ? "text-purple-400" : "text-zinc-600"}`}>
+                              {centralPackingStats.outCount}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Action Button */}
+                      {isCentralPackingActive ? (
+                        <span className="px-4 py-2 rounded-2xl bg-amber-500/20 text-amber-200 border border-amber-500/50 text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                          <CheckCircle2 className="w-4 h-4 text-amber-400" />
+                          <span>Station Active Below</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveHubId("STOCK-CTR-01");
+                          }}
+                          className="px-4 py-2 rounded-2xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 transition cursor-pointer"
+                        >
+                          <Boxes className="w-4 h-4" />
+                          <span>Open Central Packing Station</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -5604,21 +5788,36 @@ export default function AdminPage() {
                       <tbody className="divide-y divide-zinc-800/60">
                         {allHubsQueueStats.map(({ hub: h, sum5, inCount, recCount, sortCount, loadCount, outCount, gateCount, formattedArray }) => {
                           const isActive = h.id === activeHubId;
+                          const isOriginHub = h.type === "origin" || h.id === "STOCK-CTR-01" || h.id === "STK-CTR-01";
                           return (
                             <tr
                               key={h.id}
                               onClick={() => setActiveHubId(h.id)}
                               className={`transition-all cursor-pointer group ${
                                 isActive
-                                  ? "bg-purple-950/30 hover:bg-purple-950/40 border-l-4 border-l-purple-500"
+                                  ? isOriginHub
+                                    ? "bg-amber-950/30 hover:bg-amber-950/40 border-l-4 border-l-amber-500"
+                                    : "bg-purple-950/30 hover:bg-purple-950/40 border-l-4 border-l-purple-500"
+                                  : isOriginHub
+                                  ? "bg-amber-950/10 hover:bg-amber-950/20 border-l-4 border-l-amber-500/40"
                                   : "hover:bg-zinc-900/60 border-l-4 border-l-transparent"
                               }`}
                             >
                               <td className="py-2.5 px-3">
                                 {isActive ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-                                    ACTIVE
+                                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${
+                                    isOriginHub
+                                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                      : "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+                                  }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                                      isOriginHub ? "bg-amber-400" : "bg-purple-400"
+                                    }`} />
+                                    {isOriginHub ? "ACTIVE ORIGIN" : "ACTIVE"}
+                                  </span>
+                                ) : isOriginHub ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                    📦 ORIGIN
                                   </span>
                                 ) : h.isDynamic ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
@@ -5702,7 +5901,11 @@ export default function AdminPage() {
                               <td className="py-2.5 px-3 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
                                   {isActive ? (
-                                    <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider px-2 py-1 bg-purple-500/10 rounded-lg border border-purple-500/30">
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg border ${
+                                      isOriginHub
+                                        ? "text-amber-400 bg-amber-500/10 border-amber-500/30"
+                                        : "text-purple-400 bg-purple-500/10 border-purple-500/30"
+                                    }`}>
                                       Current
                                     </span>
                                   ) : (
@@ -5712,9 +5915,13 @@ export default function AdminPage() {
                                         e.stopPropagation();
                                         setActiveHubId(h.id);
                                       }}
-                                      className="px-2.5 py-1 text-[10px] font-bold bg-zinc-800 hover:bg-purple-600 text-zinc-300 hover:text-white rounded-lg transition-colors cursor-pointer border border-zinc-700 hover:border-purple-500"
+                                      className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-colors cursor-pointer border ${
+                                        isOriginHub
+                                          ? "bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 border-amber-500/40"
+                                          : "bg-zinc-800 hover:bg-purple-600 text-zinc-300 hover:text-white border-zinc-700 hover:border-purple-500"
+                                      }`}
                                     >
-                                      Select
+                                      {isOriginHub ? "Open Origin" : "Select"}
                                     </button>
                                   )}
                                   {h.isDynamic && (
@@ -5746,90 +5953,110 @@ export default function AdminPage() {
                     type="button"
                     onClick={() => setHubTab("incoming")}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "incoming"
-                      ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
+                      ? isCentralPackingActive
+                        ? "bg-amber-600/20 border-amber-500/60 shadow-lg shadow-amber-600/10"
+                        : "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
                     <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
-                      <span>1. INCOMING</span>
-                      <ArrowDownLeft className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{isCentralPackingActive ? "1. PACKAGING / QC" : "1. INCOMING"}</span>
+                      <ArrowDownLeft className={`w-3.5 h-3.5 ${isCentralPackingActive ? "text-amber-400" : "text-blue-400"}`} />
                     </div>
-                    <div className="text-xl font-bold font-mono text-white">
+                    <div className={`text-xl font-bold font-mono ${isCentralPackingActive ? "text-amber-300" : "text-white"}`}>
                       {hubQueue.totals.incoming}
                     </div>
-                    <div className="text-[9px] text-zinc-500 mt-0.5">En route to dock</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">
+                      {isCentralPackingActive ? "Awaiting packaging" : "En route to dock"}
+                    </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setHubTab("received")}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "received"
-                      ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
+                      ? isCentralPackingActive
+                        ? "bg-amber-600/20 border-amber-500/60 shadow-lg shadow-amber-600/10"
+                        : "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
                     <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
-                      <span>2. RECEIVED</span>
+                      <span>{isCentralPackingActive ? "2. PACKED AT DOCK" : "2. RECEIVED"}</span>
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                     </div>
                     <div className="text-xl font-bold font-mono text-emerald-400">
                       {hubQueue.totals.received}
                     </div>
-                    <div className="text-[9px] text-zinc-500 mt-0.5">Scanned at dock</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">
+                      {isCentralPackingActive ? "Sealed & verified" : "Scanned at dock"}
+                    </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setHubTab("sorting")}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "sorting"
-                      ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
+                      ? isCentralPackingActive
+                        ? "bg-amber-600/20 border-amber-500/60 shadow-lg shadow-amber-600/10"
+                        : "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
                     <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
-                      <span>3. SORTING</span>
+                      <span>{isCentralPackingActive ? "3. ORIGIN SORT" : "3. SORTING"}</span>
                       <Boxes className="w-3.5 h-3.5 text-amber-400" />
                     </div>
                     <div className="text-xl font-bold font-mono text-amber-400">
                       {hubQueue.totals.sorting}
                     </div>
-                    <div className="text-[9px] text-zinc-500 mt-0.5">Fleet routing bay</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">
+                      {isCentralPackingActive ? "Assign 1st hub" : "Fleet routing bay"}
+                    </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setHubTab("loading")}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "loading"
-                      ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
+                      ? isCentralPackingActive
+                        ? "bg-amber-600/20 border-amber-500/60 shadow-lg shadow-amber-600/10"
+                        : "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
                     <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
-                      <span>4. LOADING</span>
+                      <span>{isCentralPackingActive ? "4. TRUNK LOAD" : "4. LOADING"}</span>
                       <PackagePlus className="w-3.5 h-3.5 text-cyan-400" />
                     </div>
                     <div className="text-xl font-bold font-mono text-cyan-400">
                       {hubQueue.totals.loading}
                     </div>
-                    <div className="text-[9px] text-zinc-500 mt-0.5">Vehicle bay staging</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">
+                      {isCentralPackingActive ? "Long-haul bay" : "Vehicle bay staging"}
+                    </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setHubTab("outgoing")}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${hubTab === "outgoing"
-                      ? "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
+                      ? isCentralPackingActive
+                        ? "bg-amber-600/20 border-amber-500/60 shadow-lg shadow-amber-600/10"
+                        : "bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-600/10"
                       : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700"
                       }`}
                   >
                     <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1">
-                      <span>5. OUTGOING</span>
+                      <span>{isCentralPackingActive ? "5. DEPARTED" : "5. OUTGOING"}</span>
                       <ArrowUpRight className="w-3.5 h-3.5 text-purple-400" />
                     </div>
                     <div className="text-xl font-bold font-mono text-purple-400">
                       {hubQueue.totals.outgoing}
                     </div>
-                    <div className="text-[9px] text-zinc-500 mt-0.5">Fleet on the way</div>
+                    <div className="text-[9px] text-zinc-500 mt-0.5">
+                      {isCentralPackingActive ? "En route to hub" : "Fleet on the way"}
+                    </div>
                   </button>
 
                   <button
@@ -5938,18 +6165,30 @@ export default function AdminPage() {
                 <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-4 text-white">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
                     <div className="flex items-center gap-2.5">
-                      <ArrowDownLeft className="w-5 h-5 text-blue-400" />
+                      {isCentralPackingActive ? (
+                        <Boxes className="w-5 h-5 text-amber-400" />
+                      ) : (
+                        <ArrowDownLeft className="w-5 h-5 text-blue-400" />
+                      )}
                       <div>
                         <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">
-                          Inbound Cargo Arriving at {hubQueue.hub.name}
+                          {isCentralPackingActive
+                            ? `1. Packaging & QA Inspection Queue · Central Stock & Fulfillment Center`
+                            : `Inbound Cargo Arriving at ${hubQueue.hub.name}`}
                         </h3>
                         <p className="text-xs text-zinc-400">
-                          Packages dispatched from upstream centers heading to this dock. Scan barcodes or tap below to check in.
+                          {isCentralPackingActive
+                            ? "Customer orders registered from checkout awaiting quality inspection, tamper-proof packaging, and origin dock staging."
+                            : "Packages dispatched from upstream centers heading to this dock. Scan barcodes or tap below to check in."}
                         </p>
                       </div>
                     </div>
-                    <span className="text-xs font-mono text-zinc-400 bg-zinc-900 px-3 py-1 rounded-full border border-zinc-800">
-                      {hubQueue.incoming.length} consignments awaiting check-in
+                    <span className={`text-xs font-mono px-3 py-1 rounded-full border ${
+                      isCentralPackingActive
+                        ? "text-amber-300 bg-amber-500/10 border-amber-500/30"
+                        : "text-zinc-400 bg-zinc-900 border-zinc-800"
+                    }`}>
+                      {hubQueue.incoming.length} {isCentralPackingActive ? "orders awaiting packaging & QC" : "consignments awaiting check-in"}
                     </span>
                   </div>
 
@@ -5958,9 +6197,13 @@ export default function AdminPage() {
                       <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600 mx-auto flex items-center justify-center">
                         <CheckCircle2 className="w-6 h-6 text-zinc-500" />
                       </div>
-                      <div className="text-sm font-semibold text-zinc-300">Inbound Dock Cleared</div>
+                      <div className="text-sm font-semibold text-zinc-300">
+                        {isCentralPackingActive ? "Origin Packaging Queue Cleared" : "Inbound Dock Cleared"}
+                      </div>
                       <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-                        All inbound consignments for {hubQueue.hub.name} have been received and verified.
+                        {isCentralPackingActive
+                          ? "All newly created customer orders have been packaged, quality checked, and moved to origin dock."
+                          : `All inbound consignments for ${hubQueue.hub.name} have been received and verified.`}
                       </p>
                     </div>
                   ) : (
@@ -5970,18 +6213,26 @@ export default function AdminPage() {
                         .map((ord) => (
                           <div
                             key={ord.id}
-                            className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                            className={`p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                              isCentralPackingActive
+                                ? "bg-amber-950/10 border-amber-500/30 hover:border-amber-500/60"
+                                : "bg-zinc-900/80 border-zinc-800 hover:border-zinc-700"
+                            }`}
                           >
                             <div className="space-y-1.5 min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono text-xs font-bold text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded border border-blue-500/20">
+                                <span className={`font-mono text-xs font-bold px-2.5 py-0.5 rounded border ${
+                                  isCentralPackingActive
+                                    ? "text-amber-300 bg-amber-500/15 border-amber-500/30"
+                                    : "text-blue-400 bg-blue-500/10 border-blue-500/20"
+                                }`}>
                                   {ord.orderNumber}
                                 </span>
                                 <span className="text-xs font-semibold text-zinc-200">
                                   {ord.customer?.fullName || "Customer"} · {ord.customer?.city || "Destination"}
                                 </span>
                                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 uppercase">
-                                  Fleet: {ord.transitMode || "Truck"} [{ord.vehicleNo || "OR-TRK-5555"}]
+                                  {isCentralPackingActive ? "Origin Strategy: Direct Corridor" : `Fleet: ${ord.transitMode || "Truck"} [${ord.vehicleNo || "OR-TRK-5555"}]`}
                                 </span>
                                 {ord.containerId && (
                                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
@@ -5995,11 +6246,11 @@ export default function AdminPage() {
                                 </span>
                                 <span>•</span>
                                 <span>
-                                  Origin: <strong className="text-zinc-300">{ord.currentHub || "Upstream Hub"}</strong>
+                                  Origin: <strong className="text-zinc-300">{ord.currentHub || "Central Stock Center"}</strong>
                                 </span>
                                 <span>➔</span>
                                 <span>
-                                  Target Route: <strong className="text-purple-300">{ord.nextHub || "Regional Hub"}</strong>
+                                  Target Route: <strong className="text-purple-300">{ord.nextHub || "Regional Transit Gateway"}</strong>
                                 </span>
                               </div>
                             </div>
@@ -6009,14 +6260,20 @@ export default function AdminPage() {
                                 type="button"
                                 disabled={hubActionLoading === ord.orderNumber}
                                 onClick={() => handleHubQueueAction(ord.orderNumber, "receive")}
-                                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50"
+                                className={`px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50 ${
+                                  isCentralPackingActive
+                                    ? "bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold"
+                                    : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                                }`}
                               >
                                 {hubActionLoading === ord.orderNumber ? (
                                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : isCentralPackingActive ? (
+                                  <Boxes className="w-4 h-4" />
                                 ) : (
                                   <ArrowDownLeft className="w-4 h-4" />
                                 )}
-                                <span>Scan & Receive at Dock</span>
+                                <span>{isCentralPackingActive ? "Verify QC & Pack at Dock" : "Scan & Receive at Dock"}</span>
                               </button>
                             </div>
                           </div>
@@ -6034,15 +6291,19 @@ export default function AdminPage() {
                       <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                       <div>
                         <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">
-                          Received Parcels Docked at {hubQueue.hub.name}
+                          {isCentralPackingActive
+                            ? "2. Packaged Consignments Staged at Central Stock Dock"
+                            : `Received Parcels Docked at ${hubQueue.hub.name}`}
                         </h3>
                         <p className="text-xs text-zinc-400">
-                          Parcels verified and physically present at this dock. Move to sorting bays for vehicle loading.
+                          {isCentralPackingActive
+                            ? "Parcels boxed, sealed, and verified at Central Stock Center. Ready to stage into sorting bays for regional transit corridor routing."
+                            : "Parcels verified and physically present at this dock. Move to sorting bays for vehicle loading."}
                         </p>
                       </div>
                     </div>
                     <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                      {hubQueue.received.length} packages ready for sorting
+                      {hubQueue.received.length} packages ready for {isCentralPackingActive ? "origin sorting" : "sorting"}
                     </span>
                   </div>
 
@@ -6051,9 +6312,13 @@ export default function AdminPage() {
                       <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600 mx-auto flex items-center justify-center">
                         <Boxes className="w-6 h-6 text-zinc-500" />
                       </div>
-                      <div className="text-sm font-semibold text-zinc-300">Receiving Bay Empty</div>
+                      <div className="text-sm font-semibold text-zinc-300">
+                        {isCentralPackingActive ? "Origin Staging Dock Empty" : "Receiving Bay Empty"}
+                      </div>
                       <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-                        No packages currently resting at the dock. Check Inbound cargo tab or sorting dock.
+                        {isCentralPackingActive
+                          ? "No packages currently staged at origin dock. Check Packaging / QC tab or sorting dock."
+                          : `No packages currently resting at the dock. Check Inbound cargo tab or sorting dock.`}
                       </p>
                     </div>
                   ) : (
@@ -6063,7 +6328,11 @@ export default function AdminPage() {
                         .map((ord) => (
                           <div
                             key={ord.id}
-                            className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                            className={`p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                              isCentralPackingActive
+                                ? "bg-amber-950/10 border-amber-500/30 hover:border-amber-500/60"
+                                : "bg-zinc-900/80 border-zinc-800 hover:border-zinc-700"
+                            }`}
                           >
                             <div className="space-y-1.5 min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
@@ -6074,7 +6343,7 @@ export default function AdminPage() {
                                   {ord.customer?.fullName} ({ord.customer?.city})
                                 </span>
                                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700 font-semibold">
-                                  Dock Scanned ✓
+                                  {isCentralPackingActive ? "Tamper-Proof Box Sealed ✓" : "Dock Scanned ✓"}
                                 </span>
                               </div>
                               <div className="text-xs text-zinc-400">
@@ -6094,7 +6363,7 @@ export default function AdminPage() {
                                 ) : (
                                   <Boxes className="w-4 h-4" />
                                 )}
-                                <span>Move to Sorting Dock</span>
+                                <span>{isCentralPackingActive ? "Send to Origin Sorting Bay" : "Move to Sorting Dock"}</span>
                               </button>
                             </div>
                           </div>
@@ -6119,6 +6388,28 @@ export default function AdminPage() {
                           <p className="text-xs text-zinc-400">
                             Assign next destination hub, select fleet transport mode, and vehicle ID. (Container ID required for Train & Ship).
                           </p>
+                          <div className="flex flex-wrap items-center gap-2 pt-1.5 text-xs">
+                            <span className="text-zinc-400 font-medium">Sorting Station Location:</span>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900 border border-zinc-700/80 font-semibold text-zinc-100 shadow-sm">
+                              <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span className={hubQueue.hub.id === "STOCK-CTR-01" || hubQueue.hub.id === "STK-CTR-01" ? "text-amber-300" : "text-blue-300 font-bold"}>
+                                {hubQueue.hub.id === "STOCK-CTR-01" || hubQueue.hub.id === "STK-CTR-01" ? "Central Packing Station · " : ""}
+                                {hubQueue.hub.name}
+                              </span>
+                              <span className="text-zinc-400 font-normal">({hubQueue.hub.region})</span>
+                              <span
+                                className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-bold ml-1 border ${
+                                  hubQueue.hub.id === "STOCK-CTR-01" || hubQueue.hub.id === "STK-CTR-01"
+                                    ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                                    : "bg-blue-500/15 text-blue-300 border-blue-500/30"
+                                }`}
+                              >
+                                {hubQueue.hub.id === "STOCK-CTR-01" || hubQueue.hub.id === "STK-CTR-01"
+                                  ? "Origin Packing Station"
+                                  : "Transit Logistics Hub"}
+                              </span>
+                            </span>
+                          </div>
                         </div>
                       </div>
                       <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
@@ -6187,9 +6478,9 @@ export default function AdminPage() {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                        <div className="sm:col-span-5 space-y-1.5">
+                        <div className="sm:col-span-7 space-y-1.5">
                           <label className="text-[11px] font-semibold text-zinc-400 block">Select Transport Fleet Mode</label>
-                          <div className="grid grid-cols-6 gap-1">
+                          <div className="grid grid-cols-6 gap-1.5">
                             {vehicleModes.map((mode) => {
                               const Icon = mode.icon;
                               const isSelected = transitMode === mode.id;
@@ -6198,9 +6489,9 @@ export default function AdminPage() {
                                   key={mode.id}
                                   type="button"
                                   onClick={() => setTransitMode(mode.id as TransportMode)}
-                                  className={`py-2 flex flex-col items-center justify-center rounded-lg border text-[10px] font-semibold transition cursor-pointer ${isSelected
+                                  className={`py-2 flex flex-col items-center justify-center rounded-xl border text-[10px] font-semibold transition cursor-pointer ${isSelected
                                     ? "bg-purple-600 border-purple-500 text-white shadow-md shadow-purple-600/20"
-                                    : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white"
+                                    : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900"
                                     }`}
                                 >
                                   <Icon className="w-3.5 h-3.5 mb-0.5" />
@@ -6211,19 +6502,8 @@ export default function AdminPage() {
                           </div>
                         </div>
 
-                        <div className="sm:col-span-3 space-y-1.5">
-                          <label className="text-[11px] font-semibold text-zinc-400 block">Vehicle ID / Plate</label>
-                          <input
-                            type="text"
-                            value={vehicleNo}
-                            onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
-                            placeholder="e.g. WB-19-EXP-5501"
-                            className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-950 border border-zinc-800 rounded-xl text-white uppercase focus:outline-none focus:border-purple-500"
-                          />
-                        </div>
-
                         {/* Destination Routing Selector: Adapts based on addressCloseToHub */}
-                        <div className="sm:col-span-4 space-y-1.5">
+                        <div className="sm:col-span-5 space-y-1.5">
                           {isAddressCloseToHub ? (
                             <>
                               <label className="text-[11px] font-semibold text-emerald-400 flex items-center justify-between">
@@ -6299,7 +6579,7 @@ export default function AdminPage() {
                                   type="text"
                                   value={trainNumber}
                                   onChange={(e) => setTrainNumber(e.target.value.toUpperCase())}
-                                  placeholder="e.g. 12302"
+                                  placeholder="e.g. 12302 (Rajdhani Express)"
                                   className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-amber-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-amber-400"
                                 />
                               </div>
@@ -6334,8 +6614,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={railPwbNumber}
                                       onChange={(e) => setRailPwbNumber(e.target.value.toUpperCase())}
-                                      placeholder="PWB-HWH-74829"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. PWB-HWH-74829 (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
 
@@ -6345,8 +6625,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={railConsignmentGroupId}
                                       onChange={(e) => setRailConsignmentGroupId(e.target.value.toUpperCase())}
-                                      placeholder="GRP-KOL-ASN-001"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. GRP-KOL-ASN-001 (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
 
@@ -6356,8 +6636,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={railParcelId}
                                       onChange={(e) => setRailParcelId(e.target.value.toUpperCase())}
-                                      placeholder="PRC-ER-20261028-091"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. PRC-ER-20261028-091 (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
 
@@ -6367,8 +6647,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={railSourceStation}
                                       onChange={(e) => setRailSourceStation(e.target.value)}
-                                      placeholder="HWH (Howrah Jn)"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. HWH (Howrah Jn) (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
 
@@ -6378,8 +6658,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={railDestStation}
                                       onChange={(e) => setRailDestStation(e.target.value)}
-                                      placeholder="ASN (Asansol Jn)"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. ASN (Asansol Jn) (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
 
@@ -6389,8 +6669,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={railArrivalTime}
                                       onChange={(e) => setRailArrivalTime(e.target.value)}
-                                      placeholder="17:15"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. 17:15 (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
 
@@ -6428,8 +6708,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={railLoadingManifestId}
                                       onChange={(e) => setRailLoadingManifestId(e.target.value.toUpperCase())}
-                                      placeholder="LMF-HWH-ASN-4402"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. LMF-HWH-ASN-4402 (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
                                 </div>
@@ -6472,7 +6752,7 @@ export default function AdminPage() {
                                   type="text"
                                   value={flightNumber}
                                   onChange={(e) => setFlightNumber(e.target.value.toUpperCase())}
-                                  placeholder="e.g. 6E-204"
+                                  placeholder="e.g. 6E-204 (IndiGo Cargo)"
                                   className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-cyan-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400"
                                 />
                               </div>
@@ -6507,8 +6787,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={airAwbNumber}
                                       onChange={(e) => setAirAwbNumber(e.target.value.toUpperCase())}
-                                      placeholder="098-84729103"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. 098-84729103 (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
 
@@ -6518,8 +6798,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={airUldId}
                                       onChange={(e) => setAirUldId(e.target.value.toUpperCase())}
-                                      placeholder="AKE-14920-6E"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. AKE-14920-6E (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
 
@@ -6543,8 +6823,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={airSourceAirport}
                                       onChange={(e) => setAirSourceAirport(e.target.value)}
-                                      placeholder="DEL (Delhi Indira Gandhi Intl)"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. DEL (Delhi Indira Gandhi Intl) (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
 
@@ -6554,8 +6834,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={airDestAirport}
                                       onChange={(e) => setAirDestAirport(e.target.value)}
-                                      placeholder="CCU (Kolkata NSCB Intl)"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. CCU (Kolkata NSCB Intl) (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
 
@@ -6565,8 +6845,8 @@ export default function AdminPage() {
                                       type="text"
                                       value={airFlightManifest}
                                       onChange={(e) => setAirFlightManifest(e.target.value.toUpperCase())}
-                                      placeholder="FLM-6E-DEL-CCU-88"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                      placeholder="e.g. FLM-6E-DEL-CCU-88 (Optional)"
+                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                     />
                                   </div>
                                 </div>
@@ -6677,73 +6957,73 @@ export default function AdminPage() {
                                   <span className="text-[10px] text-zinc-500 font-mono">Can be empty without issue</span>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-zinc-400 block font-mono">Port of Loading (Origin)</label>
-                                    <input
-                                      type="text"
-                                      value={shipSourcePort}
-                                      onChange={(e) => setShipSourcePort(e.target.value)}
-                                      placeholder="INNSA (Nhava Sheva Port, Mumbai)"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
-                                    />
-                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] text-zinc-400 block font-mono">Port of Loading (Origin)</label>
+                                      <input
+                                        type="text"
+                                        value={shipSourcePort}
+                                        onChange={(e) => setShipSourcePort(e.target.value)}
+                                        placeholder="e.g. INNSA (Nhava Sheva Port, Mumbai) (Optional)"
+                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+                                      />
+                                    </div>
 
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-zinc-400 block font-mono">Port of Discharge (Destination)</label>
-                                    <input
-                                      type="text"
-                                      value={shipDestPort}
-                                      onChange={(e) => setShipDestPort(e.target.value)}
-                                      placeholder="INHAL (Haldia Port, West Bengal)"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
-                                    />
-                                  </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] text-zinc-400 block font-mono">Port of Discharge (Destination)</label>
+                                      <input
+                                        type="text"
+                                        value={shipDestPort}
+                                        onChange={(e) => setShipDestPort(e.target.value)}
+                                        placeholder="e.g. INHAL (Haldia Port, West Bengal) (Optional)"
+                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+                                      />
+                                    </div>
 
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-zinc-400 block font-mono">Voyage Number</label>
-                                    <input
-                                      type="text"
-                                      value={shipVoyageNumber}
-                                      onChange={(e) => setShipVoyageNumber(e.target.value.toUpperCase())}
-                                      placeholder="VOY-2026-09E"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
-                                    />
-                                  </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] text-zinc-400 block font-mono">Voyage Number</label>
+                                      <input
+                                        type="text"
+                                        value={shipVoyageNumber}
+                                        onChange={(e) => setShipVoyageNumber(e.target.value.toUpperCase())}
+                                        placeholder="e.g. VOY-2026-09E (Optional)"
+                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+                                      />
+                                    </div>
 
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-zinc-400 block font-mono">Bill of Lading (B/L #)</label>
-                                    <input
-                                      type="text"
-                                      value={shipBillOfLading}
-                                      onChange={(e) => setShipBillOfLading(e.target.value.toUpperCase())}
-                                      placeholder="BL-MSC-IN-994821"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
-                                    />
-                                  </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] text-zinc-400 block font-mono">Bill of Lading (B/L #)</label>
+                                      <input
+                                        type="text"
+                                        value={shipBillOfLading}
+                                        onChange={(e) => setShipBillOfLading(e.target.value.toUpperCase())}
+                                        placeholder="e.g. BL-MSC-IN-994821 (Optional)"
+                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+                                      />
+                                    </div>
 
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-zinc-400 block font-mono">Shipping Line / Carrier</label>
-                                    <input
-                                      type="text"
-                                      value={shipShippingLine}
-                                      onChange={(e) => setShipShippingLine(e.target.value)}
-                                      placeholder="Maersk Line / MSC"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
-                                    />
-                                  </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] text-zinc-400 block font-mono">Shipping Line / Carrier</label>
+                                      <input
+                                        type="text"
+                                        value={shipShippingLine}
+                                        onChange={(e) => setShipShippingLine(e.target.value)}
+                                        placeholder="e.g. Maersk Line / MSC (Optional)"
+                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+                                      />
+                                    </div>
 
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-zinc-400 block font-mono">Berthing Pier / Terminal</label>
-                                    <input
-                                      type="text"
-                                      value={shipBerthLocation}
-                                      onChange={(e) => setShipBerthLocation(e.target.value)}
-                                      placeholder="Berth 4 / Container Terminal 2"
-                                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
-                                    />
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] text-zinc-400 block font-mono">Berthing Pier / Terminal</label>
+                                      <input
+                                        type="text"
+                                        value={shipBerthLocation}
+                                        onChange={(e) => setShipBerthLocation(e.target.value)}
+                                        placeholder="e.g. Berth 4 / Container Terminal 2 (Optional)"
+                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+                                      />
+                                    </div>
                                   </div>
-                                </div>
                               </div>
                             )}
                           </div>
@@ -6803,7 +7083,7 @@ export default function AdminPage() {
                                       setDeliveryVehiclePlate(val);
                                       setVehicleNo(val);
                                     }}
-                                    placeholder={transitMode === "bike" ? "DL-01-BK-4092" : transitMode === "van" ? "WB-02-VN-8812" : "DL-01-TRK-9000"}
+                                    placeholder={transitMode === "bike" ? "e.g. DL-01-BK-4092" : transitMode === "van" ? "e.g. WB-02-VN-8812" : "e.g. DL-01-TRK-9000"}
                                     className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-emerald-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-400 uppercase"
                                   />
                                 </div>
@@ -6824,13 +7104,13 @@ export default function AdminPage() {
                                 <div className="space-y-1">
                                   <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
                                     <span>Driver / Rider Name</span>
-                                    <span className="text-rose-400 font-bold">*</span>
+                                    <span className="text-zinc-500 text-[10px] font-normal">(Optional)</span>
                                   </label>
                                   <input
                                     type="text"
                                     value={deliveryDriverName}
                                     onChange={(e) => setDeliveryDriverName(e.target.value)}
-                                    placeholder="Rakesh Sharma (ANC Fleet)"
+                                    placeholder="e.g. Rakesh Sharma (Optional)"
                                     className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-emerald-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-400"
                                   />
                                 </div>
@@ -6838,13 +7118,13 @@ export default function AdminPage() {
                                 <div className="space-y-1">
                                   <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1">
                                     <span>Driver Contact / Phone</span>
-                                    <span className="text-rose-400 font-bold">*</span>
+                                    <span className="text-zinc-500 text-[10px] font-normal">(Optional)</span>
                                   </label>
                                   <input
                                     type="text"
                                     value={deliveryDriverContact}
                                     onChange={(e) => setDeliveryDriverContact(e.target.value)}
-                                    placeholder="+91 98301 23456"
+                                    placeholder="e.g. +91 98301 23456 (Optional)"
                                     className="w-full px-3 py-2 text-xs font-mono font-bold bg-zinc-900 border border-emerald-500/40 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-400"
                                   />
                                 </div>
@@ -6913,8 +7193,8 @@ export default function AdminPage() {
                                         type="text"
                                         value={deliveryRunSheetId}
                                         onChange={(e) => setDeliveryRunSheetId(e.target.value.toUpperCase())}
-                                        placeholder="DRS-20261029-01"
-                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                        placeholder="e.g. DRS-20261029-01 (Optional)"
+                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                       />
                                     </div>
 
@@ -6924,8 +7204,8 @@ export default function AdminPage() {
                                         type="text"
                                         value={deliveryFleetProvider}
                                         onChange={(e) => setDeliveryFleetProvider(e.target.value)}
-                                        placeholder="ANC In-House Priority Delivery"
-                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 focus:outline-none"
+                                        placeholder="e.g. ANC In-House Priority Delivery (Optional)"
+                                        className="w-full px-2.5 py-1.5 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
                                       />
                                     </div>
                                   </div>
@@ -7066,16 +7346,43 @@ export default function AdminPage() {
                           .filter((ord) => filterDestinationHub === "all" || ord.nextHubId === filterDestinationHub)
                           .map((ord) => {
                             const isClose = perOrderAddressClose[ord.orderNumber] ?? isAddressCloseToHub;
+                            const wasLoadingDenied = ord.events?.some((e) => e.title.includes("Vehicle Loading Denied") || e.title.includes("Returned to Sorting Dock"));
+
+                            // Accurately determine current physical location of this package:
+                            const currentLeg = ord.route?.find((l) => l.status === "sorting" || l.status === "received" || l.status === "loading") || (ord.route && ord.route[0]);
+
+                            // Check whether package is currently at the Central Packing Station (Origin) or at a Regional Transit Hub
+                            const isAtCentralPackingStation =
+                              hubQueue.hub.id === "STOCK-CTR-01" ||
+                              hubQueue.hub.id === "STK-CTR-01" ||
+                              (ord.currentHubId === "STOCK-CTR-01" && (!currentLeg || currentLeg.hubId === "STOCK-CTR-01" || currentLeg.hubId === "STK-CTR-01")) ||
+                              ord.hubQueueStatus === "packaging" ||
+                              (ord.deliveryStatus === "processing" && (!ord.route || ord.route.length === 0 || ord.route[0]?.status === "pending"));
+
+                            const currentLocationName = isAtCentralPackingStation
+                              ? "Central Packing Station (Central Stock & Fulfillment Center)"
+                              : (currentLeg?.hubName || ord.currentHub || hubQueue.hub.name);
+
+                            const currentLocationRegion = isAtCentralPackingStation
+                              ? "Nagpur Zero-Mile / National Stock Center, Maharashtra"
+                              : (currentLeg?.region || ord.currentRegion || hubQueue.hub.region);
+
+                            const locationTypeBadge = isAtCentralPackingStation
+                              ? "Central Packing Station (Origin)"
+                              : "Transit Logistics Hub";
+
                             return (
                               <div
                                 key={ord.id}
                                 className={`p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                                  isClose
+                                  wasLoadingDenied
+                                    ? "bg-rose-950/20 border-rose-500/40 hover:border-rose-500/70"
+                                    : isClose
                                     ? "bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/70"
                                     : "bg-zinc-900/80 border-zinc-800 hover:border-zinc-700"
                                 }`}
                               >
-                                <div className="space-y-1.5 min-w-0 flex-1">
+                                <div className="space-y-2 min-w-0 flex-1">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/20">
                                       {ord.orderNumber}
@@ -7083,13 +7390,19 @@ export default function AdminPage() {
                                     <span className="text-xs font-semibold text-zinc-200">
                                       {ord.customer?.fullName} ({ord.customer?.city})
                                     </span>
+                                    {wasLoadingDenied && (
+                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold flex items-center gap-1">
+                                        <RotateCcw className="w-2.5 h-2.5" />
+                                        Reverted from Loading Bay · Ready for Re-sorting
+                                      </span>
+                                    )}
                                     {isClose ? (
                                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
                                         ✓ Out for Delivery (Afternoon/Evening)
                                       </span>
                                     ) : (
                                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-semibold">
-                                        Routing: {getHubById(targetDestinationHubId)?.name || ord.nextHub}
+                                        Next Hub: {getHubById(targetDestinationHubId)?.name || ord.nextHub}
                                       </span>
                                     )}
 
@@ -7113,29 +7426,90 @@ export default function AdminPage() {
                                     </button>
                                   </div>
 
+                                  {/* Current Physical Location Banner */}
+                                  <div className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800/90 flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <div
+                                        className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
+                                          isAtCentralPackingStation
+                                            ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                                            : "bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                                        }`}
+                                      >
+                                        <MapPin className="w-4 h-4" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[10px] uppercase font-mono tracking-wider text-zinc-400 font-bold">
+                                            Current Physical Location:
+                                          </span>
+                                          <span
+                                            className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold border ${
+                                              isAtCentralPackingStation
+                                                ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                                                : "bg-blue-500/15 text-blue-300 border-blue-500/30"
+                                            }`}
+                                          >
+                                            {isAtCentralPackingStation ? "Origin Packing Station" : "Transit Hub Location"}
+                                          </span>
+                                        </div>
+                                        <span className="text-zinc-100 font-bold text-xs flex flex-wrap items-baseline gap-1.5 mt-0.5">
+                                          <span className={isAtCentralPackingStation ? "text-amber-300" : "text-blue-300"}>
+                                            {currentLocationName}
+                                          </span>
+                                          <span className="text-zinc-400 text-[11px] font-normal">
+                                            ({currentLocationRegion})
+                                          </span>
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <span
+                                      className={`text-[10px] font-mono px-2.5 py-1 rounded-xl font-bold border shrink-0 ${
+                                        isAtCentralPackingStation
+                                          ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                                          : "bg-blue-500/15 text-blue-300 border-blue-500/30"
+                                      }`}
+                                    >
+                                      📍 {locationTypeBadge}
+                                    </span>
+                                  </div>
+
                                   <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <span>
+                                      Location: <strong className={isAtCentralPackingStation ? "text-amber-300 font-semibold" : "text-blue-300 font-semibold"}>{currentLocationName} ({currentLocationRegion})</strong>
+                                    </span>
+                                    <span>•</span>
                                     <span>
                                       Assigned Mode: <strong className="text-zinc-200 uppercase">{transitMode}</strong>
                                     </span>
                                     <span>•</span>
                                     {transitMode === "train" ? (
                                       <span>
-                                        Train: <strong className="text-amber-400 font-mono font-bold">#{trainNumber} · {trainDateTime.replace("T", " ")}</strong>
+                                        Train: <strong className="text-amber-400 font-mono font-bold">#{trainNumber.trim() || "Scheduled Rake"} · {trainDateTime.replace("T", " ")}</strong>
                                         {railSpaceAllocation && <span className="text-zinc-400 text-[10px] ml-1">[{railSpaceAllocation} · {railFreightScale}]</span>}
                                       </span>
                                     ) : transitMode === "plane" ? (
                                       <span>
-                                        Flight: <strong className="text-cyan-400 font-mono font-bold">#{flightNumber} · {flightDateTime.replace("T", " ")}</strong>
+                                        Flight: <strong className="text-cyan-400 font-mono font-bold">#{flightNumber.trim() || "Scheduled Cargo"} · {flightDateTime.replace("T", " ")}</strong>
                                         {airBayLocation && <span className="text-zinc-400 text-[10px] ml-1">[{airBayLocation.split(" ")[0]}]</span>}
                                       </span>
                                     ) : transitMode === "ship" ? (
                                       <span>
-                                        Vessel: <strong className="text-sky-400 font-mono font-bold">{vesselName}</strong> [{vesselImo}] · Container: <strong className="text-zinc-300 font-mono">{shipContainerId}</strong>
+                                        Vessel: <strong className="text-sky-400 font-mono font-bold">{vesselName.trim() || "Scheduled Ocean Vessel"}</strong>
+                                        {vesselImo.trim() ? ` [${vesselImo.trim()}]` : ""}
+                                        {shipContainerId.trim() ? <> · Container: <strong className="text-zinc-300 font-mono">{shipContainerId.trim()}</strong></> : ""}
                                       </span>
                                     ) : (
                                       <span>
-                                        Fleet: <strong className="text-emerald-400 font-mono font-bold">{deliveryVehiclePlate || vehicleNo}</strong> · Rider: <strong className="text-zinc-300">{deliveryDriverName}</strong>
-                                        <span className="text-zinc-500 font-mono text-[10px] ml-1">({deliveryDriverContact})</span>
+                                        Fleet: <strong className="text-emerald-400 font-mono font-bold">{deliveryVehiclePlate.trim() || vehicleNo.trim() || (transitMode === "bike" ? "Express Bike" : transitMode === "van" ? "Delivery Van" : "Heavy Road Truck")}</strong>
+                                        {deliveryDriverName.trim() && (
+                                          <>
+                                            {" "}· Rider: <strong className="text-zinc-300">{deliveryDriverName.trim()}</strong>
+                                          </>
+                                        )}
+                                        {deliveryDriverContact.trim() && (
+                                          <span className="text-zinc-500 font-mono text-[10px] ml-1">({deliveryDriverContact.trim()})</span>
+                                        )}
                                       </span>
                                     )}
                                     <span>•</span>
@@ -7278,7 +7652,23 @@ export default function AdminPage() {
                                 const isLastMile = Boolean(currentLeg?.isFinalDeliveryHub || perOrderAddressClose[ord.orderNumber] || !ord.nextHubId);
 
                                 return (
-                                  <div className="flex items-center gap-2 shrink-0">
+                                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                    {/* Deny Loading / Revert to Sorting Action */}
+                                    <button
+                                      type="button"
+                                      disabled={hubActionLoading === ord.orderNumber}
+                                      onClick={() => {
+                                        setDenyLoadingModalOrder(ord);
+                                        setDenyLoadingReason("🏷️ Mislabeled Destination / Routing");
+                                        setCustomDenyNotes("");
+                                      }}
+                                      className="px-3.5 py-2.5 rounded-xl border border-rose-500/40 hover:border-rose-500/70 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-white font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                                      title="Deny vehicle loading and revert consignment back to Sorting Dock for routing/label correction"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+                                      <span>Deny Loading (Revert to Sorting)</span>
+                                    </button>
+
                                     <button
                                       type="button"
                                       disabled={hubActionLoading === ord.orderNumber}
@@ -12127,6 +12517,157 @@ export default function AdminPage() {
             onClick={(e) => e.stopPropagation()}
           >
             High-resolution Proof of Delivery archive · Authenticated by carrier terminal · Press ESC or click backdrop to close
+          </div>
+        </div>
+      )}
+
+      {/* DENY VEHICLE LOADING MODAL (REVERT TO SORTING DOCK) */}
+      {denyLoadingModalOrder && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setDenyLoadingModalOrder(null)}
+        >
+          <div
+            className="relative max-w-lg w-full bg-zinc-950 border border-zinc-800 rounded-3xl p-6 sm:p-7 shadow-2xl text-white space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-zinc-100">
+                    Deny Vehicle Loading
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Revert Consignment <span className="text-cyan-400 font-mono font-bold">#{denyLoadingModalOrder.orderNumber}</span> to Sorting Dock
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDenyLoadingModalOrder(null)}
+                className="p-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Explanation Banner */}
+            <div className="p-3.5 rounded-2xl bg-rose-950/20 border border-rose-500/30 text-xs space-y-1">
+              <div className="flex items-center gap-2 text-rose-300 font-semibold">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>Immediate Sorting Dock Reversion</span>
+              </div>
+              <p className="text-zinc-300 text-[11px] leading-relaxed">
+                Found a mistake or mislabeled information before loading into the vehicle? Denying loading stops dispatch and immediately returns the consignment back to the <strong>Sorting Dock</strong> so you can adjust the destination hub, fleet mode, or vehicle details.
+              </p>
+            </div>
+
+            {/* Consignment Details */}
+            <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Customer:</span>
+                <span className="text-zinc-200 font-medium">
+                  {denyLoadingModalOrder.customer?.fullName} ({denyLoadingModalOrder.customer?.city})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Current Assigned Staging:</span>
+                <span className="text-purple-300 font-medium">
+                  {denyLoadingModalOrder.nextHub || "Next Transit Gateway"} ({denyLoadingModalOrder.transitMode?.toUpperCase() || "VAN"})
+                </span>
+              </div>
+              {denyLoadingModalOrder.vehicleNo && (
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Vehicle / Plate:</span>
+                  <span className="text-zinc-300 font-mono">{denyLoadingModalOrder.vehicleNo}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Preset Denial Reasons */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-300 block">
+                Select Reason for Loading Denial & Return:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  "🏷️ Mislabeled Destination / Routing",
+                  "🚆 Wrong Train / Flight / Vehicle ID",
+                  "🔄 Wrong Transport Fleet Mode",
+                  "📍 Address Proximity Flag Mismatch",
+                  "📦 Packaging / Manifest Discrepancy",
+                  "⚠️ Operator Labeling Correction",
+                ].map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setDenyLoadingReason(reason)}
+                    className={`p-2.5 rounded-xl border text-left text-xs font-medium transition cursor-pointer ${
+                      denyLoadingReason === reason
+                        ? "bg-rose-500/20 border-rose-500 text-rose-200 shadow-xs"
+                        : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Notes */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-400 block">
+                Additional Clarification / Notes (Optional):
+              </label>
+              <input
+                type="text"
+                value={customDenyNotes}
+                onChange={(e) => setCustomDenyNotes(e.target.value)}
+                placeholder="e.g. Train number was filled as 12302 instead of 12004, fix destination to Patna"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setDenyLoadingModalOrder(null)}
+                className="px-4 py-2.5 rounded-xl border border-zinc-800 hover:bg-zinc-900 text-zinc-300 text-xs font-semibold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={hubActionLoading === denyLoadingModalOrder.orderNumber}
+                onClick={async () => {
+                  const reasonPayload = `${denyLoadingReason}${customDenyNotes ? ` · Note: ${customDenyNotes}` : ""}`;
+                  await handleHubQueueAction(
+                    denyLoadingModalOrder.orderNumber,
+                    "deny_loading",
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    reasonPayload
+                  );
+                  setDenyLoadingModalOrder(null);
+                  setCustomDenyNotes("");
+                }}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-semibold flex items-center gap-2 transition cursor-pointer shadow-lg shadow-rose-600/30 disabled:opacity-50"
+              >
+                {hubActionLoading === denyLoadingModalOrder.orderNumber ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-3.5 h-3.5" />
+                )}
+                <span>Confirm & Revert to Sorting Dock</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
