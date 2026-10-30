@@ -241,19 +241,8 @@ export function ProductDetailView({
       label: angleLabels[i] || `Angle 0${i + 1}`,
     }));
 
-    // If product has exploded view and it's not already in variant images, append it as technical view
-    if (product.explodedView?.image && !variantImages.includes(product.explodedView.image)) {
-      items.push({
-        id: "exploded-tech",
-        url: product.explodedView.image,
-        alt: `${product.name} Internal Acoustic Architecture`,
-        type: "360" as const,
-        label: "Internal Architecture",
-      });
-    }
-
     return items;
-  }, [variantImages, product.name, currentChildVariant?.color, currentVariant?.name, product.explodedView?.image]);
+  }, [variantImages, product.name, currentChildVariant?.color, currentVariant?.name]);
 
   // Read initial query params from window.location on mount without blocking SSR
   useEffect(() => {
