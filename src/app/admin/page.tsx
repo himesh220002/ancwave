@@ -1535,6 +1535,14 @@ export default function AdminPage() {
     const uploadKey = `${groupId}-${colorIndex}`;
     setUploadingColorKey(uploadKey);
 
+    const productSlug = (masterName || product?.name || selectedSlug || "product")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || "product";
+
+    const targetFolder = `products/${productSlug}`;
+
     try {
       const uploadedUrls: string[] = [];
       for (let i = 0; i < files.length; i++) {
@@ -1545,7 +1553,7 @@ export default function AdminPage() {
           body: JSON.stringify({
             fileName: `variant-${groupId}-${colorIndex}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`,
             contentType: file.type || "image/jpeg",
-            folder: "products",
+            folder: targetFolder,
           }),
         });
         const resJson = await presignRes.json();
@@ -1567,7 +1575,8 @@ export default function AdminPage() {
           console.warn("Direct S3 upload notice, forwarding via server S3 proxy:", directErr);
           const formData = new FormData();
           formData.append("file", file);
-          formData.append("key", presignData.fileKey);
+          formData.append("key", presignData.fileKey || `${targetFolder}/variant-${groupId}-${colorIndex}-${Date.now()}-${file.name}`);
+          formData.append("folder", targetFolder);
           const fallbackRes = await fetch("/api/reviews/mock-upload", {
             method: "POST",
             body: formData,
