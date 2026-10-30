@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 
 const MONGODB_URI = process.env.MONGODB_URI || "";
 
+export const DB_NAME = "ancwaveDB";
+
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -29,22 +31,15 @@ export async function connectDB() {
   }
 
   if (!cached.promise) {
-    // Explicitly target ancwaveDB if not present in URI
-    let connectionUri = MONGODB_URI;
-    if (connectionUri.includes(".mongodb.net/") && !connectionUri.split(".mongodb.net/")[1]?.split("?")[0]) {
-      const [base, query] = connectionUri.split(".mongodb.net/");
-      connectionUri = `${base}.mongodb.net/ancwaveDB${query ? `?${query.replace(/^\??/, "")}` : ""}`;
-    }
-
     const opts: mongoose.ConnectOptions = {
       bufferCommands: false,
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000,
-      dbName: "ancwaveDB",
+      dbName: DB_NAME, // Connects directly to ancwaveDB on the cluster
     };
 
-    cached.promise = mongoose.connect(connectionUri, opts).then((m) => {
-      console.log(`Connected to MongoDB Atlas [Database: ${m.connection.name || "ancwaveDB"}]`);
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((m) => {
+      console.log(`Connected to MongoDB Atlas [Database: ${m.connection.name || DB_NAME}]`);
       return m;
     });
   }
