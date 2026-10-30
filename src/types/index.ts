@@ -806,7 +806,7 @@ export interface GateOtpSession {
   podImages?: GateOtpPodImages;
 }
 
-export type HubQueueStatus = "incoming" | "received" | "sorting" | "loading" | "outgoing" | "gate_handover" | "delivered";
+export type HubQueueStatus = "packaging" | "incoming" | "received" | "sorting" | "loading" | "outgoing" | "gate_handover" | "delivered";
 
 export type DispatchCategory = "b2b_bulk_freight" | "b2c_individual_courier";
 

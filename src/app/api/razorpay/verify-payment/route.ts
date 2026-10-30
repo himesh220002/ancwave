@@ -8,6 +8,11 @@ import { dispatchOrderPlacedEvent } from "@/lib/aws-services";
 import { revalidatePath } from "next/cache";
 import { generateRazorpayOrderEmail, sendOrderConfirmationEmail } from "@/lib/email-service";
 import { deductOrderStock } from "@/lib/inventory-service";
+import {
+  CENTRAL_STOCK_CENTER,
+  getDirectionCorridorDecision,
+  ensureOrderRoute,
+} from "@/lib/logistics-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -111,6 +116,17 @@ export async function POST(req: NextRequest) {
     const finalPaymentId = razorpay_payment_id || "pay_" + Math.random().toString(36).substring(2, 14);
     const finalOrderId = razorpay_order_id || "order_demo";
 
+    const customerData = customer || {
+      fullName: "Alex Morgan",
+      email: "alex@example.com",
+      address: "1420 NW Johnson Street",
+      city: "Portland",
+      state: "Oregon",
+      zipCode: "97209",
+    };
+
+    const corridor = getDirectionCorridorDecision(customerData);
+
     const initialEvents: OrderEvent[] = [
       {
         id: "ev-" + Math.random().toString(36).substring(2, 9),
@@ -122,26 +138,19 @@ export async function POST(req: NextRequest) {
       },
       {
         id: "ev-" + Math.random().toString(36).substring(2, 9),
-        title: "Order Allocated at Fulfillment Hub",
-        description: `Order registered in logistics pipeline and queued for dispatch at Portland Primary Logistics Center.`,
+        title: "Packaging Stage at Central Stock Center",
+        description: `Order registered at ${CENTRAL_STOCK_CENTER.name}. Quality inspection, barcode tagging, and packaging in progress. Direction corridor determined: ${corridor.directionLabel}. Assigned 1st Hub: ${corridor.firstHubName}.`,
         timestamp: new Date().toISOString(),
         type: "delivery",
-        actor: "Portland Primary Logistics Center",
+        actor: "Central Stock Center (Nagpur Zero-Mile Depot)",
       },
     ];
 
-    const order: Order = {
+    const rawOrder: Order = {
       id: "ord-" + Math.random().toString(36).substring(2, 9),
       orderNumber,
       userId: userId || undefined,
-      customer: customer || {
-        fullName: "Alex Morgan",
-        email: "alex@example.com",
-        address: "1420 NW Johnson Street",
-        city: "Portland",
-        state: "Oregon",
-        zipCode: "97209",
-      },
+      customer: customerData,
       items: rawItems,
       subtotal,
       shipping,
@@ -152,10 +161,17 @@ export async function POST(req: NextRequest) {
       razorpayPaymentId: finalPaymentId,
       razorpayOrderId: finalOrderId,
       deliveryStatus: "processing",
-      currentHub: "Portland Primary Logistics Center",
+      currentHub: CENTRAL_STOCK_CENTER.name,
+      currentHubId: CENTRAL_STOCK_CENTER.id,
+      currentRegion: CENTRAL_STOCK_CENTER.region,
+      nextHub: corridor.firstHubName,
+      nextHubId: corridor.firstHubId,
+      nextRegion: corridor.firstHubRegion,
+      hubQueueStatus: "packaging",
       trackingNumber: `TRK-${orderNumber.replace(/[^0-9]/g, "")}`,
-      transitMode: "van",
-      vehicleNo: "OR-EXP-8891",
+      transitMode: corridor.corridorMode,
+      vehicleNo: corridor.vehicleNo,
+      containerId: corridor.containerId,
       manifestVerified: true,
       cancellation: {
         requested: false,
@@ -166,6 +182,8 @@ export async function POST(req: NextRequest) {
       awsEventBridgeDispatched: true,
       cacheRevalidated: true,
     };
+
+    const order = ensureOrderRoute(rawOrder);
 
     // Save to store
     store.addOrder(order);

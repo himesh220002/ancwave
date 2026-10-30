@@ -15,6 +15,7 @@ import {
   getHubById,
   STANDARD_HUBS,
   generateRtoReverseRoute,
+  CENTRAL_STOCK_CENTER,
 } from "@/lib/logistics-service";
 
 function normalizeOrder(o: any): Order {
@@ -72,13 +73,18 @@ function normalizeOrder(o: any): Order {
     },
     {
       id: "ev-auto-2",
-      title: "Logistics Routing Initialized",
-      description: `Package queued at ${o.currentHub || "Portland Primary Logistics Center"} for inspection.`,
+      title: "Packaging Stage at Central Stock Center",
+      description: `Package registered at ${o.currentHub || CENTRAL_STOCK_CENTER.name}. Quality inspection and direction-corridor hub assignment in progress.`,
       timestamp: o.createdAt ? new Date(o.createdAt).toISOString() : new Date().toISOString(),
       type: "delivery",
-      actor: "Logistics Center",
+      actor: "Central Stock Center",
     },
   ];
+
+  const isNewlyCreatedOrProcessing =
+    !o.deliveryStatus ||
+    o.deliveryStatus === "processing" ||
+    o.hubQueueStatus === "packaging";
 
   const base: Order = {
     id: o._id?.toString() || o.id || `ord-${Math.random().toString(36).substring(2, 9)}`,
@@ -105,13 +111,19 @@ function normalizeOrder(o: any): Order {
     refundAmount: o.refundAmount,
     refundInitiatedAt: o.refundInitiatedAt,
     deliveryStatus: o.deliveryStatus || "processing",
-    currentHub: o.currentHub || "Delhi National Fulfillment Hub",
-    currentHubId: o.currentHubId,
-    currentRegion: o.currentRegion || "Delhi NCR, IN",
-    nextHub: o.nextHub || "Kolkata Eastern Logistics Hub",
+    currentHub: isNewlyCreatedOrProcessing
+      ? CENTRAL_STOCK_CENTER.name
+      : o.currentHub || CENTRAL_STOCK_CENTER.name,
+    currentHubId: isNewlyCreatedOrProcessing
+      ? CENTRAL_STOCK_CENTER.id
+      : o.currentHubId || CENTRAL_STOCK_CENTER.id,
+    currentRegion: isNewlyCreatedOrProcessing
+      ? CENTRAL_STOCK_CENTER.region
+      : o.currentRegion || CENTRAL_STOCK_CENTER.region,
+    nextHub: o.nextHub,
     nextHubId: o.nextHubId,
-    nextRegion: o.nextRegion || "West Bengal, IN",
-    hubQueueStatus: o.hubQueueStatus,
+    nextRegion: o.nextRegion,
+    hubQueueStatus: isNewlyCreatedOrProcessing ? "packaging" : o.hubQueueStatus,
     containerId: o.containerId,
     route: o.route,
     trackingNumber: o.trackingNumber || `TRK-${orderNumber.replace(/[^0-9]/g, "") || "984210"}`,
