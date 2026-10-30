@@ -1,6 +1,7 @@
 import React from "react";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { getProductBySlug, sampleCatalog } from "@/lib/store";
 import { ProductDetailView } from "@/components/ProductDetailView";
 import { ProductData, ColorVariant, normalizeProductData } from "@/types";
@@ -52,7 +53,21 @@ async function fetchRelatedProducts(currentSlug: string): Promise<ProductData[]>
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = await fetchProduct(slug);
+  let product = getProductBySlug(slug);
+
+  if (!product) {
+    try {
+      const db = await connectDB();
+      if (db) {
+        const doc = await ProductModel.findOne({
+          $or: [{ slug }, { productId: slug }, { id: slug }],
+        }).lean();
+        if (doc) product = normalizeProductData(doc as any);
+      }
+    } catch {
+      // Fallback
+    }
+  }
 
   if (!product) {
     return {
@@ -100,6 +115,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function ProductSlugPage({ params }: PageProps) {
+  await connection();
   const { slug } = await params;
 
   const rawProduct = await fetchProduct(slug);

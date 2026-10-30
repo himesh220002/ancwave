@@ -100,7 +100,7 @@ const ProductSchema = new Schema(
       weight: String,
       bluetooth: String,
     },
-    lastRevalidatedAt: { type: String, default: () => new Date().toISOString() },
+    lastRevalidatedAt: { type: String, default: "" },
   },
   { timestamps: true, strict: false }
 );

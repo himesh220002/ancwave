@@ -273,7 +273,7 @@ export function normalizeProductData(raw: any): ProductData {
           stock: 10,
         },
       ],
-      lastRevalidatedAt: new Date().toISOString(),
+      lastRevalidatedAt: "",
     };
   }
 
@@ -483,7 +483,7 @@ export function normalizeProductData(raw: any): ProductData {
     colorVariants: normalizedColorVariants,
     childVariants: normalizedChildVariants,
     variantGroups: normalizedVariantGroups,
-    lastRevalidatedAt: clean.lastRevalidatedAt || new Date().toISOString(),
+    lastRevalidatedAt: clean.lastRevalidatedAt || "",
     restockProcess: clean.restockProcess,
   };
 }
