@@ -59,13 +59,21 @@ export async function GET(req: NextRequest) {
     }
 
     const targetSlug = slug || "";
+    const aliasSlug = targetSlug === "hyperx-cloud-stinger-2-core" ? "hyperx-cloudx-stinger-2-core" : targetSlug;
     let product: any = null;
 
     if (db) {
       try {
         if (targetSlug) {
           const doc = await ProductModel.findOne({
-            $or: [{ slug: targetSlug }, { productId: targetSlug }, { id: targetSlug }],
+            $or: [
+              { slug: targetSlug },
+              { productId: targetSlug },
+              { id: targetSlug },
+              { slug: aliasSlug },
+              { productId: aliasSlug },
+              { id: aliasSlug },
+            ],
           }).lean();
           if (doc) {
             product = normalizeProductData(doc);

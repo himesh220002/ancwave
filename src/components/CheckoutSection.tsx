@@ -10,13 +10,12 @@ import {
   RotateCcw,
   ShieldCheck,
   Truck,
-  Sparkles,
   Flame,
   Box,
 } from "lucide-react";
 import { ProductData, ProductColor, Order } from "@/types";
 import { useCart } from "@/context/CartContext";
-import { toast } from "@/components/Toaster";
+import { CurrencyPrice, useCurrency } from "@/context/CurrencyContext";
 
 interface CheckoutSectionProps {
   product: ProductData;
@@ -31,6 +30,7 @@ export function CheckoutSection({
   onColorChange,
 }: CheckoutSectionProps) {
   const { addItem } = useCart();
+  const { currency } = useCurrency();
   const [isAddedRecently, setIsAddedRecently] = useState(false);
 
   const currentVariant =
@@ -49,6 +49,8 @@ export function CheckoutSection({
     currentVariant?.images?.[0] ||
     currentVariant?.image ||
     "/images/checkout-floating.jpg";
+  const activePrice = currentVariant.price ?? product.price;
+  const activePriceInr = currentVariant.priceInr ?? product.priceInr;
 
   const handleAddToCart = () => {
     addItem({
@@ -56,7 +58,8 @@ export function CheckoutSection({
       name: `${product.name} - ${currentVariant?.name || "Standard"}`,
       variant: currentVariant?.id || "silver",
       variantName: currentVariant?.name || "Standard",
-      price: product.price,
+      price: activePrice,
+      priceInr: activePriceInr,
       image: variantCoverImage,
       fit: "One size · adjustable",
     });
@@ -82,7 +85,7 @@ export function CheckoutSection({
               Your next favorite thing.
             </h2>
             <span className="text-[10px] font-mono tracking-[0.18em] text-zinc-400 uppercase sm:text-right shrink-0">
-              CONFIGURE & PURCHASE / ALL PRICES IN USD
+              CONFIGURE & PURCHASE / DISPLAYED IN {currency}
             </span>
           </div>
         </div>
@@ -93,7 +96,7 @@ export function CheckoutSection({
           <div className="lg:col-span-6 space-y-4 sm:space-y-6">
             <div className="relative aspect-4/3 rounded-3xl bg-[#F0EFEA] overflow-hidden border border-[#E8E7E2] shadow-xs">
               <div className="absolute top-4 left-4 sm:top-5 sm:left-6 text-[10px] font-mono tracking-[0.18em] text-zinc-700 uppercase z-10 bg-white/85 backdrop-blur-md px-2.5 py-1 rounded-md shadow-2xs">
-                FORM 01 / {(currentVariant?.name || "Silver").toUpperCase()}
+                {product.name} / {(currentVariant?.name || "Standard").toUpperCase()}
               </div>
               <Image
                 src={variantCoverImage}
@@ -124,7 +127,7 @@ export function CheckoutSection({
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-mono tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-semibold">
-                      FLAGSHIP WIRELESS
+                      {product.model}
                     </span>
                     {isLowStock && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-mono text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-semibold">
@@ -133,7 +136,7 @@ export function CheckoutSection({
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-zinc-400 font-mono shrink-0">MODEL 01</span>
+                  <span className="text-xs text-zinc-400 font-mono shrink-0">{product.sku}</span>
                 </div>
 
                 <div className="flex flex-col xs:flex-row xs:items-baseline justify-between gap-2 pt-1">
@@ -142,13 +145,16 @@ export function CheckoutSection({
                       {product.name}
                     </h3>
                     <p className="text-xs text-zinc-500 mt-0.5 break-words">
-                      Wireless Over-Ear Active Noise Cancelling Headphones
+                      {product.type} · {product.category}
                     </p>
                   </div>
                   <div className="xs:text-right shrink-0">
-                    <div className="text-2xl sm:text-3xl font-bold text-[#111111]">
-                      ${product.price.toFixed(2)}
-                    </div>
+                    <CurrencyPrice
+                      usd={activePrice}
+                      inr={activePriceInr}
+                      reserve
+                      className="text-2xl sm:text-3xl font-bold text-[#111111]"
+                    />
                     <div className="text-[10px] text-zinc-400">Free delivery included</div>
                   </div>
                 </div>
@@ -229,14 +235,22 @@ export function CheckoutSection({
                         name: product.name,
                         variant: currentVariant?.id || "silver",
                         variantName: currentVariant?.name || "Standard",
-                        price: product.price,
+                        price: activePrice,
+                        priceInr: activePriceInr,
                         image: currentVariant?.image || variantCoverImage,
                         fit: "One size · adjustable",
                       });
                     }}
                     className="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-semibold text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2"
                   >
-                    <span>Buy Now — ${product.price.toFixed(2)}</span>
+                    <span className="flex items-center gap-1.5">
+                      Buy Now —
+                      <CurrencyPrice
+                        usd={activePrice}
+                        inr={activePriceInr}
+                        className="font-semibold text-white"
+                      />
+                    </span>
                     <ArrowUpRight className="w-4 h-4 stroke-[2.2]" />
                   </Link>
                 </div>

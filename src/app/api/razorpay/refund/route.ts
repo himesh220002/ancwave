@@ -74,10 +74,15 @@ export async function POST(req: NextRequest) {
       refundId = "rfd_" + Math.random().toString(36).substring(2, 14);
     }
 
+    const isInr = targetOrder.currency === "INR" || (targetOrder.customer?.country === "India" && refundAmount > 2000);
+    const refundFormatted = isInr
+      ? `₹${Math.round(refundAmount).toLocaleString("en-IN")}`
+      : `$${refundAmount.toFixed(2)} USD`;
+
     const refundEvent: OrderEvent = {
       id: "ev-rfd-" + Math.random().toString(36).substring(2, 9),
       title: "Razorpay Refund Initiated",
-      description: `Refund of $${refundAmount.toFixed(2)} initiated via Razorpay (Refund ID: ${refundId}). Amount will be sent back to the customer's account in 2–7 business days.`,
+      description: `Refund of ${refundFormatted} initiated via Razorpay (Refund ID: ${refundId}). Amount will be sent back to the customer's account in 2–7 business days.`,
       timestamp: new Date().toISOString(),
       type: "refund",
       actor,

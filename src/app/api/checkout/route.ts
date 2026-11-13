@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
       shipping,
       tax,
       total,
+      currency: body.currency || (customer?.country === "India" ? "INR" : "USD"),
       paymentMethod,
       paymentStatus: "paid",
       deliveryStatus: "processing",

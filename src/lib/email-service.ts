@@ -22,6 +22,7 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
   const customerName = order.customer.fullName || "Valued Customer";
   const customerEmail = order.customer.email;
   const isIndia = order.customer.country === "India" || (order.customer.contact && order.customer.contact.startsWith("+91"));
+  const isOrderInr = order.currency === "INR" || (isIndia && Number(order.total) > 2000);
 
   const total = Number(order.total) || 0;
   const tax = Number(order.tax) || 0;
@@ -53,13 +54,24 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
 
   const shipping = Math.max(0, Math.round((total - subtotal - tax) * 100) / 100);
 
-  const shortAmount = isIndia
-    ? `₹${Math.round(total * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")}`
-    : `$${total.toFixed(2)} USD`;
+  const formatMoney = (val: number) => {
+    if (isOrderInr) {
+      return `₹${Math.round(val).toLocaleString("en-IN")}`;
+    }
+    return `$${val.toFixed(2)}`;
+  };
 
-  const amountFormatted = isIndia
-    ? `₹${Math.round(total * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")} ($${total.toFixed(2)} USD)`
-    : `$${total.toFixed(2)} USD`;
+  const shortAmount = isOrderInr
+    ? `₹${Math.round(total).toLocaleString("en-IN")}`
+    : isIndia
+      ? `₹${Math.round(total * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")}`
+      : `$${total.toFixed(2)} USD`;
+
+  const amountFormatted = isOrderInr
+    ? `₹${Math.round(total).toLocaleString("en-IN")}`
+    : isIndia
+      ? `₹${Math.round(total * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")} ($${total.toFixed(2)} USD)`
+      : `$${total.toFixed(2)} USD`;
 
   const itemsListString = rawItems
     .map((item) => `${item.name} (${item.variantName || item.variant || "Standard"}) × ${item.quantity}`)
@@ -326,10 +338,10 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
           } · ${item.fit || "Precision Fit"}</span>
               </td>
               <td style="text-align: center; font-family: monospace;">${item.quantity}</td>
-              <td style="text-align: right; font-family: monospace;">$${item.price.toFixed(2)}</td>
-              <td style="text-align: right; font-family: monospace; font-weight: 700;">$${(
+              <td style="text-align: right; font-family: monospace;">${formatMoney(item.price)}</td>
+              <td style="text-align: right; font-family: monospace; font-weight: 700;">${formatMoney(
             item.price * item.quantity
-          ).toFixed(2)}</td>
+          )}</td>
             </tr>
           `
       )
@@ -341,17 +353,17 @@ export function generateRazorpayOrderEmail(order: Order): CustomRazorpayEmailDat
       <div style="max-width: 300px; margin-left: auto;">
         <div class="summary-row">
           <span>Subtotal:</span>
-          <span style="font-family: monospace;">$${subtotal.toFixed(2)}</span>
+          <span style="font-family: monospace;">${formatMoney(subtotal)}</span>
         </div>
         <div class="summary-row">
           <span>Insured Shipping:</span>
           <span style="font-family: monospace; color: ${shipping === 0 ? "#16A34A" : "#111827"}; font-weight: 600;">
-            ${shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`}
+            ${shipping === 0 ? "FREE" : formatMoney(shipping)}
           </span>
         </div>
         <div class="summary-row">
           <span>Estimated Sales Tax / GST (0%):</span>
-          <span style="font-family: monospace;">$${tax.toFixed(2)}</span>
+          <span style="font-family: monospace;">${formatMoney(tax)}</span>
         </div>
         <div class="summary-total">
           <span>Total Paid:</span>
@@ -764,10 +776,13 @@ export function generateRefundEmail(order: Order, refundId: string, refundAmount
   const customerName = order.customer.fullName || "Valued Customer";
   const customerEmail = order.customer.email;
   const isIndia = order.customer.country === "India" || (order.customer.contact && order.customer.contact.startsWith("+91"));
+  const isOrderInr = order.currency === "INR" || (isIndia && Number(order.total) > 2000);
   const amt = refundAmount ?? order.total;
-  const refundFormatted = isIndia
-    ? `₹${Math.round(amt * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")} ($${amt.toFixed(2)} USD)`
-    : `$${amt.toFixed(2)} USD`;
+  const refundFormatted = isOrderInr
+    ? `₹${Math.round(amt).toLocaleString("en-IN")}`
+    : isIndia
+      ? `₹${Math.round(amt * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")} ($${amt.toFixed(2)} USD)`
+      : `$${amt.toFixed(2)} USD`;
 
   const subject = `Refund Initiated: ${refundFormatted} for Order #${order.orderNumber} · ancwave`;
   const orderUrl = `https://ancwave.cyphertech.online/orders?order=${order.orderNumber}`;

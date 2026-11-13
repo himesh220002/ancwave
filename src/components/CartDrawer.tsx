@@ -3,8 +3,10 @@
 import React, { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { X, Minus, Plus, Truck, RotateCcw, ShieldCheck, ArrowUpRight, Clock } from "lucide-react";
+import { X, Minus, Plus, Truck, RotateCcw, ShieldCheck, ArrowUpRight, Clock, ArrowLeft } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useCurrency } from "@/context/CurrencyContext";
+import { toInr } from "@/lib/currency";
 
 export function CartDrawer() {
   const {
@@ -18,9 +20,24 @@ export function CartDrawer() {
     shipping,
     tax,
     total,
+    shippingSettings,
     recentAddedFlash,
     setRecentAddedFlash,
   } = useCart();
+  const { currency, format, toggleCurrency } = useCurrency();
+
+  const subtotalInr = items.reduce(
+    (sum, item) =>
+      sum + (item.priceInr ?? toInr(item.price)) * item.quantity,
+    0
+  );
+  const shippingInr =
+    totalItemsCount > 0
+      ? Number(shippingSettings?.generalDeliveryPriceInr) || toInr(shipping)
+      : 0;
+  const taxInr = 0;
+  const totalInr = subtotalInr + shippingInr + taxInr;
+  const closeDrawer = () => setIsCartOpen(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -60,13 +77,24 @@ export function CartDrawer() {
                 </span>
               )}
             </div>
-            <button
-              onClick={() => setIsCartOpen(false)}
-              className="p-1 rounded-full text-zinc-400 hover:text-black transition-colors"
-              aria-label="Close bag"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={toggleCurrency}
+                className="px-2 py-1 rounded-md border border-zinc-200 text-[10px] font-mono font-semibold text-zinc-600 hover:border-zinc-400 hover:text-zinc-900 transition-colors"
+                aria-label="Switch display currency"
+                title="Switch display currency"
+              >
+                {currency}
+              </button>
+              <button
+                onClick={() => setIsCartOpen(false)}
+                className="p-1 rounded-full text-zinc-400 hover:text-black transition-colors"
+                aria-label="Close bag"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Scrollable Item Body matching Screenshot 6 */}
@@ -95,7 +123,7 @@ export function CartDrawer() {
                   onClick={() => setIsCartOpen(false)}
                   className="px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg"
                 >
-                  Explore Form 01
+                  Continue shopping
                 </button>
               </div>
             ) : (
@@ -121,8 +149,14 @@ export function CartDrawer() {
                         <h3 className="font-bold text-[#111111] text-xs sm:text-sm truncate">
                           {item.name}
                         </h3>
-                        <span className="font-semibold text-[#111111] text-xs shrink-0">
-                          ${(item.price * item.quantity).toFixed(2)}
+                        <span
+                          suppressHydrationWarning
+                          className="font-semibold text-[#111111] text-xs shrink-0 tabular-nums whitespace-nowrap"
+                        >
+                          {format(
+                            item.price * item.quantity,
+                            (item.priceInr ?? toInr(item.price)) * item.quantity
+                          )}
                         </span>
                       </div>
                       {item.component && (
@@ -183,7 +217,10 @@ export function CartDrawer() {
                     At your door in 3–5 business days.
                   </p>
                   <p className="text-zinc-500 text-[11px]">
-                    Standard US shipping · {shipping === 0 ? "Free" : `$${shipping.toFixed(2)}`}
+                    Standard delivery ·{" "}
+                    {shipping === 0
+                      ? "Free"
+                      : format(shipping, shippingInr)}
                   </p>
                 </div>
               </div>
@@ -208,21 +245,39 @@ export function CartDrawer() {
               <div className="space-y-1 text-xs text-zinc-600">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span className="text-[#111111] font-medium">${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Standard shipping</span>
-                  <span className="text-[#111111] font-medium">
-                    {shipping === 0 ? "Free" : `$${shipping.toFixed(2)}`}
+                  <span
+                    suppressHydrationWarning
+                    className="text-[#111111] font-medium tabular-nums"
+                  >
+                    {format(subtotal, subtotalInr)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Tax - Oregon</span>
-                  <span className="text-[#111111] font-medium">${tax.toFixed(2)}</span>
+                  <span>Standard shipping</span>
+                  <span
+                    suppressHydrationWarning
+                    className="text-[#111111] font-medium tabular-nums"
+                  >
+                    {shipping === 0 ? "Free" : format(shipping, shippingInr)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Tax</span>
+                  <span
+                    suppressHydrationWarning
+                    className="text-[#111111] font-medium tabular-nums"
+                  >
+                    {format(tax, taxInr)}
+                  </span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-zinc-200 text-sm font-bold text-[#111111]">
                   <span>Estimated total</span>
-                  <span className="text-xl font-bold">${total.toFixed(2)}</span>
+                  <span
+                    suppressHydrationWarning
+                    className="text-xl font-bold tabular-nums whitespace-nowrap"
+                  >
+                    {format(total, totalInr)}
+                  </span>
                 </div>
               </div>
 
@@ -232,12 +287,28 @@ export function CartDrawer() {
                 onClick={() => setIsCartOpen(false)}
                 className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-medium text-xs sm:text-sm transition-all shadow-xs"
               >
-                <span>Proceed to checkout · ${total.toFixed(2)}</span>
+                <span suppressHydrationWarning className="tabular-nums">
+                  Proceed to checkout · {format(total, totalInr)}
+                </span>
                 <ArrowUpRight className="w-4 h-4 stroke-[2.2]" />
               </Link>
 
-              <p className="text-[11px] text-zinc-400 text-center">
-                Your total at checkout is ${total.toFixed(2)}, including delivery.
+              <button
+                type="button"
+                onClick={closeDrawer}
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold text-zinc-600 hover:text-zinc-950 hover:bg-white border border-transparent hover:border-zinc-200 transition-all"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Continue browsing the lineup</span>
+              </button>
+
+              <p
+                suppressHydrationWarning
+                className="text-[11px] text-zinc-400 text-center tabular-nums"
+              >
+                {currency === "INR"
+                  ? `Native INR total ${format(total, totalInr)} · converted at checkout`
+                  : `Your total at checkout is ${format(total, totalInr)}, including delivery.`}
               </p>
 
               <div className="flex items-center justify-center gap-4 text-[11px] text-zinc-400 pt-1">

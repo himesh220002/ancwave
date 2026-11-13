@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useCurrency } from "@/context/CurrencyContext";
 import { toast } from "@/components/Toaster";
 
 interface NavbarProps {
@@ -30,6 +31,7 @@ interface NavbarProps {
 export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
   const { totalItemsCount, setIsCartOpen } = useCart();
   const { user, isAdmin, isOwner, setIsAuthModalOpen, logout } = useAuth();
+  const { currency, toggleCurrency } = useCurrency();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -216,6 +218,17 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
             </div>
           )}
 
+          {/* Display currency toggle — native pricing without layout shift */}
+          <button
+            type="button"
+            onClick={toggleCurrency}
+            className="hidden sm:flex items-center justify-center min-w-12 px-2 py-1.5 rounded-lg border border-zinc-200 hover:border-zinc-400 text-[10px] font-mono font-bold text-zinc-700 hover:text-zinc-950 transition-colors tabular-nums"
+            title={`Displaying prices in ${currency}. Click to switch.`}
+            aria-label={`Switch currency, currently ${currency}`}
+          >
+            {currency}
+          </button>
+
           {/* Bag Icon */}
           <button
             onClick={() => setIsCartOpen(true)}
@@ -303,6 +316,39 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
               </button>
             </div>
           )}
+
+          {/* Mobile Currency Switcher */}
+          <div className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-200/80 text-xs">
+            <span className="font-semibold text-zinc-700 font-mono text-[11px] uppercase tracking-wider">Currency</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (currency !== "USD") toggleCurrency();
+                }}
+                className={`px-3 py-1 rounded-md text-xs font-mono font-bold transition-all ${
+                  currency === "USD"
+                    ? "bg-zinc-900 text-white shadow-xs"
+                    : "bg-white text-zinc-600 border border-zinc-200"
+                }`}
+              >
+                USD ($)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (currency !== "INR") toggleCurrency();
+                }}
+                className={`px-3 py-1 rounded-md text-xs font-mono font-bold transition-all ${
+                  currency === "INR"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-white text-zinc-600 border border-zinc-200"
+                }`}
+              >
+                INR (₹)
+              </button>
+            </div>
+          </div>
 
           <nav className="flex flex-col space-y-4 text-base font-semibold text-zinc-800">
             <Link

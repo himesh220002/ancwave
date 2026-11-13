@@ -153,6 +153,7 @@ const OrderSchema = new Schema(
         variantName: String,
         componentSku: String,
         price: Number,
+        priceInr: Number,
         quantity: Number,
         image: String,
         fit: String,
@@ -162,6 +163,10 @@ const OrderSchema = new Schema(
     shipping: Number,
     tax: Number,
     total: Number,
+    currency: {
+      type: String,
+      default: "USD",
+    },
     paymentMethod: {
       type: String,
       enum: ["razorpay", "apple_pay", "google_pay"],

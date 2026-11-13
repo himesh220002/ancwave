@@ -987,6 +987,7 @@ export interface Order {
   shipping: number;
   tax: number;
   total: number;
+  currency?: "USD" | "INR" | string;
   paymentMethod: "razorpay" | "apple_pay" | "google_pay";
   paymentStatus: "paid" | "pending" | "refunded" | "refund_initiated";
   razorpayPaymentId?: string;

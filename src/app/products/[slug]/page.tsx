@@ -3,7 +3,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { getProductBySlug, sampleCatalog } from "@/lib/store";
-import { ProductDetailView } from "@/components/ProductDetailView";
+import { ProductLayoutSwitcher } from "@/components/product/ProductLayoutSwitcher";
 import { ProductData, ColorVariant, normalizeProductData } from "@/types";
 import { connectDB } from "@/lib/db";
 import { ProductModel } from "@/lib/models";
@@ -15,11 +15,19 @@ interface PageProps {
 }
 
 async function fetchProduct(slug: string): Promise<ProductData | null> {
+  const targetSlug = slug === "hyperx-cloud-stinger-2-core" ? "hyperx-cloudx-stinger-2-core" : slug;
   try {
     const db = await connectDB();
     if (db) {
       const doc = await ProductModel.findOne({
-        $or: [{ slug }, { productId: slug }, { id: slug }],
+        $or: [
+          { slug },
+          { productId: slug },
+          { id: slug },
+          { slug: targetSlug },
+          { productId: targetSlug },
+          { id: targetSlug },
+        ],
       }).lean();
       if (doc) {
         return normalizeProductData(doc as any);
@@ -28,11 +36,15 @@ async function fetchProduct(slug: string): Promise<ProductData | null> {
   } catch (err) {
     console.warn("DB product lookup notice:", err);
   }
-  const fallback = getProductBySlug(slug);
+  const fallback = getProductBySlug(slug) || getProductBySlug(targetSlug);
   return fallback ? normalizeProductData(fallback) : null;
 }
 
 async function fetchRelatedProducts(currentSlug: string): Promise<ProductData[]> {
+  const curated = sampleCatalog
+    .filter((p) => p.slug !== currentSlug)
+    .map((p) => normalizeProductData(p));
+
   try {
     const db = await connectDB();
     if (db) {
@@ -42,32 +54,24 @@ async function fetchRelatedProducts(currentSlug: string): Promise<ProductData[]>
         .limit(4)
         .lean();
       if (docs && docs.length > 0) {
-        return docs.map((d: any) => normalizeProductData(d));
+        const fromDb = docs.map((d: any) => normalizeProductData(d));
+        const seen = new Set(fromDb.map((p) => p.slug));
+        return [
+          ...fromDb,
+          ...curated.filter((p) => !seen.has(p.slug)),
+        ].slice(0, 4);
       }
     }
   } catch (err) {
     console.warn("DB related products notice:", err);
   }
-  return sampleCatalog.filter((p) => p.slug !== currentSlug).map(normalizeProductData);
+
+  return curated.slice(0, 4);
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  let product = getProductBySlug(slug);
-
-  if (!product) {
-    try {
-      const db = await connectDB();
-      if (db) {
-        const doc = await ProductModel.findOne({
-          $or: [{ slug }, { productId: slug }, { id: slug }],
-        }).lean();
-        if (doc) product = normalizeProductData(doc as any);
-      }
-    } catch {
-      // Fallback
-    }
-  }
+  const product = await fetchProduct(slug);
 
   if (!product) {
     return {
@@ -205,8 +209,8 @@ export default async function ProductSlugPage({ params }: PageProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }}
       />
 
-      {/* Main Interactive Product Slug View */}
-      <ProductDetailView
+      {/* Category-driven product layout (audio experience vs. general object) */}
+      <ProductLayoutSwitcher
         product={product}
         relatedProducts={relatedProducts}
       />

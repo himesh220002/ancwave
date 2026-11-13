@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
       customer,
       items,
       amount = 361,
+      currency,
       userId,
     } = body;
 
@@ -126,12 +127,19 @@ export async function POST(req: NextRequest) {
     };
 
     const corridor = getDirectionCorridorDecision(customerData);
+    const finalCurrency =
+      currency ||
+      (customerData.country?.toLowerCase() === "india" || total > 2000 ? "INR" : "USD");
 
     const initialEvents: OrderEvent[] = [
       {
         id: "ev-" + Math.random().toString(36).substring(2, 9),
         title: "Order Placed & Payment Verified",
-        description: `Payment ID: ${finalPaymentId}. Amount of $${total.toFixed(2)} USD successfully captured via Razorpay.`,
+        description: `Payment ID: ${finalPaymentId}. Amount of ${
+          finalCurrency === "INR"
+            ? `₹${Math.round(total).toLocaleString("en-IN")}`
+            : `$${total.toFixed(2)} USD`
+        } successfully captured via Razorpay.`,
         timestamp: new Date().toISOString(),
         type: "payment",
         actor: "Razorpay Gateway",
@@ -156,6 +164,7 @@ export async function POST(req: NextRequest) {
       shipping,
       tax,
       total,
+      currency: finalCurrency,
       paymentMethod: "razorpay",
       paymentStatus: "paid",
       razorpayPaymentId: finalPaymentId,

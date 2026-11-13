@@ -2,9 +2,10 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { ArrowUpRight, Check, Flame } from "lucide-react";
+import { ArrowUpRight, Check } from "lucide-react";
 import { ProductData, ProductColor } from "@/types";
 import { useCart } from "@/context/CartContext";
+import { CurrencyPrice } from "@/context/CurrencyContext";
 
 interface HeroSectionProps {
   product: ProductData;
@@ -26,6 +27,12 @@ export function HeroSection({
   const currentVariant =
     product.variants.find((v) => v.id === activeColor) || product.variants[0];
   const heroImage = currentVariant.images?.[0] || currentVariant.image;
+  const activePrice = currentVariant.price ?? product.price;
+  const activePriceInr = currentVariant.priceInr ?? product.priceInr;
+  const taglineLines = (product.tagline || "Less noise. More you.")
+    .split(/(?<=\.)\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
 
   const handleColorSwitch = (colorId: ProductColor) => {
     setInternalColor(colorId);
@@ -38,13 +45,12 @@ export function HeroSection({
       name: `${product.name} - ${currentVariant.name}`,
       variant: currentVariant.id,
       variantName: currentVariant.name,
-      price: product.price,
+      price: activePrice,
+      priceInr: activePriceInr,
       image: heroImage,
       fit: "Adjustable fit",
     });
   };
-
-  const isLowStock = product.stock <= product.lowStockThreshold;
 
   return (
     <section className="relative pt-10 pb-16 md:pt-18 md:pb-30 bg-gray-50">
@@ -56,7 +62,7 @@ export function HeroSection({
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
               <span className="text-[11px] font-mono tracking-[0.16em] text-zinc-500 uppercase">
-                FORM 01 / WIRELESS OVER-EAR
+                {product.name} / {product.model}
               </span>
             </div>
 
@@ -72,8 +78,12 @@ export function HeroSection({
 
             {/* Headline matching Figma */}
             <h1 className="text-3xl sm:text-5xl lg:text-7xl font-bold tracking-tight text-[#111111] leading-[1.1] sm:leading-[1.05] break-words">
-              Less noise. <br />
-              More you.
+              {taglineLines.map((line, index) => (
+                <React.Fragment key={`${line}-${index}`}>
+                  {index > 0 && <br />}
+                  {line}
+                </React.Fragment>
+              ))}
             </h1>
 
             {/* Subtitle matching Figma */}
@@ -92,9 +102,12 @@ export function HeroSection({
                   <ArrowUpRight className="w-4 h-4 stroke-[2.2]" />
                 </button>
 
-                <span className="text-base font-semibold text-[#111111] font-sans">
-                  ${Number(product.price).toFixed(2)}
-                </span>
+                <CurrencyPrice
+                  usd={activePrice}
+                  inr={activePriceInr}
+                  reserve
+                  className="text-base font-semibold text-[#111111] font-sans"
+                />
               </div>
 
               {/* Trust Badges matching Figma: ✓ 30-day returns  ✓ 2-year warranty */}

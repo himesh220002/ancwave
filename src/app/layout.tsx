@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { CurrencyProvider } from "@/context/CurrencyContext";
 import { Toaster } from "@/components/Toaster";
 
 import { AuthModal } from "@/components/AuthModal";
@@ -54,11 +55,13 @@ export default function RootLayout({
     >
       <body className="min-h-screen bg-[#FBFBFA] text-[#18181B] antialiased selection:bg-blue-600 selection:text-white font-sans">
         <AuthProvider>
-          <CartProvider>
-            {children}
-            <AuthModal />
-            <Toaster />
-          </CartProvider>
+          <CurrencyProvider>
+            <CartProvider>
+              {children}
+              <AuthModal />
+              <Toaster />
+            </CartProvider>
+          </CurrencyProvider>
         </AuthProvider>
         <Script
           src="https://checkout.razorpay.com/v1/checkout.js"

@@ -44,6 +44,24 @@
   text-transform: uppercase;
 }
 
+/* ===================================================================
+   Admin Page Clean Sans-Serif Harmonization:
+   Transforms blocky monospace into smooth, minimalist Scandinavian Inter sans-serif
+   with tabular numbers (tnum) for prices, counts, timestamps, and SKUs.
+   =================================================================== */
+.admin-theme {
+  --font-mono: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.admin-theme .font-mono,
+.admin-theme code,
+.admin-theme .font-mono-tag,
+.admin-theme [class*="font-mono"] {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum" !important;
+  letter-spacing: normal;
+}
+
 /* Pulse animation for live inventory stock alert */
 @keyframes softPulse {
 
@@ -167,4 +185,28 @@
   );
   animation: shimmerWave 1.8s infinite ease-in-out;
   pointer-events: none;
+}
+/* Lightweight horizontal ticker for the refined-quality manifesto */
+@keyframes marqueeScroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marqueeScroll 28s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee {
+    animation: none;
+  }
 }

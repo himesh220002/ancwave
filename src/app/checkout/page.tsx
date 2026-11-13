@@ -28,6 +28,7 @@ import {
 import confetti from "canvas-confetti";
 import { useCart, CustomerCheckoutDetails } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useCurrency } from "@/context/CurrencyContext";
 import { Order, ShippingSettings, DEFAULT_USD_TO_INR_RATE } from "@/types";
 import { toast } from "@/components/Toaster";
 import { downloadOrderInvoicePdf } from "@/lib/invoice-generator";
@@ -53,6 +54,7 @@ export default function CheckoutPage() {
     setCustomerDetails,
   } = useCart();
   const { user, isOwner, isAdmin, setIsAuthModalOpen, logout } = useAuth();
+  const { currency: checkoutCurrency, setCurrency: setCheckoutCurrency } = useCurrency();
 
   const [formData, setFormData] = useState<CustomerCheckoutDetails>(customerDetails);
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
@@ -75,7 +77,7 @@ export default function CheckoutPage() {
   const [selectedBank, setSelectedBank] = useState<string>("HDFC Bank");
   const [upiIdInput, setUpiIdInput] = useState<string>("alex@okaxis");
   const [createdOrderId, setCreatedOrderId] = useState<string>("order_demo");
-  const [checkoutCurrency, setCheckoutCurrency] = useState<"INR" | "USD">("INR");
+
   const [shippingSettings, setShippingSettings] = useState<ShippingSettings>({
     generalDeliveryPriceUsd: 0,
     generalDeliveryPriceInr: 0,
@@ -173,6 +175,11 @@ export default function CheckoutPage() {
     setCustomerDetails(updated);
     if (isNowIndia) {
       setCheckoutCurrency("INR");
+    } else if (checkoutCurrency === "INR") {
+      // The checkout country drives the payable currency, so a non-Indian
+      // destination should not keep an INR total just because the visitor's
+      // browser locale was detected as Indian.
+      setCheckoutCurrency("USD");
     }
   };
 
@@ -252,6 +259,7 @@ export default function CheckoutPage() {
           receipt: "anc_" + Date.now(),
           userId: activeUserId || user?.id,
           customer: formData,
+          items: items && items.length > 0 ? items : undefined,
         }),
       });
 
@@ -355,14 +363,25 @@ export default function CheckoutPage() {
     try {
       const itemsToSubmit =
         items && items.length > 0
-          ? items
+          ? items.map((it) => {
+              const itemInr =
+                typeof it.priceInr === "number" && it.priceInr > 0
+                  ? it.priceInr
+                  : Math.round(it.price * DEFAULT_USD_TO_INR_RATE);
+              return {
+                ...it,
+                price: isIndia ? itemInr : it.price,
+                priceInr: itemInr,
+              };
+            })
           : [
               {
                 productId: "form-01",
                 name: "Form 01",
                 variant: "silver" as const,
                 variantName: "Silver mist",
-                price: 348.0,
+                price: isIndia ? Math.round(348.0 * DEFAULT_USD_TO_INR_RATE) : 348.0,
+                priceInr: Math.round(348.0 * DEFAULT_USD_TO_INR_RATE),
                 quantity: 1,
                 image: "/images/checkout-floating.jpg",
                 fit: "One size · adjustable",
@@ -376,7 +395,8 @@ export default function CheckoutPage() {
           razorpay_order_id: orderId,
           razorpay_payment_id: paymentId,
           razorpay_signature: signature,
-          amount: finalTotal,
+          amount: razorpayAmount,
+          currency: razorpayCurrency,
           subtotal: isIndia ? inrSubtotal : subtotal,
           shipping: isIndia ? inrShipping : activeShippingUsd,
           tax: isIndia ? inrTax : tax,

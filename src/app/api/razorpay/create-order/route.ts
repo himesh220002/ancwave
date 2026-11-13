@@ -11,14 +11,27 @@ export async function POST(req: NextRequest) {
       receipt = "rcpt_" + Date.now(),
       userId,
       customer,
+      items,
     } = body;
 
-    const currentProduct = store.getProduct();
-    if (currentProduct.stock <= 0) {
-      return NextResponse.json(
-        { success: false, error: "Form 01 is currently sold out." },
-        { status: 400 }
-      );
+    if (items && Array.isArray(items) && items.length > 0) {
+      for (const it of items) {
+        const prod = store.getProductById(it.productId) || store.getProduct(it.productId);
+        if (prod && typeof prod.stock === "number" && prod.stock <= 0) {
+          return NextResponse.json(
+            { success: false, error: `${prod.name} is currently sold out.` },
+            { status: 400 }
+          );
+        }
+      }
+    } else {
+      const currentProduct = store.getProduct();
+      if (currentProduct.stock <= 0) {
+        return NextResponse.json(
+          { success: false, error: "Form 01 is currently sold out." },
+          { status: 400 }
+        );
+      }
     }
 
     const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;

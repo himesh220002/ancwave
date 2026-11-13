@@ -352,7 +352,7 @@ export const earbudProductData: ProductData = {
       price: 219,
       discount: 0,
       stock: 5,
-      images: ["/images/earbuds-black.jpg"],
+      images: ["/images/earphones-black.jpg"],
     },
   ],
   twsComponents: [
@@ -616,7 +616,7 @@ export const earphoneProductData: ProductData = {
       price: 149,
       discount: 0,
       stock: 6,
-      images: ["/images/earphones-teal.jpg"],
+      images: ["/images/earphones-black.jpg"],
     },
   ],
   variants: [
@@ -1036,7 +1036,7 @@ export const novaX1ProductData: ProductData = {
       colors: [
         { id: "c-a2-grn", sku: "NVX1-A2-GRN", color: "Forest Green", hex: "#2E7D32", stock: 30, price: 449, images: ["/images/lifestyle-cafe.jpg"] },
         { id: "c-a2-wht", sku: "NVX1-A2-WHT", color: "Pearl White", hex: "#FAFAFA", stock: 16, price: 459, images: ["/images/hero-sandstone.jpg"] },
-        { id: "c-a2-red", sku: "NVX1-A2-RED", color: "Crimson Red", hex: "#B71C1C", stock: 11, price: 469, images: ["/images/lifestyle-urban.jpg"] },
+        { id: "c-a2-red", sku: "NVX1-A2-RED", color: "Crimson Red", hex: "#B71C1C", stock: 11, price: 469, images: ["/images/lifestyle-city.jpg"] },
       ],
     },
   ],
@@ -1046,7 +1046,7 @@ export const novaX1ProductData: ProductData = {
     { sku: "NVX1-A1-SLV", color: "Titanium Silver", specOverride: "Large Display Edition", variantSpecs: { "Display Size": "6.0 inch LTPO AMOLED", "Battery Capacity": "5500mAh Dual-Cell" }, price: 519, priceInr: 43077, discount: 0, stock: 18, images: ["/images/lifestyle-workspace.jpg"] },
     { sku: "NVX1-A2-GRN", color: "Forest Green", specOverride: "Compact Edition", variantSpecs: { "Display Size": "5.5 inch Compact AMOLED", "Battery Capacity": "4700mAh High-Density" }, price: 449, priceInr: 37267, discount: 0, stock: 30, images: ["/images/lifestyle-cafe.jpg"] },
     { sku: "NVX1-A2-WHT", color: "Pearl White", specOverride: "Compact Edition", variantSpecs: { "Display Size": "5.5 inch Compact AMOLED", "Battery Capacity": "4700mAh High-Density" }, price: 459, priceInr: 38097, discount: 0, stock: 16, images: ["/images/hero-sandstone.jpg"] },
-    { sku: "NVX1-A2-RED", color: "Crimson Red", specOverride: "Compact Edition", variantSpecs: { "Display Size": "5.5 inch Compact AMOLED", "Battery Capacity": "4700mAh High-Density" }, price: 469, priceInr: 38927, discount: 0, stock: 11, images: ["/images/lifestyle-urban.jpg"] },
+    { sku: "NVX1-A2-RED", color: "Crimson Red", specOverride: "Compact Edition", variantSpecs: { "Display Size": "5.5 inch Compact AMOLED", "Battery Capacity": "4700mAh High-Density" }, price: 469, priceInr: 38927, discount: 0, stock: 11, images: ["/images/lifestyle-city.jpg"] },
   ],
   variants: [
     { id: "c-a1-blk", name: "Midnight Black", hex: "#101010", borderHex: "#050505", image: "/images/hero-graphite.jpg", images: ["/images/hero-graphite.jpg"], tag: "01", price: 499, priceInr: 41417, stock: 35 },
@@ -1054,12 +1054,316 @@ export const novaX1ProductData: ProductData = {
     { id: "c-a1-slv", name: "Titanium Silver", hex: "#C0C0C0", borderHex: "#909090", image: "/images/lifestyle-workspace.jpg", images: ["/images/lifestyle-workspace.jpg"], tag: "03", price: 519, priceInr: 43077, stock: 18 },
     { id: "c-a2-grn", name: "Forest Green", hex: "#2E7D32", borderHex: "#1B4D1F", image: "/images/lifestyle-cafe.jpg", images: ["/images/lifestyle-cafe.jpg"], tag: "04", price: 449, priceInr: 37267, stock: 30 },
     { id: "c-a2-wht", name: "Pearl White", hex: "#FAFAFA", borderHex: "#D0D0D0", image: "/images/hero-sandstone.jpg", images: ["/images/hero-sandstone.jpg"], tag: "05", price: 459, priceInr: 38097, stock: 16 },
-    { id: "c-a2-red", name: "Crimson Red", hex: "#B71C1C", borderHex: "#6D1111", image: "/images/lifestyle-urban.jpg", images: ["/images/lifestyle-urban.jpg"], tag: "06", price: 469, priceInr: 38927, stock: 11 },
+    { id: "c-a2-red", name: "Crimson Red", hex: "#B71C1C", borderHex: "#6D1111", image: "/images/lifestyle-city.jpg", images: ["/images/lifestyle-city.jpg"], tag: "06", price: 469, priceInr: 38927, stock: 11 },
   ],
   lastRevalidatedAt: new Date().toISOString(),
 };
 
-export const sampleCatalog: ProductData[] = [];
+export const hyperxProductData: ProductData = {
+  id: "hyperx-cloudx-stinger-2-core",
+  slug: "hyperx-cloudx-stinger-2-core",
+  productId: "HYPERX-CLOUDX-STINGER2-CORE",
+  name: "HyperX CloudX Stinger 2 Core",
+  model: "OFFICIAL XBOX WIRED GAMING HEADSET",
+  category: "Audio / Over-Ear",
+  categorySlug: "headphones",
+  tagline: "Lightweight comfort. Heavyweight gaming audio.",
+  description:
+    "The HyperX CloudX Stinger 2 Core is an officially licensed Xbox wired gaming headset featuring 40mm directional drivers, a swivel-to-mute microphone, and a lightweight 275g frame.",
+  price: 39.99,
+  basePrice: 39.99,
+  originalPrice: 49.99,
+  priceInr: 3499,
+  activeDiscount: 0,
+  baseDiscount: 0,
+  type: "Over-Ear Gaming Headset",
+  sku: "6H9B8AA-MASTER",
+  stock: 25,
+  lowStockThreshold: 5,
+  isFlashSale: false,
+  warrantyYears: 2,
+  returnDays: 30,
+  deliveryEstimate: "Ready to ship · US & Global delivery in 2–4 business days",
+  rating: 4.8,
+  averageRating: 4.8,
+  reviewCount: 42,
+  globalSpecs: {
+    "Brand": "HyperX (HP Inc.)",
+    "Model Name": "HyperX CloudX Stinger 2 Core",
+    "Part Numbers": "6H9B8AA (Black) / 6H9B7AA (White)",
+    "Official Licensing": "Official Xbox Licensed Headset",
+    "Platform Compatibility": "Xbox Series X|S, Xbox One, PC, Mobile via 3.5mm",
+    "Audio Form Factor": "Over-Ear, Circumaural, Closed-Back",
+    "Driver Size & Type": "40mm Dynamic Drivers with Neodymium Magnets",
+    "Frequency Response": "10 Hz – 25 kHz",
+    "Impedance": "32.5 Ω",
+    "Sensitivity": "95 dBSPL/mW at 1 kHz",
+    "Total Harmonic Distortion": "≤ 2%",
+    "Microphone Type": "Bi-directional Noise-Cancelling Swivel-to-Mute",
+    "Mic Element": "Electret Condenser Microphone (-40.5 dBV)",
+    "Connectivity": "Wired 3.5mm Audio Jack (4-pole CTIA), 1.3m cable",
+    "Weight": "275 g (0.60 lbs)",
+    "Frame Material": "Durable Plastic with Adjustable Sliders",
+    "Ear Cushion Material": "Soft Foam & Breathable Fabric",
+    "Warranty": "2-Year Manufacturer Warranty",
+    "Country of Origin": "China",
+  },
+  specs: {
+    dimensionsMetric: "179 × 95 × 195 mm",
+    dimensionsImperial: "7.04 × 3.74 × 7.68 in",
+    weightMetric: "275 g",
+    weightImperial: "0.60 lbs (9.7 oz)",
+    batteryLife: "Passive Wired Analog · No Battery Required",
+    charging: "No charging required (3.5mm analog connection)",
+    driver: "40mm Dynamic Drivers with Neodymium Magnets · 10 Hz–25 kHz",
+    noiseControl: "Closed-back passive acoustic seal + Bi-directional mic noise cancellation",
+    connectivity: "Wired 3.5mm Audio Jack (4-pole CTIA) · 1.3m non-detachable cable",
+    codecs: "Analog Stereo · Windows Sonic & Dolby Atmos Spatial Audio compatible",
+    materials: "Durable polymer chassis · Soft foam & breathable fabric ear cushions",
+    inTheBox: "HyperX CloudX Stinger 2 Core Headset, Quick Start Guide, 2-Year Warranty Documentation",
+  },
+  metrics: {
+    playtime: "Continuous Wired",
+    driverSize: "40 mm",
+    weight: "275 g",
+    bluetooth: "3.5mm CTIA",
+  },
+  childVariants: [
+    {
+      sku: "6H9B8AA",
+      color: "Black",
+      specOverride: "Official Xbox Wired Edition (Black)",
+      variantSpecs: {
+        "Color Finish": "Matte Black",
+        "Part Number": "6H9B8AA",
+      },
+      price: 39.99,
+      priceInr: 3499,
+      discount: 0,
+      stock: 15,
+      images: [
+        "/images/hero-graphite.jpg",
+        "/images/feature-dial.jpg",
+        "/images/feature-foam.jpg",
+      ],
+    },
+    {
+      sku: "6H9B7AA",
+      color: "White",
+      specOverride: "Official Xbox Wired Edition (White)",
+      variantSpecs: {
+        "Color Finish": "Arctic White",
+        "Part Number": "6H9B7AA",
+      },
+      price: 39.99,
+      priceInr: 3499,
+      discount: 0,
+      stock: 10,
+      images: [
+        "/images/hero-silver.jpg",
+        "/images/feature-aluminum.jpg",
+        "/images/feature-foam.jpg",
+      ],
+    },
+  ],
+  variants: [
+    {
+      id: "black",
+      name: "Black",
+      hex: "#111111",
+      borderHex: "#333333",
+      image: "/images/hero-graphite.jpg",
+      images: [
+        "/images/hero-graphite.jpg",
+        "/images/feature-dial.jpg",
+        "/images/feature-foam.jpg",
+      ],
+      tag: "01",
+      price: 39.99,
+      priceInr: 3499,
+      stock: 15,
+    },
+    {
+      id: "white",
+      name: "White",
+      hex: "#ECECEC",
+      borderHex: "#999999",
+      image: "/images/hero-silver.jpg",
+      images: [
+        "/images/hero-silver.jpg",
+        "/images/feature-aluminum.jpg",
+        "/images/feature-foam.jpg",
+      ],
+      tag: "02",
+      price: 39.99,
+      priceInr: 3499,
+      stock: 10,
+    },
+  ],
+  variantGroups: [
+    {
+      id: "arch-wired-xbox",
+      name: "Official Xbox Wired Edition",
+      specOverride: "40mm Dynamic Driver with Swivel-to-Mute Mic",
+      price: 39.99,
+      discount: 0,
+      colors: [
+        {
+          id: "black",
+          sku: "6H9B8AA",
+          color: "Black",
+          hex: "#111111",
+          stock: 15,
+          price: 39.99,
+          images: [
+            "/images/hero-graphite.jpg",
+            "/images/feature-dial.jpg",
+            "/images/feature-foam.jpg",
+          ],
+        },
+        {
+          id: "white",
+          sku: "6H9B7AA",
+          color: "White",
+          hex: "#ECECEC",
+          stock: 10,
+          price: 39.99,
+          images: [
+            "/images/hero-silver.jpg",
+            "/images/feature-aluminum.jpg",
+            "/images/feature-foam.jpg",
+          ],
+        },
+      ],
+    },
+  ],
+  primaryValueCallouts: [
+    {
+      tag: "OFFICIAL XBOX LICENSED",
+      title: "Official Xbox Licensed",
+      subtitle: "Xbox Series X|S & Xbox One Plug & Play",
+      description:
+        "Designed specifically for Xbox Series X|S and Xbox One consoles with plug-and-play 3.5mm controller connectivity.",
+    },
+    {
+      tag: "IMMERSIVE GAME AUDIO",
+      title: "Directional 40mm Drivers",
+      subtitle: "Enhanced Bass Acoustics & Pinpoint Spatial Clarity",
+      description:
+        "Closed-cup design paired with directional 40mm drivers tuned for enhanced bass response and immersive game audio.",
+    },
+    {
+      tag: "LIGHTWEIGHT COMFORT",
+      title: "275g Lightweight Frame",
+      subtitle: "Soft Foam & Breathable Fabric Ear Cushions",
+      description:
+        "Weighs only 275g with soft foam and breathable fabric ear cushions plus adjustable sliders for marathon gaming sessions.",
+    },
+    {
+      tag: "SWIVEL-TO-MUTE MIC",
+      title: "Swivel-to-Mute Mic",
+      subtitle: "Bi-directional Noise-Cancelling Boom",
+      description:
+        "Flexible, bi-directional noise-cancelling boom microphone mutes instantly when flipped upward out of the way.",
+    },
+    {
+      tag: "ONBOARD AUDIO CONTROLS",
+      title: "Onboard Audio Controls",
+      subtitle: "Direct Ear-cup Volume Adjustment",
+      description:
+        "Built-in volume controls located directly on the headset earcup eliminate navigating console system menus.",
+    },
+  ],
+  tabbedSpecs: {
+    core: [
+      { label: "Brand & Manufacturer", value: "HyperX (HP Inc.)" },
+      { label: "Model Name", value: "HyperX CloudX Stinger 2 Core" },
+      { label: "Part Numbers (MPN / SKU)", value: "6H9B8AA (Black) / 6H9B7AA (White)" },
+      { label: "Official Licensing", value: "Official Xbox Licensed Headset", badge: "Licensed" },
+      { label: "Form Factor", value: "Over-Ear, Circumaural, Closed-Back" },
+      { label: "Driver Size & Type", value: "40mm Dynamic Drivers with Neodymium Magnets" },
+      { label: "Frequency Response", value: "10 Hz – 25,000 Hz" },
+      { label: "Impedance", value: "32.5 Ω" },
+      { label: "Sensitivity", value: "95 dBSPL/mW at 1 kHz" },
+      { label: "Total Harmonic Distortion", value: "≤ 2%" },
+      { label: "Weight", value: "275 g (0.60 lbs)" },
+      { label: "Warranty", value: "2-Year Manufacturer Warranty" },
+      { label: "Country of Origin", value: "China" },
+    ],
+    battery: [
+      { label: "Power & Battery", value: "Passive Analog Wired (Zero charging required)", badge: "Always Ready" },
+      { label: "Playtime Duration", value: "Unlimited continuous playback via 3.5mm jack" },
+      { label: "Headset Cable", value: "1.3m (4.26 ft) non-detachable 3.5mm 4-pole CTIA cable" },
+      { label: "Onboard Controls", value: "Direct earcup volume wheel/slider" },
+      { label: "Microphone Mute", value: "Physical swivel-to-mute boom switch", badge: "Swivel Mute" },
+    ],
+    connectivity: [
+      { label: "Connectivity Type", value: "Wired Analog (Zero Latency)", badge: "Instant" },
+      { label: "Connector", value: "3.5mm Audio Jack (4-pole CTIA)" },
+      { label: "Cable Length & Type", value: "1.3m (4.26 ft) non-detachable headset cable" },
+      { label: "Platform Compatibility", value: "Xbox Series X|S, Xbox One, PC, PS5, Switch & Mobile" },
+      { label: "Audio Profile", value: "Enhanced bass gaming profile with spatial sound compatibility" },
+    ],
+  },
+  qna: [
+    {
+      id: "q1",
+      question: "Will this headset work on PC and PlayStation as well as Xbox?",
+      answer:
+        "Yes! While it is officially licensed for Xbox Series X|S and Xbox One, its standard 3.5mm 4-pole CTIA connector makes it plug-and-play compatible with PC, Mac, PlayStation 4/5, Nintendo Switch, and mobile devices.",
+      author: "HyperX Audio Specialist",
+      date: "Nov 2026",
+    },
+    {
+      id: "q2",
+      question: "How does the swivel-to-mute microphone work?",
+      answer:
+        "Simply flip the microphone upward along the ear cup. A physical internal switch automatically mutes the microphone with a tactile click, so you never have to fumble with cables or buttons.",
+      author: "HyperX Audio Specialist",
+      date: "Nov 2026",
+    },
+  ],
+  mediaGallery: [
+    {
+      id: "m-hero",
+      url: "/images/hero-graphite.jpg",
+      alt: "HyperX CloudX Stinger 2 Core Black View",
+      type: "hero",
+      label: "Studio View (Black)",
+    },
+    {
+      id: "m-white",
+      url: "/images/hero-silver.jpg",
+      alt: "HyperX CloudX Stinger 2 Core White View",
+      type: "hero",
+      label: "Studio View (White)",
+    },
+    {
+      id: "m-dial",
+      url: "/images/feature-dial.jpg",
+      alt: "Onboard Volume Wheel Controls",
+      type: "macro",
+      label: "Volume Wheel Macro",
+    },
+    {
+      id: "m-cushion",
+      url: "/images/feature-foam.jpg",
+      alt: "Breathable Fabric Ear Cushions",
+      type: "macro",
+      label: "Breathable Fabric",
+    },
+  ],
+  lastRevalidatedAt: new Date().toISOString(),
+};
+
+export const sampleCatalog: ProductData[] = [
+  normalizeProductData(initialProductData),
+  normalizeProductData(hyperxProductData),
+  normalizeProductData(earbudProductData),
+  normalizeProductData(earphoneProductData),
+  normalizeProductData(productAData),
+  normalizeProductData(novaX1ProductData),
+];
 
 export const sampleReviews: (Review & IReview)[] = [];
 
@@ -1095,24 +1399,27 @@ class AncWaveStore {
   }
 
   getProduct(slug = "form-01"): ProductData {
-    let p = this.products.get(slug) || sampleCatalog.find((x) => x.slug === slug);
+    const targetSlug = slug === "hyperx-cloud-stinger-2-core" ? "hyperx-cloudx-stinger-2-core" : slug;
+    let p = this.products.get(targetSlug) || this.products.get(slug) || sampleCatalog.find((x) => x.slug === targetSlug || x.slug === slug);
     if (!p) p = { ...initialProductData };
     return normalizeProductData(p);
   }
 
   getProductById(id: string): ProductData | undefined {
+    const targetId = id === "hyperx-cloud-stinger-2-core" ? "hyperx-cloudx-stinger-2-core" : id;
     for (const p of this.products.values()) {
-      if (p.id === id || p.slug === id || p.productId === id) {
+      if (p.id === id || p.slug === id || p.productId === id || p.slug === targetId || p.id === targetId) {
         return normalizeProductData(p);
       }
     }
-    const fromSample = sampleCatalog.find((p) => p.id === id || p.slug === id || p.productId === id);
+    const fromSample = sampleCatalog.find((p) => p.id === id || p.slug === id || p.productId === id || p.slug === targetId || p.id === targetId);
     if (fromSample) return normalizeProductData(fromSample);
     return undefined;
   }
 
   getProductBySlug(slug: string): ProductData | undefined {
-    const p = this.products.get(slug) || sampleCatalog.find((x) => x.slug === slug);
+    const targetSlug = slug === "hyperx-cloud-stinger-2-core" ? "hyperx-cloudx-stinger-2-core" : slug;
+    const p = this.products.get(targetSlug) || this.products.get(slug) || sampleCatalog.find((x) => x.slug === targetSlug || x.slug === slug);
     if (!p) return undefined;
     return normalizeProductData(p);
   }
@@ -1379,7 +1686,7 @@ class AncWaveStore {
       }
     } else {
       p.stock = (p.stock || 0) + count;
-      let rp = p.restockProcess;
+      const rp = p.restockProcess;
       if (rp) {
         const newReceived = (rp.receivedQty || 0) + count;
         const newRemaining = Math.max(0, rp.targetQty - newReceived);

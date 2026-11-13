@@ -24,6 +24,7 @@ import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
 import { sampleCatalog } from "@/lib/store";
 import { useCart } from "@/context/CartContext";
+import { CurrencyPrice } from "@/context/CurrencyContext";
 import { toast } from "@/components/Toaster";
 import { ProductData, normalizeProductData } from "@/types";
 import { ProductCardSkeleton } from "@/components/Skeleton";
@@ -50,15 +51,21 @@ export default function ProductsCatalogPage() {
     fetch("/api/product?all=true")
       .then((res) => res.json())
       .then((data) => {
-        if (data.products && Array.isArray(data.products)) {
-          setCatalogProducts(data.products.map(normalizeProductData));
-        } else {
-          setCatalogProducts([]);
+        if (data.products && Array.isArray(data.products) && data.products.length > 0) {
+          setCatalogProducts((prev) => {
+            const merged = new Map<string, ProductData>();
+            [...sampleCatalog, ...prev].forEach((p) =>
+              merged.set(p.slug, normalizeProductData(p))
+            );
+            data.products.forEach((p: ProductData) =>
+              merged.set(p.slug, normalizeProductData(p))
+            );
+            return Array.from(merged.values());
+          });
         }
       })
       .catch((err) => {
         console.warn("Failed to fetch catalog products:", err);
-        setCatalogProducts([]);
       })
       .finally(() => {
         setIsLoading(false);
@@ -158,6 +165,8 @@ export default function ProductsCatalogPage() {
   const handleQuickAdd = (product: ProductData, variant?: any, childVariant?: any) => {
     const chosenVariant = variant || product.variants[0];
     const chosenPrice = childVariant?.price ?? chosenVariant?.price ?? product.price;
+    const chosenPriceInr =
+      childVariant?.priceInr ?? chosenVariant?.priceInr ?? product.priceInr;
     const chosenImage =
       chosenVariant?.image ||
       chosenVariant?.images?.[0] ||
@@ -170,6 +179,7 @@ export default function ProductsCatalogPage() {
       variant: chosenVariant?.id || "standard",
       variantName: chosenVariant?.name || "Standard",
       price: chosenPrice,
+      priceInr: chosenPriceInr,
       image: chosenImage,
       fit: product.categorySlug === "headphones" ? "Adjustable fit" : "Universal fit",
     });
@@ -498,7 +508,7 @@ export default function ProductsCatalogPage() {
                             {p.name}
                           </Link>
                           <div className="text-sm font-mono font-bold text-blue-600">
-                            ${Number(p.price).toFixed(2)}
+                            <CurrencyPrice usd={p.price} inr={p.priceInr} />
                           </div>
                           {(p.reviewCount || 0) > 0 ? (
                             <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-500">
@@ -944,6 +954,13 @@ function ProductCatalogCard({
     product.variants?.[0]?.image ||
     "/images/hero-silver.jpg";
 
+  const hoverImage =
+    activeChild?.images?.[1] ||
+    activeVariant?.images?.[1] ||
+    product.mediaGallery?.find((m) => m.type === "macro" || m.type === "360")?.url ||
+    product.explodedView?.image ||
+    displayImage;
+
   const displayPrice = activeChild?.price ?? activeVariant?.price ?? product.price;
 
   // Derive contextual badge for top-left
@@ -1042,7 +1059,14 @@ function ProductCatalogCard({
             src={displayImage}
             alt={`${product.name} - ${activeVariant?.name || "Standard"}`}
             fill
-            className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+            className="object-cover transition-all duration-500 ease-out group-hover:scale-105 group-hover:opacity-0"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          />
+          <Image
+            src={hoverImage}
+            alt={`${product.name} alternate material view`}
+            fill
+            className="object-cover opacity-0 scale-105 transition-all duration-500 ease-out group-hover:scale-100 group-hover:opacity-100"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         </Link>
@@ -1094,7 +1118,10 @@ function ProductCatalogCard({
               </h2>
             </Link>
             <span className="text-lg font-bold font-mono text-zinc-900 shrink-0">
-              ${displayPrice}
+              <CurrencyPrice
+                usd={displayPrice}
+                inr={activeChild?.priceInr ?? activeVariant?.priceInr ?? product.priceInr}
+              />
             </span>
           </div>
 

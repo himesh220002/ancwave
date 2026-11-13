@@ -1322,22 +1322,22 @@ export default function AdminPage() {
 
   // --- Hierarchical Variant Architecture & Colorway Studio Helpers ---
 
-  // 1. Add a new Architecture Cut (e.g. A3)
+  // 1. Add a new Model Variant Edition (e.g. V3)
   const handleAddArchitectureGroup = () => {
     const nextNum = variantGroups.length + 1;
-    const newArchId = `A${nextNum}`;
-    const newArchName = `A${nextNum} (${nextNum === 1 ? "Regular Fit" : nextNum === 2 ? "Oversized Fit" : "Performance Cut"})`;
-    const newSku = `${masterProductId}-${newArchId}-BLK`;
+    const newVariantId = `V${nextNum}`;
+    const newVariantName = `V${nextNum} (${nextNum === 1 ? "Standard Edition" : nextNum === 2 ? "Pro Edition" : "Special Edition"})`;
+    const newSku = `${masterProductId}-${newVariantId}-BLK`;
 
     const newGroup: IVariantGroup = {
-      id: newArchId,
-      name: newArchName,
-      specOverride: newArchName,
+      id: newVariantId,
+      name: newVariantName,
+      specOverride: newVariantName,
       price: masterBasePrice,
       discount: masterBaseDiscount,
       colors: [
         {
-          id: `${newArchId}-C1`,
+          id: `${newVariantId}-C1`,
           sku: newSku,
           color: "Pitch Black",
           hex: "#1A1A1A",
@@ -1354,18 +1354,18 @@ export default function AdminPage() {
     setChildVariants(variantGroupsToChildVariants(updated, masterBasePrice));
     toast({
       type: "success",
-      title: "Architecture Created",
-      description: `Added "${newArchName}" with 1 initial colorway. Click "+ Add Color" to add more colors.`,
+      title: "Model Variant Edition Created",
+      description: `Added "${newVariantName}" with 1 initial colorway SKU. Click "+ Add Colorway" to add more colors.`,
     });
   };
 
-  // 2. Remove an entire Architecture
+  // 2. Remove an entire Model Variant Edition
   const handleRemoveArchitectureGroup = (groupId: string) => {
     if (variantGroups.length <= 1) {
       toast({
         type: "info",
-        title: "Minimum 1 Architecture Required",
-        description: "Products must have at least one variant architecture.",
+        title: "Minimum 1 Variant Edition Required",
+        description: "Products must have at least one model variant edition.",
       });
       return;
     }
@@ -2081,10 +2081,11 @@ export default function AdminPage() {
         if (data.product.hygienePolicy) setHygienePolicy(data.product.hygienePolicy);
         if (data.product.qna) setProductQna(data.product.qna);
         setStockInput(data.product.stock);
+        fetchAdminData(selectedSlug);
         toast({
           type: "success",
           title: "All 5 Product Sections Synced",
-          description: `Saved ${variantGroups.length} architectures with ${data.product.childVariants?.length || 0} colors, specs matrix, return policy, and Q&A. Storefront synced & ISR purged.`,
+          description: `Saved ${variantGroups.length} variant editions with ${data.product.childVariants?.length || 0} colorway SKUs, specs matrix, return policy, and Q&A. Storefront synced & ISR purged.`,
         });
       } else {
         toast({ type: "error", title: "Save Failed", description: data.error || "Could not save variation engine." });
@@ -3889,7 +3890,7 @@ export default function AdminPage() {
   // 2. Not Logged In Screen - Dedicated Admin Operations Gateway
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0E0E10] text-white flex items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-[#0E0E10] text-white flex items-center justify-center p-4 font-sans admin-theme">
         <div className="max-w-md w-full bg-[#18181B] border border-zinc-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
           {/* Subtle Ambient Top Glow */}
           <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -4070,7 +4071,7 @@ export default function AdminPage() {
   // 3. Logged In but Not Owner/Admin Screen
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-[#0E0E10] text-white flex items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-[#0E0E10] text-white flex items-center justify-center p-4 font-sans admin-theme">
         <div className="max-w-lg w-full bg-[#18181B] border border-zinc-800 rounded-3xl p-8 space-y-6 shadow-2xl relative overflow-hidden">
           <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mx-auto flex items-center justify-center">
             <ShieldAlert className="w-8 h-8" />
@@ -4131,7 +4132,7 @@ export default function AdminPage() {
   // 4. Authenticated as Owner or Admin, but Day-Token Not Verified Screen
   if (!isDayTokenVerified) {
     return (
-      <div className="min-h-screen bg-[#0E0E10] text-white flex items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-[#0E0E10] text-white flex items-center justify-center p-4 font-sans admin-theme">
         <div className="max-w-md w-full bg-[#18181B] border border-zinc-800 rounded-3xl p-8 space-y-6 shadow-2xl relative overflow-hidden">
           {/* Ambient Glow */}
           <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -4234,7 +4235,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-zinc-950 font-sans flex flex-col">
+    <div className="min-h-screen bg-[#F8F9FA] text-zinc-950 font-sans flex flex-col admin-theme">
       {/* 1. TOP MINIMALIST COMMERCE OS NAVBAR */}
       <header className="h-14 border-b border-zinc-200/80 bg-white sticky top-0 z-40 px-4 flex items-center justify-between gap-4 shrink-0">
         {/* Left: ancwave Brand & Logo */}
@@ -5266,7 +5267,273 @@ export default function AdminPage() {
                 </div>
               ) : (
                 <>
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* 1. TOP SECTION: MULTI-CATEGORY INVENTORY HUB (Overview of All Catalog Products) */}
+                <div id="admin-inventory-hub" className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center">
+                        <Grid className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
+                          Multi-Category Inventory Hub ({products.length} Products)
+                        </h3>
+                        <p className="text-xs text-zinc-500">
+                          Master inventory overview across all product lines, model variants, and SKU colorways
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsNewProductModalOpen(true)}
+                      className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-semibold shadow-xs transition-colors self-start sm:self-auto cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Add New Product</span>
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-zinc-100 text-zinc-400 font-mono">
+                          <th className="py-2.5 px-3 font-normal">PRODUCT & ROOT SKU</th>
+                          <th className="py-2.5 px-3 font-normal">CATEGORY</th>
+                          <th className="py-2.5 px-3 font-normal">RETAIL PRICE</th>
+                          <th className="py-2.5 px-3 font-normal">TOTAL STOCK</th>
+                          <th className="py-2.5 px-3 font-normal">MODEL VARIANTS & COLORS</th>
+                          <th className="py-2.5 px-3 font-normal text-right">STUDIO ACTION</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100">
+                        {products.map((p) => {
+                          const isSelected = p.slug === selectedSlug;
+                          const hasLowStock = p.stock <= (p.lowStockThreshold || 5);
+                          const isSoldOut = p.stock === 0;
+
+                          return (
+                            <tr
+                              key={p.slug}
+                              onClick={() => {
+                                setSelectedSlug(p.slug);
+                                fetchAdminData(p.slug);
+                              }}
+                              className={`hover:bg-zinc-50/80 transition-colors cursor-pointer ${
+                                isSelected ? "bg-blue-50/30" : ""
+                              }`}
+                            >
+                              <td className="py-3 px-3">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-zinc-900">{p.name}</span>
+                                    {isSelected && (
+                                      <span className="text-[9px] font-mono px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded font-bold">
+                                        ACTIVE STUDIO
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] font-mono text-zinc-400">
+                                    {p.productId || p.sku} · {p.model}
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3">
+                                <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">
+                                  {p.category || p.categorySlug}
+                                </span>
+                              </td>
+
+                              <td className="py-3 px-3 font-mono text-xs">
+                                <div className="font-bold text-zinc-900">${(Number(p.price) || 0).toFixed(2)}</div>
+                                <div className="text-[10px] text-zinc-400">₹{p.priceInr || Math.round(p.price * exchangeRate)}</div>
+                              </td>
+
+                              <td className="py-3 px-3">
+                                <div className="flex items-center gap-1.5 font-mono">
+                                  <span className="font-bold text-zinc-950">{p.stock} units</span>
+                                  <span
+                                    className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                                      isSoldOut
+                                        ? "bg-red-100 text-red-700"
+                                        : hasLowStock
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-emerald-100 text-emerald-800"
+                                    }`}
+                                  >
+                                    {isSoldOut ? "SOLD OUT" : hasLowStock ? "LOW" : "HEALTHY"}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3">
+                                <div className="flex flex-col gap-1.5 max-w-sm">
+                                  {(() => {
+                                    const groups = p.variantGroups && p.variantGroups.length > 0
+                                      ? p.variantGroups
+                                      : p.childVariants && p.childVariants.length > 0
+                                        ? childVariantsToVariantGroups(p.childVariants)
+                                        : [];
+                                    if (groups.length === 0) {
+                                      return (
+                                        <div className="flex flex-wrap gap-1">
+                                          {(p.variants || []).map((v, vIdx) => (
+                                            <span
+                                              key={`${p.slug || p.id}-var-${v.id || v.name || vIdx}-${vIdx}`}
+                                              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200"
+                                            >
+                                              {v.name}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      );
+                                    }
+                                    return groups.map((vg, vgIdx) => {
+                                      const variantBadge = `Variant 0${vgIdx + 1}`;
+                                      return (
+                                        <div key={vg.id || `vg-${vgIdx}`} className="flex flex-wrap items-center gap-1.5">
+                                          <span
+                                            className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200/60 shrink-0"
+                                            title={vg.name}
+                                          >
+                                            {variantBadge}
+                                          </span>
+                                          <div className="flex flex-wrap gap-1">
+                                            {(vg.colors || []).map((c, cIdx) => (
+                                              <span
+                                                key={`${vg.id || vgIdx}-${c.sku || c.color || cIdx}-${cIdx}`}
+                                                className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-white text-zinc-700 border border-zinc-200 shadow-2xs"
+                                              >
+                                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.hex || "#666" }} />
+                                                <span>{c.color}</span>
+                                                <span className="font-bold text-blue-600">({c.stock})</span>
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    });
+                                  })()}
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => openRestockModal(p)}
+                                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors shadow-2xs cursor-pointer"
+                                    title="Open Dedicated Variant Restock Popup"
+                                  >
+                                    <PackagePlus className="w-3 h-3" />
+                                    <span>+ Restock</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedSlug(p.slug);
+                                      fetchAdminData(p.slug);
+                                    }}
+                                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                                      isSelected
+                                        ? "bg-zinc-900 text-white font-bold"
+                                        : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
+                                    }`}
+                                    title="Inspect in Studio Below"
+                                  >
+                                    {isSelected ? "Active Studio" : "Inspect Studio"}
+                                  </button>
+
+                                  <Link
+                                    href={`/products/${p.slug}`}
+                                    target="_blank"
+                                    className="p-1.5 text-zinc-400 hover:text-zinc-700 transition-colors"
+                                    title="View on Storefront"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </Link>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* 2. CATALOGUE PRODUCT SELECTOR TABS (Choose Any Product) */}
+                <div className="rounded-3xl bg-white border border-zinc-200 p-5 sm:p-6 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
+                    <div className="flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-blue-600" />
+                      <h4 className="text-xs sm:text-sm font-bold font-mono uppercase tracking-wider text-zinc-900">
+                        Product Selector & Variant Studio Switcher
+                      </h4>
+                    </div>
+                    <span className="text-[11px] font-mono text-zinc-400">
+                      Active: <strong className="text-zinc-800">{product?.name || selectedSlug}</strong>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                    {products.map((p) => {
+                      const isSelected = p.slug === selectedSlug;
+                      const thumb = p.variants?.[0]?.image || "/images/hero-silver.jpg";
+
+                      return (
+                        <button
+                          key={`tab-${p.slug}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSlug(p.slug);
+                            fetchAdminData(p.slug);
+                          }}
+                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                            isSelected
+                              ? "bg-blue-50/90 border-blue-400 ring-2 ring-blue-300/60 shadow-xs"
+                              : "bg-zinc-50/70 border-zinc-200 hover:bg-zinc-100/80 hover:border-zinc-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-xl bg-white border border-zinc-200/80 relative overflow-hidden shrink-0">
+                              <Image
+                                src={thumb}
+                                alt={p.name}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-zinc-900 truncate" title={p.name}>
+                                {p.name}
+                              </div>
+                              <div className="text-[10px] text-zinc-400 font-mono">
+                                ${(Number(p.price) || 0).toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] font-mono pt-1.5 border-t border-zinc-200/60">
+                            <span className="text-zinc-600 font-semibold">{p.stock} units</span>
+                            {isSelected ? (
+                              <span className="px-1.5 py-0.2 rounded font-bold bg-blue-600 text-white text-[9px]">
+                                ACTIVE
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400 text-[9px]">Select →</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. PRODUCT VARIANT & SKU STUDIO (2 Columns) */}
+                <div id="product-sku-studio" className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Left Column: Variant-Aware Restock & Alert Center */}
                 <div className="lg:col-span-6 rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
                   <div className="border-b border-zinc-100 pb-4 flex items-center justify-between">
@@ -5311,10 +5578,10 @@ export default function AdminPage() {
                     </button>
                   </div>
 
-                  {/* Visual Architecture & Colorway Summary */}
+                  {/* Visual Variant Edition & Colorway Summary */}
                   <div className="space-y-2">
                     <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-semibold">
-                      Current Architecture & Color Allocations:
+                      Current Variant Editions & Colorway Allocations:
                     </span>
                     <div className="space-y-1.5">
                       {(variantGroups && variantGroups.length > 0 ? variantGroups : childVariantsToVariantGroups(childVariants)).map((g, gIdx) => (
@@ -5322,7 +5589,7 @@ export default function AdminPage() {
                           <div className="flex items-center justify-between text-xs font-bold text-zinc-900 font-mono">
                             <span className="flex items-center gap-1.5">
                               <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold font-mono shrink-0">
-                                {g.id.length <= 4 ? g.id : `Arch 0${gIdx + 1}`}
+                                {g.id.length <= 4 ? g.id : `Variant 0${gIdx + 1}`}
                               </span>
                               <span>{g.name}</span>
                             </span>
@@ -5543,15 +5810,15 @@ export default function AdminPage() {
                   </form>
                 </div>
 
-                {/* Right: Architecture & Colorway Real-Time Inventory Control */}
+                {/* Right: Model Variant & Colorway SKU Inventory Control */}
                 <div className="lg:col-span-6 rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
                   <div className="border-b border-zinc-100 pb-4 flex items-center justify-between">
                     <div>
                       <h3 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans">
-                        Architecture & Colorway Inventory
+                        Model Variants & Colorway SKUs
                       </h3>
                       <p className="text-xs text-zinc-500 mt-1">
-                        Independent colorway counters organized by architecture cut (A1, A2).
+                        Direct stock &amp; SKU counters organized by model variant and colorway edition.
                       </p>
                     </div>
                     <button
@@ -5573,7 +5840,7 @@ export default function AdminPage() {
                           <div className="flex items-center justify-between border-b border-zinc-200/70 pb-2.5">
                             <div className="flex items-center gap-2">
                               <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold font-mono shrink-0 whitespace-nowrap">
-                                {g.id.length <= 4 ? g.id : `Arch 0${gIdx + 1}`}
+                                {g.id.length <= 4 ? g.id : `Variant 0${gIdx + 1}`}
                               </span>
                               <span className="text-xs font-bold text-zinc-900 font-sans">
                                 {g.name}
@@ -5690,194 +5957,6 @@ export default function AdminPage() {
                       Every inventory mutation triggers an AWS EventBridge <code>StockUpdated</code> event and issues Next.js on-demand ISR revalidation via <code>revalidatePath</code>, ensuring subsequent visitors hit zero-latency CloudFront edge caches.
                     </p>
                   </div>
-                </div>
-              </div>
-
-              {/* Multi-Category Inventory & Product Catalog Hub */}
-              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-100">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center">
-                      <Grid className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
-                        Multi-Category Inventory Hub ({products.length} Products)
-                      </h3>
-                      <p className="text-xs text-zinc-500">
-                        Manage stock allocations, architectures, and variants across 10 top-selling e-commerce categories
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsNewProductModalOpen(true)}
-                    className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-semibold shadow-xs transition-colors self-start sm:self-auto"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add New Product</span>
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-zinc-100 text-zinc-400 font-mono">
-                        <th className="py-2.5 px-3 font-normal">PRODUCT & ROOT SKU</th>
-                        <th className="py-2.5 px-3 font-normal">CATEGORY</th>
-                        <th className="py-2.5 px-3 font-normal">RETAIL PRICE</th>
-                        <th className="py-2.5 px-3 font-normal">TOTAL STOCK</th>
-                        <th className="py-2.5 px-3 font-normal">VARIANTS & ARCHITECTURES</th>
-                        <th className="py-2.5 px-3 font-normal text-right">RESTOCK ACTION</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                      {products.map((p) => {
-                        const isSelected = p.slug === selectedSlug;
-                        const hasLowStock = p.stock <= (p.lowStockThreshold || 5);
-                        const isSoldOut = p.stock === 0;
-
-                        return (
-                          <tr
-                            key={p.slug}
-                            className={`hover:bg-zinc-50/80 transition-colors ${isSelected ? "bg-blue-50/30" : ""
-                              }`}
-                          >
-                            <td className="py-3 px-3">
-                              <div className="space-y-0.5">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-zinc-900">{p.name}</span>
-                                  {isSelected && (
-                                    <span className="text-[9px] font-mono px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded font-bold">
-                                      ACTIVE
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-[10px] font-mono text-zinc-400">
-                                  {p.productId || p.sku} · {p.model}
-                                </div>
-                              </div>
-                            </td>
-
-                            <td className="py-3 px-3">
-                              <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">
-                                {p.category || p.categorySlug}
-                              </span>
-                            </td>
-
-                            <td className="py-3 px-3 font-mono text-xs">
-                              <div className="font-bold text-zinc-900">${(Number(p.price) || 0).toFixed(2)}</div>
-                              <div className="text-[10px] text-zinc-400">₹{p.priceInr || Math.round(p.price * exchangeRate)}</div>
-                            </td>
-
-                            <td className="py-3 px-3">
-                              <div className="flex items-center gap-1.5 font-mono">
-                                <span className="font-bold text-zinc-950">{p.stock} units</span>
-                                <span
-                                  className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${isSoldOut
-                                    ? "bg-red-100 text-red-700"
-                                    : hasLowStock
-                                      ? "bg-amber-100 text-amber-800"
-                                      : "bg-emerald-100 text-emerald-800"
-                                    }`}
-                                >
-                                  {isSoldOut ? "SOLD OUT" : hasLowStock ? "LOW" : "HEALTHY"}
-                                </span>
-                              </div>
-                            </td>
-
-                            <td className="py-3 px-3">
-                              <div className="flex flex-col gap-1.5 max-w-sm">
-                                {(() => {
-                                  const groups = p.variantGroups && p.variantGroups.length > 0
-                                    ? p.variantGroups
-                                    : p.childVariants && p.childVariants.length > 0
-                                      ? childVariantsToVariantGroups(p.childVariants)
-                                      : [];
-                                  if (groups.length === 0) {
-                                    return (
-                                      <div className="flex flex-wrap gap-1">
-                                        {(p.variants || []).map((v, vIdx) => (
-                                          <span
-                                            key={`${p.slug || p.id}-var-${v.id || v.name || vIdx}-${vIdx}`}
-                                            className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200"
-                                          >
-                                            {v.name}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    );
-                                  }
-                                  return groups.map((vg, vgIdx) => {
-                                    const archBadge = vg.id?.length <= 4 ? vg.id : `Arch 0${vgIdx + 1}`;
-                                    return (
-                                      <div key={vg.id || `vg-${vgIdx}`} className="flex flex-wrap items-center gap-1.5">
-                                        <span
-                                          className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200/60 shrink-0"
-                                          title={vg.name}
-                                        >
-                                          {archBadge}
-                                        </span>
-                                        <div className="flex flex-wrap gap-1">
-                                          {(vg.colors || []).map((c, cIdx) => (
-                                            <span
-                                              key={`${vg.id || vgIdx}-${c.sku || c.color || cIdx}-${cIdx}`}
-                                              className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-white text-zinc-700 border border-zinc-200 shadow-2xs"
-                                            >
-                                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.hex || "#666" }} />
-                                              <span>{c.color}</span>
-                                              <span className="font-bold text-blue-600">({c.stock})</span>
-                                            </span>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    );
-                                  });
-                                })()}
-                              </div>
-                            </td>
-
-                            <td className="py-3 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => openRestockModal(p)}
-                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors shadow-2xs"
-                                  title="Open Dedicated Variant Restock Popup"
-                                >
-                                  <PackagePlus className="w-3 h-3" />
-                                  <span>+ Restock</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedSlug(p.slug);
-                                    fetchAdminData(p.slug);
-                                    setActiveTab("variation-engine");
-                                  }}
-                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-medium transition-colors"
-                                  title="Edit in Variation Engine"
-                                >
-                                  Edit
-                                </button>
-
-                                <Link
-                                  href={`/products/${p.slug}`}
-                                  target="_blank"
-                                  className="p-1.5 text-zinc-400 hover:text-zinc-700 transition-colors"
-                                  title="View on Storefront"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </Link>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
                 </div>
               </div>
               </>
@@ -9493,7 +9572,7 @@ export default function AdminPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <ShoppingBag className="w-5 h-5 text-blue-600 shrink-0" />
-                      <h3 className="text-base sm:text-lg font-bold text-zinc-950 font-sans">
+                      <h3 className="text-lg sm:text-xl font-bold text-zinc-950 font-sans">
                         Order Buying Details & Analytics ({orders.length})
                       </h3>
                     </div>
@@ -9966,85 +10045,90 @@ export default function AdminPage() {
                                       )}
                                     </div>
 
-                                    {/* 3-Column Command Console Grid */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 text-xs">
-                                      {/* Column 1: Customer Destination & Items Allocation (5 cols) */}
-                                      <div className="lg:col-span-5 space-y-4">
-                                        {/* Destination Card */}
-                                        <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-2">
-                                          <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold">
-                                            DELIVERY DESTINATION & CUSTOMER
-                                          </div>
-                                          <div className="font-semibold text-zinc-900 text-sm">
-                                            {ord.customer?.fullName}
-                                          </div>
-                                          <div className="text-zinc-600 font-mono text-[11px]">
-                                            {ord.customer?.email}
-                                          </div>
-                                          {ord.customer?.contact && (
-                                            <div className="text-zinc-500 font-mono text-[11px]">
-                                              Phone: {ord.customer.contact}
+                                    {/* Order Command Console: 2-Tier Modular Grid */}
+                                    <div className="space-y-4 text-xs">
+                                      {/* ROW 1: [DELIVERY DESTINATION & CUSTOMER , ORDERED PRODUCTS & VARIANT ALLOCATION] up,down <---> PROOF OF DELIVERY · HANDOVER INSPECTION side */}
+                                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                                        {/* Left Side: Destination + Ordered Products (Stacked Up & Down) */}
+                                        <div className="lg:col-span-5 space-y-4">
+                                          {/* Destination Card */}
+                                          <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-2">
+                                            <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold">
+                                              DELIVERY DESTINATION & CUSTOMER
                                             </div>
-                                          )}
-                                          <div className="text-zinc-600 pt-1 text-xs leading-relaxed border-t border-zinc-100 mt-2">
-                                            <div>{ord.customer?.address}</div>
-                                            <div>
-                                              {ord.customer?.city}, {ord.customer?.state} {ord.customer?.zipCode}
+                                            <div className="font-semibold text-zinc-900 text-sm">
+                                              {ord.customer?.fullName}
                                             </div>
-                                            <div className="font-semibold text-zinc-700">
-                                              {ord.customer?.country || "United States"}
+                                            <div className="text-zinc-600 font-mono text-[11px]">
+                                              {ord.customer?.email}
                                             </div>
-                                          </div>
-                                        </div>
-
-                                        {/* Items Breakdown Card */}
-                                        <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-2">
-                                          <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold">
-                                            ORDERED PRODUCTS & VARIANT ALLOCATION
-                                          </div>
-                                          <div className="divide-y divide-zinc-100">
-                                            {(ord.items || []).map((it, itIdx) => (
-                                              <div key={itIdx} className="py-2 flex items-center justify-between gap-3">
-                                                <div className="flex items-center gap-2.5">
-                                                  {it.image && (
-                                                    <div className="w-8 h-8 rounded-lg overflow-hidden border border-zinc-200 relative bg-zinc-100 shrink-0">
-                                                      <Image src={it.image} alt={it.name || "Product"} fill className="object-cover" />
-                                                    </div>
-                                                  )}
-                                                  <div>
-                                                    <div className="font-semibold text-zinc-900">{it.name}</div>
-                                                    <div className="text-[10px] text-zinc-400 font-mono">
-                                                      {it.variantName || it.variant || "Standard"}
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                                <div className="text-right font-mono text-xs">
-                                                  <div className="font-bold text-zinc-900">
-                                                    ${(Number(it.price || 0) * (Number(it.quantity) || 1)).toFixed(2)}
-                                                  </div>
-                                                  <div className="text-[10px] text-zinc-400">
-                                                    {it.quantity || 1} × ${Number(it.price || 0).toFixed(2)}
-                                                  </div>
-                                                </div>
+                                            {ord.customer?.contact && (
+                                              <div className="text-zinc-500 font-mono text-[11px]">
+                                                Phone: {ord.customer.contact}
                                               </div>
-                                            ))}
+                                            )}
+                                            <div className="text-zinc-600 pt-1 text-xs leading-relaxed border-t border-zinc-100 mt-2">
+                                              <div>{ord.customer?.address}</div>
+                                              <div>
+                                                {ord.customer?.city}, {ord.customer?.state} {ord.customer?.zipCode}
+                                              </div>
+                                              <div className="font-semibold text-zinc-700">
+                                                {ord.customer?.country || "United States"}
+                                              </div>
+                                            </div>
                                           </div>
 
-                                          {/* Payment Reference Strip */}
-                                          <div className="pt-2 border-t border-zinc-100 space-y-1 font-mono text-[10px] text-zinc-500">
-                                            <div>Payment ID: <strong className="text-zinc-800">{ord.razorpayPaymentId || "pay_verified"}</strong></div>
-                                            <div>Order ID: <strong className="text-zinc-800">{ord.razorpayOrderId || "order_live"}</strong></div>
+                                          {/* Items Breakdown Card */}
+                                          <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-2">
+                                            <div className="text-[10px] font-mono tracking-wider text-zinc-400 uppercase font-bold">
+                                              ORDERED PRODUCTS & VARIANT ALLOCATION
+                                            </div>
+                                            <div className="divide-y divide-zinc-100">
+                                              {(ord.items || []).map((it, itIdx) => (
+                                                <div key={itIdx} className="py-2 flex items-center justify-between gap-3">
+                                                  <div className="flex items-center gap-2.5">
+                                                    {it.image && (
+                                                      <div className="w-8 h-8 rounded-lg overflow-hidden border border-zinc-200 relative bg-zinc-100 shrink-0">
+                                                        <Image src={it.image} alt={it.name || "Product"} fill className="object-cover" />
+                                                      </div>
+                                                    )}
+                                                    <div>
+                                                      <div className="font-semibold text-zinc-900">{it.name}</div>
+                                                      <div className="text-[10px] text-zinc-400 font-mono">
+                                                        {it.variantName || it.variant || "Standard"}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                  <div className="text-right font-mono text-xs">
+                                                    <div className="font-bold text-zinc-900">
+                                                      ${(Number(it.price || 0) * (Number(it.quantity) || 1)).toFixed(2)}
+                                                    </div>
+                                                    <div className="text-[10px] text-zinc-400">
+                                                      {it.quantity || 1} × ${Number(it.price || 0).toFixed(2)}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+
+                                            {/* Payment Reference Strip */}
+                                            <div className="pt-2 border-t border-zinc-100 space-y-1 font-mono text-[10px] text-zinc-500">
+                                              <div>Payment ID: <strong className="text-zinc-800">{ord.razorpayPaymentId || "pay_verified"}</strong></div>
+                                              <div>Order ID: <strong className="text-zinc-800">{ord.razorpayOrderId || "order_live"}</strong></div>
+                                            </div>
                                           </div>
                                         </div>
 
-                                        {/* Proof of Delivery (POD) Handover Verification Card */}
-                                        {(() => {
-                                          const pod = ord.podImages || ord.gateOtpSession?.podImages;
-                                          const isDelivered = ord.deliveryStatus === "delivered";
-                                          const hasPod = Boolean(pod?.labelImage || pod?.productImage);
+                                        {/* Right Side: Proof of Delivery (POD) Handover Verification Card (Side by Side with Customer & Products) */}
+                                        <div className="lg:col-span-7">
+                                          {/* Proof of Delivery (POD) Handover Verification Card */}
+                                          {(() => {
+                                            const pod = ord.podImages || ord.gateOtpSession?.podImages;
+                                            const isDelivered = ord.deliveryStatus === "delivered";
+                                            const hasPod = Boolean(pod?.labelImage || pod?.productImage);
 
-                                          return (
-                                            <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-3 shadow-xs">
+                                            return (
+                                              <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-3 shadow-xs h-full flex flex-col justify-between">
                                               <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
                                                 <div className="flex items-center gap-1.5">
                                                   <ShieldCheck className={`w-4 h-4 ${hasPod ? "text-emerald-600" : "text-zinc-400"}`} />
@@ -10217,9 +10301,12 @@ export default function AdminPage() {
                                           );
                                         })()}
                                       </div>
+                                    </div>
 
-                                      {/* Column 2: Orders Delivery & Logistics Controller (4 cols) */}
-                                      <div className="lg:col-span-4 space-y-4">
+                                    {/* ROW 2: [DELIVERY & TRANSIT CONTROL , AUDIT & STATUS EVENTS] side by side */}
+                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                                      {/* Left Side: Orders Delivery & Logistics Controller (7 cols) */}
+                                      <div className="lg:col-span-7 space-y-4">
                                         <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-3">
                                           <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
                                             <span className="text-[10px] font-mono tracking-wider text-purple-600 uppercase font-bold flex items-center gap-1.5">
@@ -10556,8 +10643,8 @@ export default function AdminPage() {
                                         </div>
                                       </div>
 
-                                      {/* Column 3: Live Audit Events Timeline & Custom Note (3 cols) */}
-                                      <div className="lg:col-span-3 space-y-4">
+                                      {/* Right Side: Live Audit Events Timeline & Custom Note (5 cols) */}
+                                      <div className="lg:col-span-5 space-y-4">
                                         <div className="p-4 rounded-2xl bg-white border border-zinc-200 space-y-3">
                                           {(() => {
                                             const sortedEvents = [...(ord.events || [])].sort(
@@ -10692,6 +10779,7 @@ export default function AdminPage() {
                                         </div>
                                       </div>
                                     </div>
+                                  </div>
                                   </td>
                                 </tr>
                               )}
@@ -10708,70 +10796,181 @@ export default function AdminPage() {
 
           {/* TAB 2: THE VARIATION ENGINE */}
           {activeTab === "variation-engine" && (
-            <form onSubmit={handleSaveVariationEngine} className="space-y-8 animate-in fade-in duration-200">
-              {/* Master Product Header */}
-              <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
-                <div className="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Layers className="w-5 h-5 text-blue-600" />
-                      <h3 className="text-xl font-bold text-zinc-950 font-sans">
-                        The Variation Engine: Master Product Configuration
-                      </h3>
-                    </div>
-                    <p className="text-xs text-zinc-500 mt-1">
-                      Define parent product parameters and link dynamic child variants with specialized hardware features and stock allocations.
-                    </p>
+            <div className="space-y-8 animate-in fade-in duration-200">
+              {/* Product Selector Bar for Variation Engine */}
+              <div className="rounded-3xl bg-white border border-zinc-200 p-5 sm:p-6 shadow-xs space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-blue-600" />
+                    <h4 className="text-xs sm:text-sm font-bold font-mono uppercase tracking-wider text-zinc-900">
+                      Variation Engine &bull; Catalog Product Selector
+                    </h4>
                   </div>
-
-                  <button
-                    type="submit"
-                    disabled={isSavingVariants}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-colors self-start sm:self-auto disabled:opacity-50"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>{isSavingVariants ? "Saving Engine..." : "Save Master & Child Variants"}</span>
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] font-mono text-zinc-400">
+                      Active: <strong className="text-zinc-800">{product?.name || selectedSlug}</strong>
+                    </span>
+                    <Link
+                      href={`/products/${selectedSlug}`}
+                      target="_blank"
+                      className="inline-flex items-center gap-1 text-[11px] font-mono text-blue-600 hover:text-blue-800 font-semibold"
+                    >
+                      <span>View Storefront</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
                 </div>
 
-                {/* Master Inputs */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-700">
-                      Root Product Code (productId)
-                    </label>
-                    <input
-                      type="text"
-                      value={masterProductId}
-                      onChange={(e) => setMasterProductId(e.target.value)}
-                      placeholder="e.g. ANC-AIR-TWS"
-                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-zinc-900 bg-zinc-50"
-                    />
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                  {products.map((p) => {
+                    const isSelected = p.slug === selectedSlug;
+                    const thumb = p.variants?.[0]?.image || "/images/hero-silver.jpg";
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-700">Product Name</label>
-                    <input
-                      type="text"
-                      value={masterName}
-                      onChange={(e) => setMasterName(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm text-zinc-900 bg-zinc-50"
-                    />
-                  </div>
+                    return (
+                      <button
+                        key={`ve-tab-${p.slug}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSlug(p.slug);
+                          fetchAdminData(p.slug);
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                          isSelected
+                            ? "bg-blue-50/90 border-blue-400 ring-2 ring-blue-300/60 shadow-xs"
+                            : "bg-zinc-50/70 border-zinc-200 hover:bg-zinc-100/80 hover:border-zinc-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-white border border-zinc-200/80 relative overflow-hidden shrink-0">
+                            <Image
+                              src={thumb}
+                              alt={p.name}
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-zinc-900 truncate" title={p.name}>
+                              {p.name}
+                            </div>
+                            <div className="text-[10px] text-zinc-400 font-mono">
+                              ${(Number(p.price) || 0).toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-700">Audio Category Type</label>
-                    <select
-                      value={masterType}
-                      onChange={(e) => setMasterType(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50"
+                        <div className="flex items-center justify-between text-[10px] font-mono pt-1.5 border-t border-zinc-200/60">
+                          <span className="text-zinc-600 font-semibold">{p.stock} units</span>
+                          {isSelected ? (
+                            <span className="text-blue-600 font-bold flex items-center gap-0.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                              ACTIVE
+                            </span>
+                          ) : (
+                            <span className="text-zinc-400">Edit &rarr;</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveVariationEngine} className="space-y-8">
+                {/* Master Product Header */}
+                <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs space-y-6">
+                  <div className="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Layers className="w-5 h-5 text-blue-600" />
+                        <h3 className="text-xl font-bold text-zinc-950 font-sans">
+                          The Variation Engine: Master Product Configuration
+                        </h3>
+                      </div>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Define parent product parameters and link dynamic model variants with specialized hardware features and stock allocations.
+                      </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-[10px] font-mono bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded border border-zinc-200">
+                          Slug: /products/{selectedSlug}
+                        </span>
+                        <Link
+                          href={`/products/${selectedSlug}`}
+                          target="_blank"
+                          className="inline-flex items-center gap-1 text-[11px] font-mono text-blue-600 hover:text-blue-800 font-semibold"
+                        >
+                          <span>Storefront Page</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSavingVariants}
+                      className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-colors self-start sm:self-auto disabled:opacity-50 cursor-pointer"
                     >
-                      <option value="Over-Ear Headphones">Over-Ear Headphones</option>
-                      <option value="TWS Earbuds">TWS Earbuds</option>
-                      <option value="Wireless Earphones">Wireless Earphones</option>
-                      <option value="Studio Reference Monitors">Studio Reference Monitors</option>
-                    </select>
+                      <Save className="w-4 h-4" />
+                      <span>{isSavingVariants ? "Saving Engine..." : "Save Master & Child Variants"}</span>
+                    </button>
                   </div>
+
+                  {/* Master Inputs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700">
+                        Root Product Code (productId)
+                      </label>
+                      <input
+                        type="text"
+                        value={masterProductId}
+                        onChange={(e) => setMasterProductId(e.target.value)}
+                        placeholder="e.g. ANC-AIR-TWS"
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-mono font-bold text-zinc-900 bg-zinc-50"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700">Product Name</label>
+                      <input
+                        type="text"
+                        value={masterName}
+                        onChange={(e) => setMasterName(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm text-zinc-900 bg-zinc-50"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700">Category & Product Type</label>
+                      <select
+                        value={masterType}
+                        onChange={(e) => setMasterType(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50"
+                      >
+                        <option value="Over-Ear Headphones">Over-Ear Headphones</option>
+                        <option value="Over-Ear Gaming Headset">Over-Ear Gaming Headset</option>
+                        <option value="TWS Earbuds">TWS Earbuds</option>
+                        <option value="Wireless Earphones">Wireless Earphones</option>
+                        <option value="Smartphones">Smartphones</option>
+                        <option value="Apparel & Fashion">Apparel & Fashion</option>
+                        <option value="Studio Reference Monitors">Studio Reference Monitors</option>
+                        <option value="Smart Wearables">Smart Wearables</option>
+                        <option value="Audio Accessories">Audio Accessories</option>
+                        {![
+                          "Over-Ear Headphones",
+                          "Over-Ear Gaming Headset",
+                          "TWS Earbuds",
+                          "Wireless Earphones",
+                          "Smartphones",
+                          "Apparel & Fashion",
+                          "Studio Reference Monitors",
+                          "Smart Wearables",
+                          "Audio Accessories",
+                        ].includes(masterType) && (
+                          <option value={masterType}>{masterType}</option>
+                        )}
+                      </select>
+                    </div>
 
                   <div className="space-y-1.5 sm:col-span-3">
                     <label className="text-xs font-semibold text-zinc-700">Description</label>
@@ -11009,10 +11208,10 @@ export default function AdminPage() {
                   <div>
                     <h3 className="text-lg font-bold text-zinc-950 font-sans flex items-center gap-2">
                       <Layers className="w-5 h-5 text-blue-600" />
-                      <span>Variant Architecture & Colorway Studio ({variantGroups.length} Architectures Active)</span>
+                      <span>Model Variant Edition & Colorway Studio ({variantGroups.length} Variant Editions Active)</span>
                     </h3>
                     <p className="text-xs text-zinc-500 mt-1">
-                      Model multiple variant architectures (e.g. A1 Regular Fit, A2 Streetwear Oversized Cut). Each architecture contains multiple colorways with their own stock counters, SKUs, and photography.
+                      Model multiple variant editions (e.g. Standard Core Edition, Edition with Detachable Mic, Studio Edition). Each variant edition contains multiple colorways with their own stock counters, exact SKUs, and photography.
                     </p>
                   </div>
 
@@ -11022,7 +11221,7 @@ export default function AdminPage() {
                     className="flex items-center gap-1.5 text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-semibold px-4 py-2 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add Variant Architecture (A{variantGroups.length + 1})</span>
+                    <span>+ Add Model Variant Edition (V{variantGroups.length + 1})</span>
                   </button>
                 </div>
 
@@ -11036,7 +11235,7 @@ export default function AdminPage() {
                         key={group.id}
                         className="p-5 sm:p-6 rounded-2xl bg-zinc-50/80 border border-zinc-200 space-y-5 transition-all shadow-2xs"
                       >
-                        {/* Architecture Group Header Card */}
+                        {/* Variant Edition Group Header Card */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200">
                           <div className="flex items-center gap-3">
                             <span className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xs font-bold font-mono shadow-2xs">
@@ -11045,7 +11244,7 @@ export default function AdminPage() {
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-bold">
-                                  Architecture Cut #{gIdx + 1}
+                                  Model Variant Edition #{gIdx + 1}
                                 </span>
                                 <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
                                   {group.colors.length} {group.colors.length === 1 ? "colorway" : "colorways"}
@@ -11058,7 +11257,7 @@ export default function AdminPage() {
                                 type="text"
                                 value={group.name}
                                 onChange={(e) => handleUpdateArchitectureName(group.id, e.target.value)}
-                                placeholder="e.g. A1 (Regular Fit) or A2 (Oversized Cut)"
+                                placeholder="e.g. V1 (Standard Core Edition) or V2 (Detachable Mic Edition)"
                                 className="text-sm font-bold text-zinc-900 bg-white border border-zinc-200 px-3 py-1.5 rounded-lg mt-1 w-full sm:w-80 focus:outline-none"
                               />
                             </div>
@@ -11073,7 +11272,7 @@ export default function AdminPage() {
                                 value={group.price ?? masterBasePrice}
                                 onChange={(e) => handleUpdateArchitecturePrice(group.id, Number(e.target.value))}
                                 className="w-16 text-xs font-mono font-bold text-zinc-900 bg-transparent focus:outline-none"
-                                title="Architecture Price in USD"
+                                title="Variant Edition Price in USD"
                               />
                             </div>
 
@@ -11094,7 +11293,7 @@ export default function AdminPage() {
                                   handleUpdateArchitecturePrice(group.id, usd, inr);
                                 }}
                                 className="w-20 text-xs font-mono font-bold text-blue-900 bg-transparent focus:outline-none"
-                                title="Architecture Price in INR"
+                                title="Variant Edition Price in INR"
                               />
                             </div>
 
@@ -11104,7 +11303,7 @@ export default function AdminPage() {
                               className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              <span>Delete Arch</span>
+                              <span>Delete Variant Edition</span>
                             </button>
                           </div>
                         </div>
@@ -11121,7 +11320,7 @@ export default function AdminPage() {
                               className="inline-flex items-center gap-1.5 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-3 py-1.5 rounded-lg border border-blue-200 transition-colors shadow-2xs cursor-pointer"
                             >
                               <Plus className="w-3.5 h-3.5" />
-                              <span>+ Add Color to {group.id}</span>
+                              <span>+ Add Colorway to {group.id}</span>
                             </button>
                           </div>
 
@@ -11423,14 +11622,14 @@ export default function AdminPage() {
                           ))}
                         </div>
 
-                        {/* Prominent Add Color to Architecture Button */}
+                        {/* Prominent Add Colorway Button */}
                         <button
                           type="button"
                           onClick={() => handleAddColorToArchitecture(group.id, `Color ${group.colors.length + 1}`, 5)}
                           className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 text-blue-700 font-bold text-xs transition-colors cursor-pointer"
                         >
                           <Plus className="w-4 h-4" />
-                          <span>+ Add More Colors to {group.name}</span>
+                          <span>+ Add More Colorways to {group.name}</span>
                         </button>
                       </div>
                     );
@@ -11445,7 +11644,7 @@ export default function AdminPage() {
                     className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl border border-zinc-300 hover:border-zinc-400 bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-xs transition-colors shadow-2xs cursor-pointer"
                   >
                     <Layers className="w-4 h-4 text-blue-600" />
-                    <span>+ Add New Variant Architecture (A{variantGroups.length + 1})</span>
+                    <span>+ Add New Model Variant Edition (V{variantGroups.length + 1})</span>
                   </button>
 
                   <button
@@ -12090,6 +12289,7 @@ export default function AdminPage() {
                 </div>
               </div>
             </form>
+            </div>
           )}
 
           {/* TAB 3: CUSTOMER REVIEWS & MEDIA PIPELINE */}

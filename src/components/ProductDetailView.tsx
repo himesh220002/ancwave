@@ -40,11 +40,12 @@ import {
 } from "@/types";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { CurrencyPrice, useCurrency } from "@/context/CurrencyContext";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
 import { toast } from "@/components/Toaster";
-import { sampleReviews } from "@/lib/store";
+import { ReviewImageMasonry } from "@/components/product/ReviewImageMasonry";
 import { ReviewCardSkeleton } from "@/components/Skeleton";
 import confetti from "canvas-confetti";
 import {
@@ -74,6 +75,7 @@ export function ProductDetailView({
   const router = useRouter();
   const { addItem } = useCart();
   const { user, setIsAuthModalOpen } = useAuth();
+  const { currency, format } = useCurrency();
 
   // Child Variant selection (e.g. Detachable Mic vs Built-in Mic)
   const [selectedVariantSku, setSelectedVariantSku] = useState<string>(
@@ -560,6 +562,33 @@ export function ProductDetailView({
     { id: "Call clarity", label: "Call clarity" },
   ];
 
+  // Raw owner-submitted frames for the horizontal masonry wall
+  const reviewGalleryPhotos = React.useMemo(
+    () =>
+      reviewsList.flatMap((review, reviewIndex) =>
+        (review.images || []).map((src, imageIndex) => ({
+          src,
+          alt: `Verified owner photo ${imageIndex + 1} for ${p.name}`,
+          author: review.author || review.userName || "Verified owner",
+          caption: review.comment?.slice(0, 58),
+          key: `${review.reviewId || review.id || reviewIndex}-${imageIndex}`,
+        }))
+      ),
+    [reviewsList, p.name]
+  );
+
+  const reviewFallbackPhotos = React.useMemo(
+    () =>
+      mediaGallery.map((media, index) => ({
+        src: media.url,
+        alt: media.alt,
+        author: "ancwave studio",
+        caption: `${media.label} · illustrative frame`,
+        key: `studio-${index}`,
+      })),
+    [mediaGallery]
+  );
+
   return (
     <div className="min-h-screen bg-[#FBFBFA] flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Sticky Header */}
@@ -738,26 +767,35 @@ export function ProductDetailView({
               <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 flex items-center justify-between">
                 <div>
                   <div className="flex items-baseline gap-2.5">
-                    <span className="text-2xl sm:text-3xl font-bold text-zinc-900">
-                      ${Number(activePrice).toFixed(2)}
-                    </span>
+                    <CurrencyPrice
+                      usd={activePrice}
+                      inr={activePriceInr}
+                      reserve
+                      className="text-2xl sm:text-3xl font-bold text-zinc-900"
+                    />
                     {activeOriginalPrice > activePrice && (
-                      <span className="text-sm text-zinc-400 line-through">
-                        ${Number(activeOriginalPrice).toFixed(2)}
-                      </span>
+                      <CurrencyPrice
+                        usd={activeOriginalPrice}
+                        className="text-sm text-zinc-400 line-through"
+                      />
                     )}
                     <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
                       In Stock ({activeStock} units)
                     </span>
                   </div>
-                  <span className="text-[11px] text-zinc-400 font-mono">
-                    Direct Razorpay checkout · ₹{activePriceInr.toLocaleString("en-IN")} (≈ ${activePrice.toFixed(2)})
+                  <span
+                    suppressHydrationWarning
+                    className="text-[11px] text-zinc-400 font-mono tabular-nums"
+                  >
+                    {currency === "INR"
+                      ? `Razorpay native INR checkout · ${format(activePrice, activePriceInr)}`
+                      : `Razorpay checkout · ${format(activePrice, activePriceInr)} · INR ${activePriceInr.toLocaleString("en-IN")} available`}
                   </span>
                 </div>
 
                 <div className="text-right">
                   <span className="block text-[10px] font-mono text-zinc-400 uppercase">WARRANTY</span>
-                  <span className="text-xs font-bold text-zinc-800">2 Years Included</span>
+                  <span className="text-xs font-bold text-zinc-800">{p.warrantyYears || 2} Years Included</span>
                 </div>
               </div>
 
@@ -799,7 +837,7 @@ export function ProductDetailView({
                               {comp.label}
                             </span>
                             <span className="text-xs font-mono font-bold text-blue-600">
-                              ${Number(comp.price).toFixed(2)}
+                              <CurrencyPrice usd={comp.price} />
                             </span>
                           </div>
                           <p className="text-[10px] text-zinc-500 mt-0.5 line-clamp-1">
@@ -868,7 +906,7 @@ export function ProductDetailView({
 
                           <div className="text-right shrink-0">
                             <div className="text-xs font-mono font-bold text-zinc-900">
-                              ${Number(v.price).toFixed(2)}
+                              <CurrencyPrice usd={v.price} inr={v.priceInr} />
                             </div>
                             <span
                               className={`text-[9px] font-mono font-semibold ${
@@ -958,7 +996,14 @@ export function ProductDetailView({
                     onClick={handleBuyNow}
                     className="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-semibold text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-1.5"
                   >
-                    <span>Buy Now · ${Number(activePrice).toFixed(2)}</span>
+                    <span suppressHydrationWarning className="flex items-center gap-1 tabular-nums">
+                      Buy Now ·
+                      <CurrencyPrice
+                        usd={activePrice}
+                        inr={activePriceInr}
+                        className="font-semibold text-white"
+                      />
+                    </span>
                     <ArrowUpRight className="w-4 h-4 stroke-[2.2]" />
                   </button>
                 </div>
@@ -1012,12 +1057,56 @@ export function ProductDetailView({
                     src={p.explodedView.image}
                     alt={p.explodedView.caption}
                     fill
-                    className="object-contain p-4"
+                    className="object-contain p-4 transition-transform duration-700"
                     sizes="(max-width: 1024px) 100vw, 55vw"
                   />
                   <div className="absolute top-4 left-4 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-md text-white text-[10px] font-mono tracking-wider font-semibold">
                     {p.explodedView.badge}
                   </div>
+
+                  {/* Interactive annotated nodes overlay the engineering image */}
+                  {p.explodedView.callouts.map((callout, idx) => {
+                    const positions = [
+                      { top: "26%", left: "28%" },
+                      { top: "40%", right: "24%" },
+                      { bottom: "38%", left: "30%" },
+                      { bottom: "20%", right: "26%" },
+                    ];
+                    const position = positions[idx % positions.length];
+                    const isActive = activeHotspot === idx;
+                    return (
+                      <button
+                        key={`node-${callout.number}-${idx}`}
+                        type="button"
+                        onClick={() => setActiveHotspot(idx)}
+                        style={position}
+                        aria-label={`Inspect stage ${callout.number}: ${callout.title}`}
+                        aria-pressed={isActive}
+                        className={`absolute z-10 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-mono text-[11px] font-bold transition-all duration-300 ${
+                          isActive
+                            ? "bg-blue-600 text-white ring-4 ring-blue-600/25 scale-110 shadow-lg"
+                            : "bg-white/95 text-zinc-700 ring-2 ring-zinc-300/80 hover:ring-blue-400 hover:scale-105 shadow-sm"
+                        }`}
+                      >
+                        {callout.number}
+                        {isActive && (
+                          <span className="absolute inset-0 rounded-full border border-blue-500 animate-ping opacity-40 pointer-events-none" />
+                        )}
+                      </button>
+                    );
+                  })}
+
+                  {/* Active node caption */}
+                  {p.explodedView.callouts[activeHotspot] && (
+                    <div className="absolute inset-x-3 bottom-3 sm:inset-x-5 sm:bottom-5 rounded-xl bg-white/92 backdrop-blur-md border border-zinc-200 px-3.5 py-2.5 shadow-sm animate-in fade-in slide-in-from-bottom-1 duration-300">
+                      <span className="text-[9px] font-mono tracking-widest text-blue-600 font-semibold uppercase">
+                        Stage {p.explodedView.callouts[activeHotspot].number} / Active node
+                      </span>
+                      <p className="text-[11px] font-bold text-zinc-900 truncate">
+                        {p.explodedView.callouts[activeHotspot].title}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Hotspot Markers List */}
@@ -1430,6 +1519,21 @@ export function ProductDetailView({
               )))}
             </div>
 
+            {/* Horizontal owner-frame wall + modal */}
+            <ReviewImageMasonry
+              items={reviewGalleryPhotos}
+              fallbackItems={reviewFallbackPhotos}
+              title={
+                reviewGalleryPhotos.length > 0
+                  ? "Verified community frames"
+                  : "Community frames, opening soon"
+              }
+              description={
+                reviewGalleryPhotos.length > 0
+                  ? "Raw, unretouched frames submitted by verified owners. Select any image to inspect it."
+                  : "There are no owner uploads yet for this architecture. Until the first verified review lands, an illustrative material-study set introduces the collection."
+              }
+            />
 
             {/* CONDITIONAL REVIEW COMPOSER (LoggedIn + Bought) */}
             <div className="pt-6">
@@ -1799,11 +1903,13 @@ export function ProductDetailView({
 
                 <div className="pt-4 mt-4 border-t border-zinc-200/60 flex items-center justify-between">
                   <div>
-                    <span className="text-base font-bold text-zinc-900">
-                      ${Number(rel.price).toFixed(2)}
-                    </span>
+                    <CurrencyPrice
+                      usd={rel.price}
+                      inr={rel.priceInr}
+                      className="text-base font-bold text-zinc-900"
+                    />
                     <span className="block text-[10px] font-mono text-zinc-400">
-                      approx. ₹{Math.round(rel.price * DEFAULT_USD_TO_INR_RATE).toLocaleString("en-IN")}
+                      {rel.category}
                     </span>
                   </div>
 
