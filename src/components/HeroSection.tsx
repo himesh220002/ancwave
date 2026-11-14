@@ -58,11 +58,11 @@ export function HeroSection({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
           {/* Left Column: Headline & Action */}
           <div className="lg:col-span-6 space-y-8">
-            {/* Tag matching Figma: • FORM 01 / WIRELESS OVER-EAR */}
+            {/* Tag: 01 / Product Headline */}
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
               <span className="text-[11px] font-mono tracking-[0.16em] text-zinc-500 uppercase">
-                {product.name} / {product.model}
+                01 / {product.name} · {product.model}
               </span>
             </div>
 

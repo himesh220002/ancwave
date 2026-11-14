@@ -101,7 +101,7 @@ export function ProductDetailView({
           setLiveRating(count > 0 ? (data.product.averageRating || data.product.rating || 0) : 0);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       isMounted = false;
     };
@@ -198,10 +198,10 @@ export function ProductDetailView({
   const activePriceInr = currentTwsOption
     ? Math.round(currentTwsOption.price * DEFAULT_USD_TO_INR_RATE)
     : (currentChildVariant?.priceInr ??
-       currentVariant?.priceInr ??
-       (activePrice < 1
-         ? Number((activePrice * DEFAULT_USD_TO_INR_RATE).toFixed(2))
-         : (p.priceInr ?? Math.round(activePrice * DEFAULT_USD_TO_INR_RATE))));
+      currentVariant?.priceInr ??
+      (activePrice < 1
+        ? Number((activePrice * DEFAULT_USD_TO_INR_RATE).toFixed(2))
+        : (p.priceInr ?? Math.round(activePrice * DEFAULT_USD_TO_INR_RATE))));
   const activeOriginalPrice = currentTwsOption
     ? currentTwsOption.originalPrice
     : p.originalPrice;
@@ -626,27 +626,27 @@ export function ProductDetailView({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start">
             {/* Left Column (7 cols): Split-Screen Media Gallery */}
             <div className="lg:col-span-7 space-y-4">
-              {/* Main Showcase Viewport */}
+              {/* Main Showcase Viewport: Pure Rectangle Architectural Frame */}
               <div
                 onClick={() => setActiveLightboxImage(mediaGallery[activeMediaIndex]?.url || currentVariant.image)}
-                className="relative aspect-4/3 sm:aspect-16/10 rounded-3xl bg-[#F0EFEA] p-6 sm:p-10 overflow-hidden flex items-center justify-center border border-[#EAEAE5] group cursor-zoom-in"
+                className="relative aspect-4/3 sm:aspect-4/3 rounded-none bg-black overflow-hidden flex items-center justify-center border border-zinc-200/90 group cursor-zoom-in shadow-2xs"
               >
                 <Image
                   src={mediaGallery[activeMediaIndex]?.url || currentVariant.image}
                   alt={mediaGallery[activeMediaIndex]?.alt || product.name}
                   fill
                   priority
-                  className="object-contain p-4 group-hover:scale-102 transition-transform duration-500 ease-out"
+                  className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700 ease-out"
                   sizes="(max-width: 1024px) 100vw, 60vw"
                 />
 
                 {/* Perspective & Angle Badges */}
-                <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-white/90 backdrop-blur-md text-[10px] font-mono tracking-widest text-zinc-800 uppercase font-semibold border border-zinc-200 shadow-2xs">
+                <div className="absolute top-4 left-4 sm:top-5 sm:left-5 flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-none bg-black/80 backdrop-blur-md text-[10px] font-mono tracking-widest text-white uppercase font-semibold border border-white/20 shadow-xs">
                     {mediaGallery[activeMediaIndex]?.label || "STUDIO RENDER"}
                   </span>
                   {activeMediaIndex === 3 && (
-                    <span className="px-2.5 py-1 rounded-full bg-blue-600 text-white text-[10px] font-mono font-medium shadow-2xs flex items-center gap-1">
+                    <span className="px-2.5 py-1 rounded-none bg-blue-600 text-white text-[10px] font-mono font-medium shadow-xs flex items-center gap-1">
                       <Layers className="w-3 h-3" />
                       360 / X-RAY
                     </span>
@@ -654,8 +654,8 @@ export function ProductDetailView({
                 </div>
 
                 {/* Top Right Counter & Zoom Button */}
-                <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md text-[10px] font-mono font-bold text-zinc-700 border border-zinc-200 shadow-2xs">
+                <div className="absolute top-4 right-4 sm:top-5 sm:right-5 flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-none bg-black/80 backdrop-blur-md text-[10px] font-mono font-bold text-white border border-white/20 shadow-xs">
                     {activeMediaIndex + 1} / {mediaGallery.length}
                   </span>
                   <button
@@ -664,7 +664,7 @@ export function ProductDetailView({
                       e.stopPropagation();
                       setActiveLightboxImage(mediaGallery[activeMediaIndex]?.url || currentVariant.image);
                     }}
-                    className="w-7 h-7 rounded-full bg-white/90 backdrop-blur-md border border-zinc-200 text-zinc-700 flex items-center justify-center hover:bg-white hover:scale-105 transition-all shadow-2xs"
+                    className="w-7 h-7 rounded-none bg-black/80 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-white hover:text-black transition-all shadow-xs cursor-pointer"
                     title="Inspect high resolution"
                   >
                     <Maximize2 className="w-3.5 h-3.5" />
@@ -680,7 +680,7 @@ export function ProductDetailView({
                         e.stopPropagation();
                         setActiveMediaIndex((prev) => (prev - 1 + mediaGallery.length) % mediaGallery.length);
                       }}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 backdrop-blur-md border border-zinc-200 text-zinc-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:scale-105 shadow-sm"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-none bg-black/80 backdrop-blur-md border border-white/20 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-white hover:text-black shadow-sm cursor-pointer"
                       aria-label="Previous angle"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -691,7 +691,7 @@ export function ProductDetailView({
                         e.stopPropagation();
                         setActiveMediaIndex((prev) => (prev + 1) % mediaGallery.length);
                       }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 backdrop-blur-md border border-zinc-200 text-zinc-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:scale-105 shadow-sm"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-none bg-black/80 backdrop-blur-md border border-white/20 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-white hover:text-black shadow-sm cursor-pointer"
                       aria-label="Next angle"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -700,33 +700,31 @@ export function ProductDetailView({
                 )}
 
                 {/* Color Variant Pill Indicator */}
-                <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 text-[11px] font-mono text-zinc-600 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full border border-zinc-200">
+                <div className="absolute bottom-4 left-4 sm:bottom-5 sm:left-5 text-[10px] font-mono text-white bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-none border border-white/20 shadow-xs">
                   {(currentChildVariant?.color || currentVariant?.name || "Standard").toUpperCase()} · {currentChildVariant?.sku || p.model || product.model}
                 </div>
               </div>
 
-              {/* Multi-Angle Thumbnails Carousel */}
-              <div className="flex items-center gap-3 overflow-x-auto pb-2 pt-1 scrollbar-thin">
+              {/* Multi-Angle Thumbnails: Pure Rectangle Tiles (No text tags) */}
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-thin">
                 {mediaGallery.map((media, idx) => (
                   <button
                     key={`thumb-${media.id || idx}-${idx}`}
+                    type="button"
                     onClick={() => setActiveMediaIndex(idx)}
-                    className={`relative shrink-0 w-24 sm:w-28 aspect-4/3 rounded-2xl bg-[#F0EFEA] p-1.5 overflow-hidden border transition-all text-left flex flex-col justify-end group/thumb ${
-                      activeMediaIndex === idx
-                        ? "border-blue-600 ring-2 ring-blue-600/20 shadow-xs"
-                        : "border-zinc-200/80 hover:border-zinc-400 opacity-75 hover:opacity-100"
-                    }`}
+                    className={`relative shrink-0 w-16 h-16 sm:w-20 sm:h-20 aspect-square rounded-none bg-black overflow-hidden border transition-all cursor-pointer group/thumb ${activeMediaIndex === idx
+                      ? "border-2 border-blue-600 shadow-sm ring-1 ring-blue-600/30"
+                      : "border border-zinc-300 hover:border-zinc-500 opacity-75 hover:opacity-100"
+                      }`}
+                    title={media.label || `Angle ${idx + 1}`}
                   >
                     <Image
                       src={media.url}
-                      alt={media.alt}
+                      alt={media.alt || `Angle ${idx + 1}`}
                       fill
-                      className="object-contain p-1 group-hover/thumb:scale-105 transition-transform"
-                      sizes="120px"
+                      className="object-cover group-hover/thumb:scale-108 transition-transform duration-300"
+                      sizes="80px"
                     />
-                    <span className="relative z-10 text-[9px] font-mono text-zinc-800 bg-white/90 px-1.5 py-0.5 rounded-md truncate max-w-full border border-zinc-200/50">
-                      {media.label}
-                    </span>
                   </button>
                 ))}
               </div>
@@ -826,11 +824,10 @@ export function ProductDetailView({
                           key={`pdv-comp-${comp.id || compIdx}-${compIdx}`}
                           type="button"
                           onClick={() => setSelectedTwsComponent(comp.id)}
-                          className={`p-3 rounded-xl border text-left transition-all ${
-                            isSelected
-                              ? "bg-white border-blue-600 shadow-xs ring-1 ring-blue-600"
-                              : "bg-white/80 border-zinc-200 hover:border-zinc-300"
-                          }`}
+                          className={`p-3 rounded-xl border text-left transition-all ${isSelected
+                            ? "bg-white border-blue-600 shadow-xs ring-1 ring-blue-600"
+                            : "bg-white/80 border-zinc-200 hover:border-zinc-300"
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-zinc-900">
@@ -857,7 +854,7 @@ export function ProductDetailView({
               {/* Dynamic Child Variants: Hardware Feature & Architecture Variance */}
               {product.childVariants && product.childVariants.length > 0 && (
                 <div className="space-y-2.5 pt-3 border-t border-zinc-100">
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex flex-col gap-2 justify-between text-xs">
                     <span className="font-semibold text-zinc-900 flex items-center gap-1.5 font-mono uppercase tracking-wider">
                       <Layers className="w-3.5 h-3.5 text-blue-600" />
                       {product.type || product.category || "Product"} Variant Architecture
@@ -886,11 +883,10 @@ export function ProductDetailView({
                             if (matchingColor) setSelectedColor(matchingColor.id);
                             setActiveMediaIndex(0);
                           }}
-                          className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between gap-3 ${
-                            isSelected
-                              ? "bg-white border-blue-600 shadow-xs ring-1.5 ring-blue-600/30"
-                              : "bg-white/80 border-zinc-200 hover:border-zinc-300"
-                          }`}
+                          className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between gap-3 ${isSelected
+                            ? "bg-white border-blue-600 shadow-xs ring-1.5 ring-blue-600/30"
+                            : "bg-white/80 border-zinc-200 hover:border-zinc-300"
+                            }`}
                         >
                           <div className="space-y-0.5 min-w-0">
                             <div className="flex items-center gap-2">
@@ -909,9 +905,8 @@ export function ProductDetailView({
                               <CurrencyPrice usd={v.price} inr={v.priceInr} />
                             </div>
                             <span
-                              className={`text-[9px] font-mono font-semibold ${
-                                v.stock <= 5 ? "text-amber-600" : "text-emerald-600"
-                              }`}
+                              className={`text-[9px] font-mono font-semibold ${v.stock <= 5 ? "text-amber-600" : "text-emerald-600"
+                                }`}
                             >
                               {v.stock === 0 ? "Sold out" : `${v.stock} units left`}
                             </span>
@@ -942,11 +937,10 @@ export function ProductDetailView({
                         key={`pdv-var-${v.id || v.name || vIdx}-${vIdx}`}
                         type="button"
                         onClick={() => handleColorSelect(v.id)}
-                        className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                          isSelected
-                            ? "ring-2 ring-blue-600 ring-offset-2 scale-105"
-                            : "hover:scale-105"
-                        }`}
+                        className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all ${isSelected
+                          ? "ring-2 ring-blue-600 ring-offset-2 scale-105"
+                          : "hover:scale-105"
+                          }`}
                         title={v.name}
                         aria-label={`Select ${v.name}`}
                       >
@@ -956,11 +950,10 @@ export function ProductDetailView({
                         >
                           {isSelected && (
                             <Check
-                              className={`w-4 h-4 stroke-[2.5] ${
-                                v.id === "white" || v.id === "silver" || v.id === "sandstone"
-                                  ? "text-zinc-900"
-                                  : "text-white"
-                              }`}
+                              className={`w-4 h-4 stroke-[2.5] ${v.id === "white" || v.id === "silver" || v.id === "sandstone"
+                                ? "text-zinc-900"
+                                : "text-white"
+                                }`}
                             />
                           )}
                         </span>
@@ -1008,15 +1001,23 @@ export function ProductDetailView({
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono px-1">
-                  <span className="flex items-center gap-1">
-                    <Truck className="w-3.5 h-3.5 text-blue-600" />
-                    {product.deliveryEstimate}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <RotateCcw className="w-3.5 h-3.5 text-blue-600" />
-                    30-Day Risk-Free Trial
-                  </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-zinc-100 text-[11px] font-mono text-zinc-600">
+                  <div className="flex items-center gap-1.5 p-2 rounded-xl bg-zinc-50 border border-zinc-200/60">
+                    <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span className="truncate">{product.deliveryEstimate || "Fast US & Global Shipping"}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-2 rounded-xl bg-zinc-50 border border-zinc-200/60">
+                    <RotateCcw className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>30-Day Risk-Free Trial</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-2 rounded-xl bg-zinc-50 border border-zinc-200/60">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{product.warrantyYears || 2}-Year Official Warranty</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-2 rounded-xl bg-zinc-50 border border-zinc-200/60">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>100% Genuine Guaranteed</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1082,11 +1083,10 @@ export function ProductDetailView({
                         style={position}
                         aria-label={`Inspect stage ${callout.number}: ${callout.title}`}
                         aria-pressed={isActive}
-                        className={`absolute z-10 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-mono text-[11px] font-bold transition-all duration-300 ${
-                          isActive
-                            ? "bg-blue-600 text-white ring-4 ring-blue-600/25 scale-110 shadow-lg"
-                            : "bg-white/95 text-zinc-700 ring-2 ring-zinc-300/80 hover:ring-blue-400 hover:scale-105 shadow-sm"
-                        }`}
+                        className={`absolute z-10 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-mono text-[11px] font-bold transition-all duration-300 ${isActive
+                          ? "bg-blue-600 text-white ring-4 ring-blue-600/25 scale-110 shadow-lg"
+                          : "bg-white/95 text-zinc-700 ring-2 ring-zinc-300/80 hover:ring-blue-400 hover:scale-105 shadow-sm"
+                          }`}
                       >
                         {callout.number}
                         {isActive && (
@@ -1126,18 +1126,16 @@ export function ProductDetailView({
                         key={c.number}
                         type="button"
                         onClick={() => setActiveHotspot(idx)}
-                        className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-start gap-3.5 ${
-                          activeHotspot === idx
-                            ? "bg-blue-50/60 border-blue-600 shadow-xs ring-1 ring-blue-600/30"
-                            : "bg-white border-zinc-200/80 hover:border-zinc-300"
-                        }`}
+                        className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-start gap-3.5 ${activeHotspot === idx
+                          ? "bg-blue-50/60 border-blue-600 shadow-xs ring-1 ring-blue-600/30"
+                          : "bg-white border-zinc-200/80 hover:border-zinc-300"
+                          }`}
                       >
                         <span
-                          className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-xs font-bold shrink-0 transition-colors ${
-                            activeHotspot === idx
-                              ? "bg-blue-600 text-white"
-                              : "bg-zinc-100 text-zinc-600"
-                          }`}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-xs font-bold shrink-0 transition-colors ${activeHotspot === idx
+                            ? "bg-blue-600 text-white"
+                            : "bg-zinc-100 text-zinc-600"
+                            }`}
                         >
                           {c.number}
                         </span>
@@ -1208,11 +1206,10 @@ export function ProductDetailView({
                 <button
                   type="button"
                   onClick={() => setActiveSpecTab("core")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    activeSpecTab === "core"
-                      ? "bg-white text-zinc-900 shadow-xs"
-                      : "text-zinc-600 hover:text-black"
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${activeSpecTab === "core"
+                    ? "bg-white text-zinc-900 shadow-xs"
+                    : "text-zinc-600 hover:text-black"
+                    }`}
                 >
                   <Cpu className="w-3.5 h-3.5 text-blue-600" />
                   <span>Core Specs</span>
@@ -1220,11 +1217,10 @@ export function ProductDetailView({
                 <button
                   type="button"
                   onClick={() => setActiveSpecTab("battery")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    activeSpecTab === "battery"
-                      ? "bg-white text-zinc-900 shadow-xs"
-                      : "text-zinc-600 hover:text-black"
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${activeSpecTab === "battery"
+                    ? "bg-white text-zinc-900 shadow-xs"
+                    : "text-zinc-600 hover:text-black"
+                    }`}
                 >
                   <BatteryCharging className="w-3.5 h-3.5 text-blue-600" />
                   <span>Battery & Charging</span>
@@ -1232,11 +1228,10 @@ export function ProductDetailView({
                 <button
                   type="button"
                   onClick={() => setActiveSpecTab("connectivity")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    activeSpecTab === "connectivity"
-                      ? "bg-white text-zinc-900 shadow-xs"
-                      : "text-zinc-600 hover:text-black"
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${activeSpecTab === "connectivity"
+                    ? "bg-white text-zinc-900 shadow-xs"
+                    : "text-zinc-600 hover:text-black"
+                    }`}
                 >
                   <Radio className="w-3.5 h-3.5 text-blue-600" />
                   <span>Connectivity & Intelligence</span>
@@ -1251,9 +1246,8 @@ export function ProductDetailView({
               {p.tabbedSpecs[activeSpecTab]?.map((row, idx) => (
                 <div
                   key={row.label}
-                  className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
-                    idx % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"
-                  }`}
+                  className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${idx % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"
+                    }`}
                 >
                   <span className="text-xs font-medium text-zinc-600 sm:w-1/3">
                     {row.label}
@@ -1313,13 +1307,12 @@ export function ProductDetailView({
                     return (
                       <div
                         key={label}
-                        className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors ${
-                          isOverridden
-                            ? "bg-amber-50/40 hover:bg-amber-50/70"
-                            : idx % 2 === 0
+                        className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors ${isOverridden
+                          ? "bg-amber-50/40 hover:bg-amber-50/70"
+                          : idx % 2 === 0
                             ? "bg-white"
                             : "bg-[#FAFAFA]"
-                        }`}
+                          }`}
                       >
                         <div className="sm:w-1/3 flex items-center gap-2">
                           <span className="text-xs font-medium text-zinc-700">
@@ -1333,9 +1326,8 @@ export function ProductDetailView({
                         </div>
 
                         <div className="sm:w-2/3 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4">
-                          <span className={`text-xs font-semibold font-mono ${
-                            isOverridden ? "text-amber-950 font-bold" : "text-zinc-900"
-                          }`}>
+                          <span className={`text-xs font-semibold font-mono ${isOverridden ? "text-amber-950 font-bold" : "text-zinc-900"
+                            }`}>
                             {displayValue}
                           </span>
 
@@ -1418,11 +1410,10 @@ export function ProductDetailView({
                   key={tag.id}
                   type="button"
                   onClick={() => setReviewFilterTag(tag.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all shrink-0 ${
-                    reviewFilterTag === tag.id
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-400"
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all shrink-0 ${reviewFilterTag === tag.id
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-400"
+                    }`}
                 >
                   {tag.label}
                 </button>
@@ -1446,77 +1437,76 @@ export function ProductDetailView({
                 </div>
               ) : (
                 filteredReviews.map((review, rIdx) => (
-                <div
-                  key={`rev-${review.id || review.reviewId || rIdx}-${rIdx}`}
-                  className="rounded-3xl bg-white border border-[#EAEAE5] p-6 space-y-4 flex flex-col justify-between shadow-2xs"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-3.5 h-3.5 ${
-                              i < review.rating
+                  <div
+                    key={`rev-${review.id || review.reviewId || rIdx}-${rIdx}`}
+                    className="rounded-3xl bg-white border border-[#EAEAE5] p-6 space-y-4 flex flex-col justify-between shadow-2xs"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-3.5 h-3.5 ${i < review.rating
                                 ? "fill-amber-400 text-amber-400"
                                 : "text-zinc-200"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold">
-                        <Check className="w-3 h-3" />
-                        Verified Buyer
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-zinc-700 leading-relaxed font-sans">
-                      {review.comment}
-                    </p>
-
-                    {/* Photo Gallery (Up to 5 Photos) */}
-                    {review.images && review.images.length > 0 && (
-                      <div className="pt-2">
-                        <div className="flex gap-2 overflow-x-auto py-1">
-                          {review.images.map((imgUrl, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => setActiveLightboxImage(imgUrl)}
-                              className="relative w-14 h-14 rounded-xl overflow-hidden bg-zinc-100 border border-zinc-200 shrink-0 hover:opacity-90 hover:scale-105 transition-all cursor-pointer group"
-                            >
-                              <Image
-                                src={imgUrl}
-                                alt={`Customer photo ${idx + 1}`}
-                                fill
-                                className="object-cover"
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-colors">
-                                <Maximize2 className="w-3.5 h-3.5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </div>
-                            </button>
+                                }`}
+                            />
                           ))}
                         </div>
+                        <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold">
+                          <Check className="w-3 h-3" />
+                          Verified Buyer
+                        </span>
                       </div>
-                    )}
-                  </div>
 
-                  <div className="pt-3 border-t border-zinc-100 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-zinc-100 text-zinc-700 font-bold text-[10px] flex items-center justify-center">
-                        {review.initials || "VB"}
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-zinc-900">{review.author || review.userName}</h4>
-                        <p className="text-[10px] text-zinc-400">{review.role || review.variant || "Form 01"}</p>
-                      </div>
+                      <p className="text-xs text-zinc-700 leading-relaxed font-sans">
+                        {review.comment}
+                      </p>
+
+                      {/* Photo Gallery (Up to 5 Photos) */}
+                      {review.images && review.images.length > 0 && (
+                        <div className="pt-2">
+                          <div className="flex gap-2 overflow-x-auto py-1">
+                            {review.images.map((imgUrl, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setActiveLightboxImage(imgUrl)}
+                                className="relative w-14 h-14 rounded-xl overflow-hidden bg-zinc-100 border border-zinc-200 shrink-0 hover:opacity-90 hover:scale-105 transition-all cursor-pointer group"
+                              >
+                                <Image
+                                  src={imgUrl}
+                                  alt={`Customer photo ${idx + 1}`}
+                                  fill
+                                  className="object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-colors">
+                                  <Maximize2 className="w-3.5 h-3.5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <span className="text-[10px] font-mono text-zinc-400">
-                      {review.createdAt || "Verified buyer"}
-                    </span>
+
+                    <div className="pt-3 border-t border-zinc-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-zinc-100 text-zinc-700 font-bold text-[10px] flex items-center justify-center">
+                          {review.initials || "VB"}
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-zinc-900">{review.author || review.userName}</h4>
+                          <p className="text-[10px] text-zinc-400">{review.role || review.variant || "Form 01"}</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-400">
+                        {review.createdAt || "Verified buyer"}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )))}
+                )))}
             </div>
 
             {/* Horizontal owner-frame wall + modal */}
@@ -1636,9 +1626,8 @@ export function ProductDetailView({
                                 aria-label={`${star} Stars`}
                               >
                                 <Star
-                                  className={`w-6 h-6 ${
-                                    isFilled ? "fill-amber-400 text-amber-400" : "text-zinc-200"
-                                  }`}
+                                  className={`w-6 h-6 ${isFilled ? "fill-amber-400 text-amber-400" : "text-zinc-200"
+                                    }`}
                                 />
                               </button>
                             );
@@ -1648,12 +1637,12 @@ export function ProductDetailView({
                           {formRating === 5
                             ? "5.0 - Acoustic Masterpiece"
                             : formRating === 4
-                            ? "4.0 - Exceptional Performance"
-                            : formRating === 3
-                            ? "3.0 - Good Performance"
-                            : formRating === 2
-                            ? "2.0 - Fair"
-                            : "1.0 - Needs Improvement"}
+                              ? "4.0 - Exceptional Performance"
+                              : formRating === 3
+                                ? "3.0 - Good Performance"
+                                : formRating === 2
+                                  ? "2.0 - Fair"
+                                  : "1.0 - Needs Improvement"}
                         </span>
                       </div>
                     </div>
@@ -1846,87 +1835,87 @@ export function ProductDetailView({
           "More from ancwave Acoustics"
           ========================================================================= */}
       {relatedProducts && relatedProducts.length > 0 && (
-      <section className="py-16 sm:py-20 bg-white border-b border-[#EAEAE5]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div>
-              <span className="text-[11px] font-mono tracking-widest text-zinc-400 uppercase font-semibold">
-                CROSS-PLATFORM RECOMMENDATIONS
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
-                More from ancwave Acoustics
-              </h2>
-            </div>
-            <Link
-              href="/products"
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 self-start sm:self-auto"
-            >
-              <span>View complete audio catalog</span>
-              <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.2]" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-            {relatedProducts.map((rel, relIdx) => {
-              const relCover =
-                rel.variants?.[0]?.image ||
-                rel.childVariants?.[0]?.images?.[0] ||
-                "/images/hero-silver.jpg";
-              return (
-                <div
-                  key={`rel-${rel.id || rel.slug || relIdx}-${relIdx}`}
-                  className="group rounded-3xl bg-[#FBFBFA] border border-[#EAEAE5] p-5 flex flex-col justify-between hover:border-zinc-400 transition-all hover:shadow-md"
-                >
-                  <div className="space-y-4">
-                    <div className="relative aspect-4/3 rounded-2xl bg-white p-4 overflow-hidden border border-zinc-100">
-                      <Image
-                        src={relCover}
-                        alt={rel.name}
-                        fill
-                        className="object-contain p-2 group-hover:scale-105 transition-transform duration-300"
-                        sizes="300px"
-                      />
-                    <span className="absolute top-3 left-3 text-[9px] font-mono tracking-wider px-2 py-0.5 rounded bg-zinc-100 font-semibold text-zinc-800">
-                      {rel.model}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-900 group-hover:text-blue-600 transition-colors">
-                      {rel.name}
-                    </h3>
-                    <p className="text-xs text-zinc-500 line-clamp-2 mt-1">
-                      {rel.description}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pt-4 mt-4 border-t border-zinc-200/60 flex items-center justify-between">
-                  <div>
-                    <CurrencyPrice
-                      usd={rel.price}
-                      inr={rel.priceInr}
-                      className="text-base font-bold text-zinc-900"
-                    />
-                    <span className="block text-[10px] font-mono text-zinc-400">
-                      {rel.category}
-                    </span>
-                  </div>
-
-                  <Link
-                    href={`/products/${rel.slug}`}
-                    className="px-3.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-black text-white text-xs font-medium flex items-center gap-1 transition-all"
-                  >
-                    <span>Inspect</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
+        <section className="py-16 sm:py-20 bg-white border-b border-[#EAEAE5]">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div>
+                <span className="text-[11px] font-mono tracking-widest text-zinc-400 uppercase font-semibold">
+                  CROSS-PLATFORM RECOMMENDATIONS
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
+                  More from ancwave Acoustics
+                </h2>
               </div>
-            );
-          })}
+              <Link
+                href="/products"
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 self-start sm:self-auto"
+              >
+                <span>View complete audio catalog</span>
+                <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.2]" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+              {relatedProducts.map((rel, relIdx) => {
+                const relCover =
+                  rel.variants?.[0]?.image ||
+                  rel.childVariants?.[0]?.images?.[0] ||
+                  "/images/hero-silver.jpg";
+                return (
+                  <div
+                    key={`rel-${rel.id || rel.slug || relIdx}-${relIdx}`}
+                    className="group rounded-3xl bg-[#FBFBFA] border border-[#EAEAE5] p-5 flex flex-col justify-between hover:border-zinc-400 transition-all hover:shadow-md"
+                  >
+                    <div className="space-y-4">
+                      <div className="relative aspect-4/3 rounded-2xl bg-white p-4 overflow-hidden border border-zinc-100">
+                        <Image
+                          src={relCover}
+                          alt={rel.name}
+                          fill
+                          className="object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                          sizes="300px"
+                        />
+                        <span className="absolute top-3 left-3 text-[9px] font-mono tracking-wider px-2 py-0.5 rounded bg-zinc-100 font-semibold text-zinc-800">
+                          {rel.model}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h3 className="text-base font-bold text-zinc-900 group-hover:text-blue-600 transition-colors">
+                          {rel.name}
+                        </h3>
+                        <p className="text-xs text-zinc-500 line-clamp-2 mt-1">
+                          {rel.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 mt-4 border-t border-zinc-200/60 flex items-center justify-between">
+                      <div>
+                        <CurrencyPrice
+                          usd={rel.price}
+                          inr={rel.priceInr}
+                          className="text-base font-bold text-zinc-900"
+                        />
+                        <span className="block text-[10px] font-mono text-zinc-400">
+                          {rel.category}
+                        </span>
+                      </div>
+
+                      <Link
+                        href={`/products/${rel.slug}`}
+                        className="px-3.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-black text-white text-xs font-medium flex items-center gap-1 transition-all"
+                      >
+                        <span>Inspect</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
       )}
 
       {/* Cart Drawer & Minimalist Global Footer */}

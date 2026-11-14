@@ -60,7 +60,7 @@ export function SpecsSection({ product }: SpecsSectionProps) {
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
               <span className="text-[11px] font-mono tracking-[0.16em] text-zinc-500 uppercase">
-                02 / UNDER THE SURFACE
+                05 / UNDER THE SURFACE
               </span>
             </div>
             <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#111111] leading-tight break-words">
@@ -101,7 +101,7 @@ export function SpecsSection({ product }: SpecsSectionProps) {
 
             <div className="relative w-full aspect-4/3 rounded-3xl overflow-hidden border border-[#E8E7E2] bg-[#ECECE7] shadow-xs">
               <div className="absolute top-4 left-4 sm:top-5 sm:left-6 text-[10px] font-mono tracking-[0.18em] text-zinc-700 uppercase z-20 bg-white/85 backdrop-blur-md px-2.5 py-1 rounded-md shadow-2xs">
-                FORM 01 / ACOUSTIC ASSEMBLY
+                {(product?.name || "HARDWARE").toUpperCase()} / ACOUSTIC ASSEMBLY
               </div>
               <Image
                 src="/images/exploded-assembly.jpg"

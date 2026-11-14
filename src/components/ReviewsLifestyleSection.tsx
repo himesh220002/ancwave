@@ -65,7 +65,7 @@ export function ReviewsLifestyleSection() {
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
             <span className="text-[11px] font-mono tracking-[0.16em] text-zinc-500 uppercase">
-              03 / LISTENING, LIVED IN
+              06 / LISTENING, LIVED IN
             </span>
           </div>
 

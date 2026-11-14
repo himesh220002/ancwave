@@ -449,6 +449,36 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteProduct = async (slug: string, name: string) => {
+    if (!confirm(`Are you sure you want to permanently delete "${name}" (${slug})? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/product?slug=${encodeURIComponent(slug)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          type: "success",
+          title: "Product Deleted",
+          description: `${name} has been permanently deleted from the catalog.`,
+        });
+        await fetchAdminData();
+      } else {
+        toast({
+          type: "error",
+          title: "Delete Failed",
+          description: data.error || "Failed to delete product.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        type: "error",
+        title: "Network Error",
+        description: err?.message || "Failed to delete product.",
+      });
+    }
+  };
+
   // URL & LocalStorage Persistence: Keep user on exact tab and open order on refresh
   const [hasHydratedLocation, setHasHydratedLocation] = useState(false);
 
@@ -4799,8 +4829,8 @@ export default function AdminPage() {
                         <tr>
                           <td colSpan={7} className="text-center py-12 text-zinc-400">
                             <div className="flex flex-col items-center gap-2">
-                              <span className="text-sm font-semibold text-zinc-700">No products published in ancwaveDB</span>
-                              <p className="text-xs text-zinc-500 max-w-sm">Your database is in a clean raw state. Click &quot;New Product Item&quot; above to create and publish your first product.</p>
+                              <span className="text-sm font-semibold text-zinc-700">No products in catalog</span>
+                              <p className="text-xs text-zinc-500 max-w-sm">No products currently active. Click &quot;New Product Item&quot; above to add your first product.</p>
                             </div>
                           </td>
                         </tr>
@@ -5254,7 +5284,7 @@ export default function AdminPage() {
                   </div>
                   <div className="space-y-1">
                     <h3 className="text-base font-bold text-zinc-900">No Products in Inventory</h3>
-                    <p className="text-xs text-zinc-500">ancwaveDB currently has 0 product documents. Create your first product item to begin managing architectures, colors, stock, and pricing.</p>
+                    <p className="text-xs text-zinc-500">Your store catalog is currently empty. Create your first product item to begin managing architectures, colors, stock, and pricing.</p>
                   </div>
                   <button
                     type="button"
@@ -5454,6 +5484,15 @@ export default function AdminPage() {
                                   >
                                     <ExternalLink className="w-3.5 h-3.5" />
                                   </Link>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteProduct(p.slug, p.name)}
+                                    className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                    title={`Delete ${p.name}`}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                               </td>
                             </tr>
@@ -9547,7 +9586,7 @@ export default function AdminPage() {
             const aov = orders.length > 0 ? totalRevenueUsd / orders.length : 0;
             const totalRevenueInr = Math.round(totalRevenueUsd * exchangeRate);
 
-            const filteredOrders = orders.filter((ord) => {
+            const filteredOrders = orders.filter((ord: any) => {
               if (!orderSearchQuery.trim()) return true;
               const q = orderSearchQuery.toLowerCase();
               const matchNumber = ord.orderNumber?.toLowerCase().includes(q);
@@ -9557,18 +9596,18 @@ export default function AdminPage() {
                 ord.customer?.contact?.toLowerCase().includes(q) ||
                 ord.customer?.city?.toLowerCase().includes(q);
               const matchItem = ord.items?.some(
-                (i) =>
+                (i: any) =>
                   i.name?.toLowerCase().includes(q) ||
                   i.variantName?.toLowerCase().includes(q) ||
                   i.componentSku?.toLowerCase().includes(q)
               );
               return matchNumber || matchCustomer || matchItem;
-            }).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            });
 
             return (
-              <div className="rounded-2xl sm:rounded-3xl bg-white border border-zinc-200 p-4 sm:p-6 md:p-8 shadow-xs space-y-5 sm:space-y-6">
-                {/* Section Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 gap-3 sm:gap-4">
+              <div className="space-y-6">
+                {/* Dashboard Header Banner */}
+                <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-2">
                       <ShoppingBag className="w-5 h-5 text-blue-600 shrink-0" />
@@ -12528,7 +12567,7 @@ export default function AdminPage() {
                             {isSearchingTeam ? (
                               <div className="flex items-center justify-center gap-2">
                                 <RefreshCw className="w-4 h-4 animate-spin text-amber-500" />
-                                <span>Querying accounts in database...</span>
+                                <span>Loading accounts...</span>
                               </div>
                             ) : (
                               <div className="space-y-1">

@@ -518,7 +518,9 @@ export async function DELETE(req: NextRequest) {
     const db = await connectDB();
     if (db) {
       try {
-        await ProductModel.deleteOne({ slug });
+        await ProductModel.deleteOne({
+          $or: [{ slug }, { id: slug }, { productId: slug }],
+        });
       } catch (err) {
         console.warn("MongoDB delete notice:", err);
       }

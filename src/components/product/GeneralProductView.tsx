@@ -201,45 +201,54 @@ export function GeneralProductView({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start">
             <div className="lg:col-span-7 space-y-4">
-              <div className="relative aspect-4/3 rounded-3xl bg-[#F0EFEA] p-6 sm:p-10 overflow-hidden flex items-center justify-center border border-[#EAEAE5]">
+              {/* Main Showcase Viewport: Pure Rectangle Architectural Frame */}
+              <div className="relative aspect-4/3 sm:aspect-4/3 rounded-none bg-black overflow-hidden flex items-center justify-center border border-zinc-200/90 shadow-2xs">
                 <Image
                   key={images[activeImageIndex] || images[0]}
                   src={images[activeImageIndex] || images[0]}
                   alt={`${product.name} - ${activeChildVariant?.color || activeVariant?.name || "Standard"}`}
                   fill
                   priority
-                  className="object-contain p-4"
+                  className="object-cover w-full h-full transition-transform duration-700 hover:scale-105"
                   sizes="(max-width: 1024px) 100vw, 60vw"
                 />
-                <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-white/90 backdrop-blur-md text-[10px] font-mono tracking-widest text-zinc-800 uppercase font-semibold border border-zinc-200">
+                {/* Perspective & Angle Badges */}
+                <div className="absolute top-4 left-4 sm:top-5 sm:left-5 flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-none bg-black/80 backdrop-blur-md text-[10px] font-mono tracking-widest text-white uppercase font-semibold border border-white/20 shadow-xs">
                     {profile.galleryLabels[activeImageIndex] || "STUDIO RENDER"}
                   </span>
                 </div>
-                <div className="absolute top-4 right-4 sm:top-6 sm:right-6 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md text-[10px] font-mono font-bold text-zinc-700 border border-zinc-200">
+                {/* Top Right Counter */}
+                <div className="absolute top-4 right-4 sm:top-5 sm:right-5 px-2.5 py-1 rounded-none bg-black/80 backdrop-blur-md text-[10px] font-mono font-bold text-white border border-white/20 shadow-xs">
                   {activeImageIndex + 1} / {images.length}
                 </div>
-                <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 text-[11px] font-mono text-zinc-600 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full border border-zinc-200">
+                {/* Variant Pill Indicator */}
+                <div className="absolute bottom-4 left-4 sm:bottom-5 sm:left-5 text-[10px] font-mono text-white bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-none border border-white/20 shadow-xs">
                   {(activeChildVariant?.color || activeVariant?.name || "Standard").toUpperCase()} · {sku}
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 overflow-x-auto pb-2 pt-1 scrollbar-thin">
+              {/* Multi-Angle Thumbnails: Pure Rectangle Tiles (No text tags) */}
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-2 pt-1 scrollbar-thin">
                 {images.map((image, index) => (
                   <button
                     key={`${image}-${index}`}
                     type="button"
                     onClick={() => setActiveImageIndex(index)}
-                    className={`relative shrink-0 w-24 sm:w-28 aspect-4/3 rounded-2xl bg-[#F0EFEA] p-1.5 overflow-hidden border transition-all text-left ${
+                    className={`relative shrink-0 w-16 h-16 sm:w-20 sm:h-20 aspect-square rounded-none bg-black overflow-hidden border transition-all cursor-pointer group/thumb ${
                       activeImageIndex === index
-                        ? "border-blue-600 ring-2 ring-blue-600/20"
-                        : "border-zinc-200/80 hover:border-zinc-400 opacity-75 hover:opacity-100"
+                        ? "border-2 border-blue-600 shadow-sm ring-1 ring-blue-600/30"
+                        : "border border-zinc-300 hover:border-zinc-500 opacity-75 hover:opacity-100"
                     }`}
+                    title={profile.galleryLabels[index] || `Angle ${index + 1}`}
                   >
-                    <Image src={image} alt={`${product.name} angle ${index + 1}`} fill className="object-contain p-1" sizes="120px" />
-                    <span className="relative z-10 text-[9px] font-mono text-zinc-800 bg-white/90 px-1.5 py-0.5 rounded-md truncate max-w-full border border-zinc-200/50">
-                      {profile.galleryLabels[index] || `Angle ${index + 1}`}
-                    </span>
+                    <Image
+                      src={image}
+                      alt={`${product.name} angle ${index + 1}`}
+                      fill
+                      className="object-cover group-hover/thumb:scale-108 transition-transform duration-300"
+                      sizes="80px"
+                    />
                   </button>
                 ))}
               </div>

@@ -63,7 +63,7 @@ export function ContactFaqSection() {
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
             <span className="text-[11px] font-mono tracking-[0.16em] text-zinc-500 uppercase">
-              05 / HERE WHEN YOU NEED US
+              08 / HERE WHEN YOU NEED US
             </span>
           </div>
 

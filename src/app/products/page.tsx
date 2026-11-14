@@ -22,7 +22,6 @@ import {
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
-import { sampleCatalog } from "@/lib/store";
 import { useCart } from "@/context/CartContext";
 import { CurrencyPrice } from "@/context/CurrencyContext";
 import { toast } from "@/components/Toaster";
@@ -37,35 +36,27 @@ export default function ProductsCatalogPage() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
   const [sortOption, setSortOption] = useState<SortOption>("featured");
   const [isLoading, setIsLoading] = useState(true);
-  const [catalogProducts, setCatalogProducts] = useState<ProductData[]>(() =>
-    sampleCatalog.map(normalizeProductData)
-  );
+  const [catalogProducts, setCatalogProducts] = useState<ProductData[]>([]);
   const [comparedSlugs, setComparedSlugs] = useState<string[]>([]);
   const [isSpecialistModalOpen, setIsSpecialistModalOpen] = useState(false);
   const [specialistStep, setSpecialistStep] = useState<1 | 2>(1);
   const [specialistEnvironment, setSpecialistEnvironment] = useState<string>("desk");
 
-  // Fetch updated catalog products from database
+  // Fetch updated catalog products from live API
   useEffect(() => {
     setIsLoading(true);
     fetch("/api/product?all=true")
       .then((res) => res.json())
       .then((data) => {
-        if (data.products && Array.isArray(data.products) && data.products.length > 0) {
-          setCatalogProducts((prev) => {
-            const merged = new Map<string, ProductData>();
-            [...sampleCatalog, ...prev].forEach((p) =>
-              merged.set(p.slug, normalizeProductData(p))
-            );
-            data.products.forEach((p: ProductData) =>
-              merged.set(p.slug, normalizeProductData(p))
-            );
-            return Array.from(merged.values());
-          });
+        if (data.products && Array.isArray(data.products)) {
+          setCatalogProducts(data.products.map((p: ProductData) => normalizeProductData(p)));
+        } else {
+          setCatalogProducts([]);
         }
       })
       .catch((err) => {
         console.warn("Failed to fetch catalog products:", err);
+        setCatalogProducts([]);
       })
       .finally(() => {
         setIsLoading(false);
@@ -74,8 +65,12 @@ export default function ProductsCatalogPage() {
 
   // Compute category tabs
   const categoryTabs = useMemo(() => {
+    const hasNonAudio = catalogProducts.some((p) => {
+      const cat = (p.categorySlug || p.category || "").toLowerCase();
+      return cat.includes("apparel") || cat.includes("smartphone") || cat.includes("electronics");
+    });
     const list: Array<{ slug: string; label: string; count: number }> = [
-      { slug: "all", label: "All audio", count: catalogProducts.length },
+      { slug: "all", label: hasNonAudio ? "All products" : "All audio", count: catalogProducts.length },
     ];
 
     const categoryCounts = new Map<string, { label: string; count: number }>();
@@ -318,53 +313,33 @@ export default function ProductsCatalogPage() {
             ))}
           </div>
         ) : catalogProducts.length === 0 ? (
-          <div className="py-12 sm:py-20 text-center max-w-2xl mx-auto px-4">
+          <div className="py-16 sm:py-24 text-center max-w-xl mx-auto px-4">
             <div className="bg-white border border-zinc-200/90 rounded-3xl p-8 sm:p-12 shadow-sm space-y-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-mono font-semibold">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>MongoDB Connected · Pure Production Catalog</span>
-              </div>
-
-              <div className="w-16 h-16 rounded-2xl bg-zinc-50 border border-zinc-200/80 flex items-center justify-center mx-auto text-zinc-400 shadow-2xs">
-                <Headphones className="w-8 h-8 stroke-[1.5] text-zinc-400" />
+              <div className="w-14 h-14 rounded-2xl bg-zinc-50 border border-zinc-200/80 flex items-center justify-center mx-auto text-zinc-500 shadow-2xs">
+                <Headphones className="w-7 h-7 stroke-[1.5]" />
               </div>
 
               <div className="space-y-2">
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight font-sans">
-                  No Products Available in Catalog
+                  Catalog In Preparation
                 </h2>
-                <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-lg mx-auto">
-                  All mock products, demo reviews, and test models have been cleared. Your store is in its authentic, pure state connected directly to <strong className="font-mono text-zinc-800">ancwaveDB</strong>. Add your first hardware model in the Admin Console to launch it here.
+                <p className="text-xs sm:text-sm text-zinc-500 leading-relaxed max-w-md mx-auto">
+                  Hardware releases are currently being prepared. Check back shortly for the updated lineup or manage models in the admin console.
                 </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/80 grid grid-cols-3 gap-2 text-left">
-                <div>
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase font-bold block">CATALOG</span>
-                  <span className="text-sm font-bold font-mono text-zinc-900">0 Active</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase font-bold block">STATUS</span>
-                  <span className="text-sm font-bold font-mono text-amber-600">Standby</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase font-bold block">DATABASE</span>
-                  <span className="text-sm font-bold font-mono text-emerald-600">Atlas Live</span>
-                </div>
               </div>
 
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link
                   href="/admin"
-                  className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-semibold text-xs transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <PlusCircle className="w-4 h-4 text-emerald-400" />
-                  <span>Enter Admin Console & Add Product</span>
+                  <span>Admin Console</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
                   href="/"
-                  className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span>Return to Home</span>
                 </Link>
@@ -422,235 +397,235 @@ export default function ProductsCatalogPage() {
       {/* Lineup Comparison Matrix Section */}
       {!isLoading && catalogProducts.length > 0 && (
         <section id="compare-matrix" className="py-16 sm:py-20 bg-white border-t border-[#EAEAE5] scroll-mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                <span className="text-[11px] font-mono tracking-[0.18em] text-blue-600 uppercase font-semibold">
-                  {comparedSlugs.length > 0 ? "CUSTOM COMPARISON ACTIVE" : "FIND YOUR FREQUENCY"}
-                </span>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 space-y-8">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                  <span className="text-[11px] font-mono tracking-[0.18em] text-blue-600 uppercase font-semibold">
+                    {comparedSlugs.length > 0 ? "CUSTOM COMPARISON ACTIVE" : "FIND YOUR FREQUENCY"}
+                  </span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
+                  {comparedSlugs.length > 0
+                    ? `Comparing ${comparedSlugs.length} selected model${comparedSlugs.length > 1 ? "s" : ""}`
+                    : "Compare the lineup, side by side"}
+                </h2>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
-                {comparedSlugs.length > 0
-                  ? `Comparing ${comparedSlugs.length} selected model${comparedSlugs.length > 1 ? "s" : ""}`
-                  : "Compare the lineup, side by side"}
-              </h2>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <p className="text-xs text-zinc-500 max-w-sm">
+                  {comparedSlugs.length > 0
+                    ? "Side-by-side technical specifications, driver architectures, and battery endurance."
+                    : "Check 'Add to compare' on any product cards above to customize this matrix dynamically."}
+                </p>
+                {comparedSlugs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setComparedSlugs([]);
+                      toast({
+                        type: "info",
+                        title: "Comparison Reset",
+                        description: "Reset to default flagship lineup comparison.",
+                      });
+                    }}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-100 text-xs text-zinc-600 font-medium transition-colors cursor-pointer shrink-0"
+                  >
+                    Reset to default
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <p className="text-xs text-zinc-500 max-w-sm">
-                {comparedSlugs.length > 0
-                  ? "Side-by-side technical specifications, driver architectures, and battery endurance."
-                  : "Check 'Add to compare' on any product cards above to customize this matrix dynamically."}
-              </p>
-              {comparedSlugs.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setComparedSlugs([]);
-                    toast({
-                      type: "info",
-                      title: "Comparison Reset",
-                      description: "Reset to default flagship lineup comparison.",
-                    });
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-100 text-xs text-zinc-600 font-medium transition-colors cursor-pointer shrink-0"
-                >
-                  Reset to default
-                </button>
-              )}
-            </div>
-          </div>
 
-          {/* Dynamic Comparison Matrix Table */}
-          <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-2xs overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[700px]">
-              <thead>
-                <tr className="border-b border-zinc-200 bg-zinc-50/80">
-                  <th className="p-5 text-[11px] font-mono uppercase tracking-wider text-blue-600 font-bold w-52 shrink-0 align-bottom">
-                    SPECIFICATIONS & ARCHITECTURE
-                  </th>
-                  {activeComparedProducts.map((p, idx) => {
-                    const mainImg =
-                      p.variants?.[0]?.images?.[0] ||
-                      p.variants?.[0]?.image ||
-                      p.childVariants?.[0]?.images?.[0] ||
-                      "/images/hero-silver.jpg";
-                    const isSelected = comparedSlugs.includes(p.slug);
-                    const configureHref = `/products/${p.slug}`;
+            {/* Dynamic Comparison Matrix Table */}
+            <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-2xs overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-zinc-200 bg-zinc-50/80">
+                    <th className="p-5 text-[11px] font-mono uppercase tracking-wider text-blue-600 font-bold w-52 shrink-0 align-bottom">
+                      SPECIFICATIONS & ARCHITECTURE
+                    </th>
+                    {activeComparedProducts.map((p, idx) => {
+                      const mainImg =
+                        p.variants?.[0]?.images?.[0] ||
+                        p.variants?.[0]?.image ||
+                        p.childVariants?.[0]?.images?.[0] ||
+                        "/images/hero-silver.jpg";
+                      const isSelected = comparedSlugs.includes(p.slug);
+                      const configureHref = `/products/${p.slug}`;
 
-                    return (
-                      <th key={`cmp-hdr-${p.id || p.slug || idx}-${idx}`} className="p-5 min-w-[220px] align-top relative border-l border-zinc-100">
-                        {isSelected && (
-                          <button
-                            type="button"
-                            onClick={() => toggleCompare(p.slug)}
-                            title="Remove from comparison"
-                            className="absolute top-3 right-3 w-6 h-6 rounded-full bg-zinc-200/70 hover:bg-red-100 hover:text-red-600 text-zinc-500 flex items-center justify-center transition-colors cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        <div className="relative w-20 h-20 rounded-xl bg-[#F0EFEA] shadow-md border border-zinc-200 overflow-hidden mx-auto mb-3">
-                          <Image
-                            src={mainImg}
-                            alt={p.name}
-                            fill
-                            className="object-cover rounded-xl"
-                          />
-                        </div>
-
-                        <div className="text-center space-y-1">
-                          <Link
-                            href={configureHref}
-                            className="font-bold text-sm text-zinc-900 hover:text-blue-600 transition-colors line-clamp-1"
-                          >
-                            {p.name}
-                          </Link>
-                          <div className="text-sm font-mono font-bold text-blue-600">
-                            <CurrencyPrice usd={p.price} inr={p.priceInr} />
-                          </div>
-                          {(p.reviewCount || 0) > 0 ? (
-                            <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-500">
-                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                              <span>{Number(p.averageRating || p.rating || 0).toFixed(1)}</span>
-                              <span className="text-zinc-400 font-mono">({p.reviewCount})</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-400">
-                              <Star className="w-3 h-3 text-zinc-300" />
-                              <span>0/0</span>
-                              <span className="font-mono">(0)</span>
-                            </div>
+                      return (
+                        <th key={`cmp-hdr-${p.id || p.slug || idx}-${idx}`} className="p-5 min-w-[220px] align-top relative border-l border-zinc-100">
+                          {isSelected && (
+                            <button
+                              type="button"
+                              onClick={() => toggleCompare(p.slug)}
+                              title="Remove from comparison"
+                              className="absolute top-3 right-3 w-6 h-6 rounded-full bg-zinc-200/70 hover:bg-red-100 hover:text-red-600 text-zinc-500 flex items-center justify-center transition-colors cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           )}
+                          <div className="relative w-20 h-20 rounded-xl bg-[#F0EFEA] shadow-md border border-zinc-200 overflow-hidden mx-auto mb-3">
+                            <Image
+                              src={mainImg}
+                              alt={p.name}
+                              fill
+                              className="object-cover rounded-xl"
+                            />
+                          </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleQuickAdd(p)}
-                            className="mt-2.5 w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
-                          >
-                            <span>Add to bag +</span>
-                          </button>
-                        </div>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 text-xs text-zinc-600">
-                <tr>
-                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Category & Form</td>
-                  {activeComparedProducts.map((p, idx) => (
-                    <td key={`cmp-cat-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 font-medium text-zinc-900 border-l border-zinc-100">
-                      {p.category || (p.categorySlug === "headphones" ? "Wireless Over-Ear" : p.categorySlug === "earbuds" ? "True Wireless Earbuds" : "Smart Instrument")}
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Core Philosophy</td>
-                  {activeComparedProducts.map((p, idx) => (
-                    <td key={`cmp-phi-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 text-zinc-700 border-l border-zinc-100">
-                      {p.tagline || (p.description ? p.description.slice(0, 80) + "..." : "Precision engineered")}
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Driver & Hardware</td>
-                  {activeComparedProducts.map((p, idx) => {
-                    const spec =
-                      p.specs?.driver ||
-                      p.globalSpecs?.["Display Size"] ||
-                      p.globalSpecs?.["Acoustic Driver"] ||
-                      p.globalSpecs?.["Processor"] ||
-                      "40 mm custom biocellulose driver";
-                    return (
-                      <td key={`cmp-drv-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 font-medium text-zinc-900 border-l border-zinc-100">
-                        {spec}
+                          <div className="text-center space-y-1">
+                            <Link
+                              href={configureHref}
+                              className="font-bold text-sm text-zinc-900 hover:text-blue-600 transition-colors line-clamp-1"
+                            >
+                              {p.name}
+                            </Link>
+                            <div className="text-sm font-mono font-bold text-blue-600">
+                              <CurrencyPrice usd={p.price} inr={p.priceInr} />
+                            </div>
+                            {(p.reviewCount || 0) > 0 ? (
+                              <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-500">
+                                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                <span>{Number(p.averageRating || p.rating || 0).toFixed(1)}</span>
+                                <span className="text-zinc-400 font-mono">({p.reviewCount})</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-400">
+                                <Star className="w-3 h-3 text-zinc-300" />
+                                <span>0/0</span>
+                                <span className="font-mono">(0)</span>
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleQuickAdd(p)}
+                              className="mt-2.5 w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <span>Add to bag +</span>
+                            </button>
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 text-xs text-zinc-600">
+                  <tr>
+                    <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Category & Form</td>
+                    {activeComparedProducts.map((p, idx) => (
+                      <td key={`cmp-cat-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 font-medium text-zinc-900 border-l border-zinc-100">
+                        {p.category || (p.categorySlug === "headphones" ? "Wireless Over-Ear" : p.categorySlug === "earbuds" ? "True Wireless Earbuds" : "Smart Instrument")}
                       </td>
-                    );
-                  })}
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Battery & Playtime</td>
-                  {activeComparedProducts.map((p, idx) => {
-                    const batt =
-                      p.specs?.batteryLife ||
-                      p.globalSpecs?.["Battery Capacity"] ||
-                      p.globalSpecs?.["Battery"] ||
-                      (p.isTws ? "Up to 8.5 h (34 h with case)" : "Up to 40 h · 38 h with ANC");
-                    return (
-                      <td key={`cmp-bat-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
-                        {batt}
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Core Philosophy</td>
+                    {activeComparedProducts.map((p, idx) => (
+                      <td key={`cmp-phi-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 text-zinc-700 border-l border-zinc-100">
+                        {p.tagline || (p.description ? p.description.slice(0, 80) + "..." : "Precision engineered")}
                       </td>
-                    );
-                  })}
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Noise Control / Processor</td>
-                  {activeComparedProducts.map((p, idx) => {
-                    const noise =
-                      p.specs?.noiseControl ||
-                      p.globalSpecs?.["Chipset / Processor"] ||
-                      "Adaptive Hybrid ANC with Transparency";
-                    return (
-                      <td key={`cmp-noi-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
-                        {noise}
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Driver & Hardware</td>
+                    {activeComparedProducts.map((p, idx) => {
+                      const spec =
+                        p.specs?.driver ||
+                        p.globalSpecs?.["Display Size"] ||
+                        p.globalSpecs?.["Acoustic Driver"] ||
+                        p.globalSpecs?.["Processor"] ||
+                        "40 mm custom biocellulose driver";
+                      return (
+                        <td key={`cmp-drv-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 font-medium text-zinc-900 border-l border-zinc-100">
+                          {spec}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  <tr>
+                    <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Battery & Playtime</td>
+                    {activeComparedProducts.map((p, idx) => {
+                      const batt =
+                        p.specs?.batteryLife ||
+                        p.globalSpecs?.["Battery Capacity"] ||
+                        p.globalSpecs?.["Battery"] ||
+                        (p.isTws ? "Up to 8.5 h (34 h with case)" : "Up to 40 h · 38 h with ANC");
+                      return (
+                        <td key={`cmp-bat-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
+                          {batt}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  <tr>
+                    <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Noise Control / Processor</td>
+                    {activeComparedProducts.map((p, idx) => {
+                      const noise =
+                        p.specs?.noiseControl ||
+                        p.globalSpecs?.["Chipset / Processor"] ||
+                        "Adaptive Hybrid ANC with Transparency";
+                      return (
+                        <td key={`cmp-noi-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
+                          {noise}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  <tr>
+                    <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Charging & Durability</td>
+                    {activeComparedProducts.map((p, idx) => {
+                      const charge =
+                        p.specs?.charging ||
+                        p.globalSpecs?.["Water Resistance"] ||
+                        "USB-C Rapid Charge";
+                      return (
+                        <td key={`cmp-chg-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
+                          {charge}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  <tr>
+                    <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Connectivity</td>
+                    {activeComparedProducts.map((p, idx) => {
+                      const conn =
+                        p.specs?.connectivity ||
+                        p.globalSpecs?.["Connectivity"] ||
+                        "Bluetooth 5.3 · Multi-device Multipoint";
+                      return (
+                        <td key={`cmp-con-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
+                          {conn}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  <tr>
+                    <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Materials & Weight</td>
+                    {activeComparedProducts.map((p, idx) => {
+                      const mat =
+                        p.specs?.materials ||
+                        p.globalSpecs?.["Build Material"] ||
+                        "Anodized Aluminum · Slow-Recovery Foam";
+                      const wt = p.specs?.weightMetric || "256 g";
+                      return (
+                        <td key={`cmp-mat-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
+                          {mat} ({wt})
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  <tr>
+                    <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Warranty & Trial</td>
+                    {activeComparedProducts.map((p, idx) => (
+                      <td key={`cmp-war-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 text-emerald-700 font-medium border-l border-zinc-100">
+                        {p.warrantyYears || 2}-Year Warranty · {p.returnDays || 30}-Day Returns
                       </td>
-                    );
-                  })}
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Charging & Durability</td>
-                  {activeComparedProducts.map((p, idx) => {
-                    const charge =
-                      p.specs?.charging ||
-                      p.globalSpecs?.["Water Resistance"] ||
-                      "USB-C Rapid Charge";
-                    return (
-                      <td key={`cmp-chg-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
-                        {charge}
-                      </td>
-                    );
-                  })}
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Connectivity</td>
-                  {activeComparedProducts.map((p, idx) => {
-                    const conn =
-                      p.specs?.connectivity ||
-                      p.globalSpecs?.["Connectivity"] ||
-                      "Bluetooth 5.3 · Multi-device Multipoint";
-                    return (
-                      <td key={`cmp-con-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
-                        {conn}
-                      </td>
-                    );
-                  })}
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Materials & Weight</td>
-                  {activeComparedProducts.map((p, idx) => {
-                    const mat =
-                      p.specs?.materials ||
-                      p.globalSpecs?.["Build Material"] ||
-                      "Anodized Aluminum · Slow-Recovery Foam";
-                    const wt = p.specs?.weightMetric || "256 g";
-                    return (
-                      <td key={`cmp-mat-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 border-l border-zinc-100">
-                        {mat} ({wt})
-                      </td>
-                    );
-                  })}
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Warranty & Trial</td>
-                  {activeComparedProducts.map((p, idx) => (
-                    <td key={`cmp-war-${p.id || p.slug || idx}-${idx}`} className="p-4 sm:p-5 text-emerald-700 font-medium border-l border-zinc-100">
-                      {p.warrantyYears || 2}-Year Warranty · {p.returnDays || 30}-Day Returns
-                    </td>
-                  ))}
-                </tr>
-                {/* <tr>
+                    ))}
+                  </tr>
+                  {/* <tr>
                   <td className="p-4 sm:p-5 font-semibold text-zinc-700 bg-zinc-50/50">Stock Availability</td>
                   {activeComparedProducts.map((p) => (
                     <td key={p.id} className="p-4 sm:p-5 border-l border-zinc-100">
@@ -661,15 +636,15 @@ export default function ProductsCatalogPage() {
                     </td>
                   ))}
                 </tr> */}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
 
-          <p className="text-[11px] text-zinc-400 font-mono">
-            ⓘ Real-time technical comparison. Select any products from the catalog above to view instant hardware differences.
-          </p>
-        </div>
-      </section>
+            <p className="text-[11px] text-zinc-400 font-mono">
+              ⓘ Real-time technical comparison. Select any products from the catalog above to view instant hardware differences.
+            </p>
+          </div>
+        </section>
       )}
 
       {/* Brand Guarantees Strip */}
@@ -968,50 +943,60 @@ function ProductCatalogCard({
     if (product.slug === "form-01") return "Few units left";
     if (product.slug === "form-air-tws") return "Everyday essential";
     if (product.slug === "form-pulse-iem") return "Built to move";
+    if (product.slug?.includes("hyperx")) return "Xbox Licensed";
     if (product.categorySlug?.includes("smartphone")) return "Flagship 5G";
     if (product.categorySlug?.includes("apparel")) return "Organic 450 GSM";
     return product.model || "Official Release";
   }, [product]);
 
-  // Derive 3-column technical specs
+  // Derive 3-column technical specs (concise product advantages, guaranteed no overflow)
   const specsRow = useMemo(() => {
-    // 1. Form 01
+    // 1. HyperX Gaming Headset
+    if (product.slug?.includes("hyperx")) {
+      return [
+        { label: "DRIVERS", value: "40 mm" },
+        { label: "WEIGHT", value: "275 g" },
+        { label: "MIC", value: "Swivel-Mute" },
+      ];
+    }
+
+    // 2. Form 01
     if (product.slug === "form-01") {
       return [
         { label: "PLAYTIME", value: "40 h" },
         { label: "WITH ANC", value: "38 h" },
-        { label: "CONNECTIVITY", value: "Bluetooth 5.3" },
+        { label: "CONNECTIVITY", value: "BT 5.3" },
       ];
     }
-    // 2. Form Air TWS
+    // 3. Form Air TWS
     if (product.slug === "form-air-tws") {
       return [
         { label: "PER CHARGE", value: "8.5 h" },
         { label: "WITH CASE", value: "34 h" },
-        { label: "DRIVERS", value: "11 mm graphene" },
+        { label: "DRIVERS", value: "11 mm" },
       ];
     }
-    // 3. Form Pulse IEM
+    // 4. Form Pulse IEM
     if (product.slug === "form-pulse-iem") {
       return [
         { label: "PLAYTIME", value: "18 h" },
         { label: "PROTECTION", value: "IPX7" },
-        { label: "FIT", value: "Titanium earhooks" },
+        { label: "FIT", value: "Titanium" },
       ];
     }
 
-    // 4. Smartphone / Dynamic products
+    // 5. Smartphone / Dynamic products
     if (product.categorySlug?.includes("smartphone") || product.globalSpecs?.["Processor"]) {
-      const displayVal = activeChild?.variantSpecs?.["Display Size"]?.split(" ")?.[0] || "6.0\"";
+      const displayVal = activeChild?.variantSpecs?.["Display Size"]?.split(" ")?.[0] || "6.7\"";
       const batteryVal = activeChild?.variantSpecs?.["Battery Capacity"]?.split(" ")?.[0] || "5500 mAh";
       return [
         { label: "DISPLAY", value: displayVal },
-        { label: "CHIPSET", value: "Snapdragon 8" },
+        { label: "CHIPSET", value: "Snapdragon" },
         { label: "BATTERY", value: batteryVal },
       ];
     }
 
-    // 5. Apparel / Other
+    // 6. Apparel / Other
     if (product.categorySlug?.includes("apparel")) {
       return [
         { label: "FABRIC", value: "100% Cotton" },
@@ -1020,15 +1005,71 @@ function ProductCatalogCard({
       ];
     }
 
-    // Fallback: extract from globalSpecs or metrics
-    const entries = Object.entries(product.globalSpecs || {}).filter(
-      ([k]) => k.toLowerCase() !== "brand"
-    );
-    if (entries.length >= 3) {
-      return entries.slice(0, 3).map(([k, v]) => ({
-        label: k.toUpperCase(),
-        value: v,
-      }));
+    // 7. General Audio / Dynamic Catalog: Extract real advantage specs, NOT administrative keys
+    const formatShort = (str: string, maxLen = 13): string => {
+      if (!str) return "";
+      let s = str.trim().replace(/\s*\([^)]*\)/g, "").trim();
+      if (s.includes("·")) s = s.split("·")[0].trim();
+      if (s.includes(",")) s = s.split(",")[0].trim();
+      if (s.includes("/")) s = s.split("/")[0].trim();
+      if (s.length > maxLen) {
+        const words = s.split(/\s+/);
+        if (words.length > 1 && (words[0].length + words[1].length + 1) <= maxLen) {
+          s = `${words[0]} ${words[1]}`;
+        } else {
+          s = words[0];
+        }
+      }
+      return s;
+    };
+
+    const specs: { label: string; value: string }[] = [];
+
+    // Prioritize metrics if available
+    if (product.metrics?.driverSize) {
+      specs.push({ label: "DRIVERS", value: formatShort(product.metrics.driverSize) });
+    }
+    if (product.metrics?.weight) {
+      specs.push({ label: "WEIGHT", value: formatShort(product.metrics.weight) });
+    }
+    if (product.metrics?.playtime) {
+      const pTime = product.metrics.playtime.toLowerCase().includes("wired")
+        ? "Continuous"
+        : formatShort(product.metrics.playtime);
+      specs.push({ label: "BATTERY", value: pTime });
+    }
+    if (product.metrics?.bluetooth && specs.length < 3) {
+      specs.push({ label: "CONNECT", value: formatShort(product.metrics.bluetooth) });
+    }
+
+    // Scan globalSpecs for advantages, completely excluding administrative / inventory keys
+    if (specs.length < 3 && product.globalSpecs) {
+      const ADMIN_FILTER = /brand|model|part|sku|mpn|licens|origin|upc|ean|asin|country|manufacturer|warranty|in the box|box contents/i;
+      for (const [k, v] of Object.entries(product.globalSpecs)) {
+        if (ADMIN_FILTER.test(k)) continue;
+        const shortVal = formatShort(v);
+        if (!shortVal) continue;
+
+        let label = k.toUpperCase();
+        if (/driver/i.test(k)) label = "DRIVERS";
+        else if (/mic/i.test(k)) label = "MIC";
+        else if (/weight/i.test(k)) label = "WEIGHT";
+        else if (/connect/i.test(k)) label = "CONNECT";
+        else if (/frequency/i.test(k)) label = "FREQ";
+        else if (/impedance/i.test(k)) label = "IMPEDANCE";
+        else if (/battery|playtime/i.test(k)) label = "BATTERY";
+        else if (/protection|water/i.test(k)) label = "RATING";
+        else if (/platform|compatibility/i.test(k)) label = "COMPAT";
+
+        if (!specs.some((s) => s.label === label)) {
+          specs.push({ label, value: shortVal });
+          if (specs.length >= 3) break;
+        }
+      }
+    }
+
+    if (specs.length >= 3) {
+      return specs.slice(0, 3);
     }
 
     return [
@@ -1038,15 +1079,34 @@ function ProductCatalogCard({
     ];
   }, [product, activeChild]);
 
-  // Derive standout feature
+  // Derive standout feature (punchy advantage, not SKU/variant name)
   const standoutFeature = useMemo(() => {
     if (product.slug === "form-01") return "Detachable boom microphone";
     if (product.slug === "form-air-tws") return "Qi wireless fast-charging case";
     if (product.slug === "form-pulse-iem") return "Ergonomic secure-fit wings";
+    if (product.slug?.includes("hyperx")) return "Swivel-to-mute noise-cancelling boom mic";
     if (product.categorySlug?.includes("smartphone")) return "Corning Gorilla Glass Victus & 65W charging";
     if (product.categorySlug?.includes("apparel")) return "Double-stitched ergonomic raglan sleeves";
-    return activeChild?.specOverride || "Precision Scandinavian acoustic architecture";
-  }, [product, activeChild]);
+
+    if (product.primaryValueCallouts && product.primaryValueCallouts.length > 0) {
+      const topFeature = product.primaryValueCallouts[0];
+      return topFeature.subtitle || topFeature.title;
+    }
+
+    if (product.tagline && product.tagline.length <= 50) {
+      return product.tagline;
+    }
+
+    if (
+      product.categorySlug === "headphones" ||
+      product.categorySlug === "earbuds" ||
+      product.categorySlug === "earphones"
+    ) {
+      return "Directional acoustic drivers & ergonomic memory foam";
+    }
+
+    return "Engineered for daily durability & premium ergonomics";
+  }, [product]);
 
   const configureHref = `/products/${product.slug}${activeColorId ? `?color=${activeColorId}` : ""}`;
 
@@ -1126,14 +1186,14 @@ function ProductCatalogCard({
           </div>
 
           {/* Description */}
-          <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed min-h-[32px]">
+          {/* <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed min-h-[32px]">
             {product.description}
-          </p>
+          </p> */}
 
           {/* 3-Column Specifications Row */}
           <div className="grid grid-cols-3 gap-2 py-3 border-y border-zinc-200 text-left">
             {specsRow.map((col, idx) => (
-              <div key={idx} className="space-y-0.5">
+              <div key={idx} className="space-y-0.5 min-w-0">
                 <span className="block text-[9px] font-mono text-zinc-400 uppercase tracking-wider truncate">
                   {col.label}
                 </span>

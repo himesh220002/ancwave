@@ -1356,14 +1356,7 @@ export const hyperxProductData: ProductData = {
   lastRevalidatedAt: new Date().toISOString(),
 };
 
-export const sampleCatalog: ProductData[] = [
-  normalizeProductData(initialProductData),
-  normalizeProductData(hyperxProductData),
-  normalizeProductData(earbudProductData),
-  normalizeProductData(earphoneProductData),
-  normalizeProductData(productAData),
-  normalizeProductData(novaX1ProductData),
-];
+export const sampleCatalog: ProductData[] = [];
 
 export const sampleReviews: (Review & IReview)[] = [];
 
