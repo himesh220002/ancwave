@@ -59,7 +59,12 @@ export async function GET(req: NextRequest) {
     }
 
     const targetSlug = slug || "";
-    const aliasSlug = targetSlug === "hyperx-cloud-stinger-2-core" ? "hyperx-cloudx-stinger-2-core" : targetSlug;
+    const aliasSlug =
+      targetSlug === "hyperx-cloud-stinger-2-core"
+        ? "hyperx-cloudx-stinger-2-core"
+        : targetSlug === "skullcandy-jib" || targetSlug === "skullcandy-jib-wired" || targetSlug === "s2duyk-343"
+          ? "skullcandy-jib-wired-in-ear-earphones-with-mic"
+          : targetSlug;
     let product: any = null;
 
     if (db) {

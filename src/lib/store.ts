@@ -1356,6 +1356,247 @@ export const hyperxProductData: ProductData = {
   lastRevalidatedAt: new Date().toISOString(),
 };
 
+export const skullcandyProductData: ProductData = {
+  id: "skullcandy-jib-wired-in-ear-earphones-with-mic",
+  slug: "skullcandy-jib-wired-in-ear-earphones-with-mic",
+  productId: "SKULLCANDY-JIB-S2DUYK343",
+  name: "Skullcandy Jib Wired In-Ear Earphones with Mic",
+  model: "WIRED IN-EAR EARPHONES WITH IN-LINE MIC",
+  category: "Audio / In-Ear",
+  categorySlug: "earphones",
+  tagline: "Supreme sound. Powerful bass. Essential comfort.",
+  description:
+    "The Skullcandy Jib Wired In-Ear Earphones feature 10mm dynamic drivers tuned for punchy bass and clear highs, a convenient in-line microphone with single-button call control, and comfortable noise-isolating silicone ear gels.",
+  price: 9.99,
+  basePrice: 9.99,
+  originalPrice: 14.99,
+  priceInr: 499,
+  activeDiscount: 0,
+  baseDiscount: 0,
+  type: "In-Ear Earphones",
+  sku: "S2DUYK-343",
+  stock: 35,
+  lowStockThreshold: 5,
+  isFlashSale: false,
+  warrantyYears: 1,
+  returnDays: 30,
+  deliveryEstimate: "Ready to ship · Fast delivery in 2–4 business days",
+  rating: 4.4,
+  averageRating: 4.4,
+  reviewCount: 38,
+  globalSpecs: {
+    "Brand": "Skullcandy",
+    "Model Name": "Skullcandy Jib Wired In-Ear with Mic",
+    "Part Number": "S2DUYK-343",
+    "Form Factor": "In-Ear, Wired Canalphone",
+    "Driver Size": "10mm Dynamic Drivers",
+    "Frequency Response": "20 Hz – 20,000 Hz",
+    "Impedance": "16 Ohms",
+    "Total Harmonic Distortion": "<0.1%",
+    "Microphone": "In-line Microphone with Single-Button Call Remote",
+    "Noise Cancellation": "Passive Noise Isolation",
+    "Cable Length": "1.2m (3.9 ft) Tangle-Resistant AUX Cable",
+    "Connector": "3.5mm Gold-Plated Audio Jack",
+    "Weight": "13 g (0.46 oz)",
+    "Water Resistance": "No (Dry use)",
+    "Warranty": "1-Year Official Manufacturer Warranty",
+    "In The Box": "Jib Wired Earbuds, 3 Pairs Silicone Ear Gels (S, M, L), User Guide",
+    "Country of Origin": "China",
+  },
+  specs: {
+    dimensionsMetric: "1200 mm cable length",
+    dimensionsImperial: "3.94 ft cable length",
+    weightMetric: "13 g",
+    weightImperial: "0.46 oz",
+    batteryLife: "Passive Wired · Zero Charging Required",
+    charging: "No charging required (3.5mm analog AUX)",
+    driver: "10mm Dynamic Drivers · 20Hz–20kHz",
+    noiseControl: "Passive Noise Isolation via silicone ear gels",
+    connectivity: "Wired 3.5mm Audio Jack · 1.2m Cable",
+    codecs: "Analog Stereo Audio (Zero Latency)",
+    materials: "Lightweight polymer housing · Silicone ear gels",
+    inTheBox: "Jib Wired Earbuds, 3 Pairs Silicone Ear Gels (S, M, L), User Guide",
+  },
+  metrics: {
+    playtime: "Continuous Wired",
+    driverSize: "10 mm",
+    weight: "13 g",
+    bluetooth: "3.5mm AUX",
+  },
+  childVariants: [
+    {
+      sku: "S2DUYK-343",
+      color: "Black",
+      specOverride: "10mm Dynamic Drivers with In-Line Mic",
+      variantSpecs: {
+        "Color Finish": "Classic Black",
+        "Part Number": "S2DUYK-343",
+      },
+      price: 9.99,
+      priceInr: 499,
+      discount: 0,
+      stock: 35,
+      images: [
+        "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/hero-black.jpg",
+        "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/earbud-detail.jpg",
+        "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/inline-mic.jpg",
+        "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/retail-box.jpg",
+      ],
+    },
+  ],
+  variants: [
+    {
+      id: "black",
+      name: "Black",
+      hex: "#111111",
+      borderHex: "#333333",
+      image: "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/hero-black.jpg",
+      images: [
+        "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/hero-black.jpg",
+        "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/earbud-detail.jpg",
+        "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/inline-mic.jpg",
+        "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/retail-box.jpg",
+      ],
+      tag: "01",
+      price: 9.99,
+      priceInr: 499,
+      stock: 35,
+    },
+  ],
+  variantGroups: [
+    {
+      id: "arch-wired-jib",
+      name: "Standard In-Ear Edition",
+      specOverride: "10mm Dynamic Drivers with In-Line Mic",
+      price: 9.99,
+      discount: 0,
+      colors: [
+        {
+          id: "black",
+          sku: "S2DUYK-343",
+          color: "Black",
+          hex: "#111111",
+          stock: 35,
+          price: 9.99,
+          images: [
+            "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/hero-black.jpg",
+            "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/earbud-detail.jpg",
+            "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/inline-mic.jpg",
+            "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/retail-box.jpg",
+          ],
+        },
+      ],
+    },
+  ],
+  mediaGallery: [
+    {
+      id: "m-hero",
+      url: "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/hero-black.jpg",
+      alt: "Skullcandy Jib Wired In-Ear Earphones with Mic Black View",
+      type: "hero",
+      label: "STUDIO VIEW",
+    },
+    {
+      id: "m-closeup",
+      url: "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/earbud-detail.jpg",
+      alt: "Skullcandy Jib 10mm Drivers & Silicone Tips Closeup",
+      type: "macro",
+      label: "EARBUD CLOSEUP",
+    },
+    {
+      id: "m-mic",
+      url: "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/inline-mic.jpg",
+      alt: "In-line Microphone and Single Button Remote",
+      type: "macro",
+      label: "IN-LINE MIC",
+    },
+    {
+      id: "m-box",
+      url: "https://d3h0eouvv2gscn.cloudfront.net/products/skullcandy-jib-wired/retail-box.jpg",
+      alt: "Skullcandy Jib Official Retail Packaging",
+      type: "360",
+      label: "RETAIL PACKAGING",
+    },
+  ],
+  primaryValueCallouts: [
+    {
+      tag: "10MM SOUND DRIVERS",
+      title: "Powerful 10mm Dynamic Drivers",
+      subtitle: "Custom-tuned for deep bass and crisp audio clarity",
+      description: "Enjoy rich acoustics and dynamic punch across all musical genres with Skullcandy's signature sound tuning.",
+    },
+    {
+      tag: "IN-LINE MIC & REMOTE",
+      title: "In-Line Call Control & Mic",
+      subtitle: "One-touch call answering & media playback control",
+      description: "Take hands-free calls and manage audio playback directly from the integrated in-line remote without reaching for your device.",
+    },
+    {
+      tag: "NOISE-ISOLATING FIT",
+      title: "Passive Noise Isolation",
+      subtitle: "3 sizes of silicone ear gels (S, M, L) included",
+      description: "Form-fitting silicone ear gels create a comfortable acoustic seal that blocks out background chatter and ambient noise.",
+    },
+    {
+      tag: "FEATHERLIGHT 13G",
+      title: "Featherlight 13g Design",
+      subtitle: "Ultra-compact all-day listening comfort",
+      description: "Weighing only 13 grams, the Jib earphones sit effortlessly in your ears without fatigue during long commutes or study sessions.",
+    },
+  ],
+  tabbedSpecs: {
+    core: [
+      { label: "Brand & Manufacturer", value: "Skullcandy, Inc." },
+      { label: "Model Name", value: "Skullcandy Jib Wired with Mic" },
+      { label: "Part Number / SKU", value: "S2DUYK-343" },
+      { label: "Form Factor", value: "In-Ear Canalphone" },
+      { label: "Driver Size", value: "10mm Dynamic Drivers" },
+      { label: "Frequency Response", value: "20 Hz – 20,000 Hz" },
+      { label: "Impedance", value: "16 Ohms" },
+      { label: "Total Harmonic Distortion", value: "<0.1%" },
+      { label: "Weight", value: "13 g (0.46 oz)" },
+      { label: "Warranty", value: "1-Year Official Manufacturer Warranty" },
+      { label: "Country of Origin", value: "China" },
+    ],
+    battery: [
+      { label: "Power & Battery", value: "Passive Wired (Zero charging required)", badge: "Always Ready" },
+      { label: "Playtime Duration", value: "Unlimited continuous playback via 3.5mm jack" },
+      { label: "Cable Length", value: "1.2m (3.9 ft) Tangle-resistant AUX cable" },
+      { label: "Microphone", value: "In-line HD Microphone with One-Touch Control", badge: "In-Line Mic" },
+    ],
+    connectivity: [
+      { label: "Connectivity Type", value: "Analog Wired 3.5mm (Zero Latency)", badge: "Instant" },
+      { label: "Audio Connector", value: "3.5mm Gold-Plated AUX Jack" },
+      { label: "Compatibility", value: "Smartphones, Laptops, Tablets, Consoles & PC" },
+      { label: "Noise Isolation", value: "Passive Noise Isolation via silicone ear gels" },
+    ],
+  },
+  qna: [
+    {
+      id: "q1",
+      question: "Does this Skullcandy Jib model have a microphone?",
+      answer: "Yes, this S2DUYK-343 model comes equipped with an in-line microphone and a multi-function button to answer calls, hang up, and play/pause tracks.",
+      author: "Skullcandy Audio Specialist",
+      date: "Nov 2026",
+    },
+    {
+      id: "q2",
+      question: "Will it work with my phone or laptop?",
+      answer: "Yes, it connects to any standard 3.5mm AUX headphone port on laptops, gaming controllers, PCs, tablets, and phones.",
+      author: "Skullcandy Audio Specialist",
+      date: "Nov 2026",
+    },
+    {
+      id: "q3",
+      question: "What ear tips are included in the box?",
+      answer: "It includes 3 pairs of soft silicone ear gels in Small, Medium, and Large sizes to ensure a secure, noise-isolating seal.",
+      author: "Skullcandy Audio Specialist",
+      date: "Nov 2026",
+    },
+  ],
+  lastRevalidatedAt: new Date().toISOString(),
+};
+
 export const sampleCatalog: ProductData[] = [];
 
 export const sampleReviews: (Review & IReview)[] = [];
@@ -1392,18 +1633,36 @@ class AncWaveStore {
   }
 
   getProduct(slug = "form-01"): ProductData {
-    const targetSlug = slug === "hyperx-cloud-stinger-2-core" ? "hyperx-cloudx-stinger-2-core" : slug;
+    const targetSlug =
+      slug === "hyperx-cloud-stinger-2-core"
+        ? "hyperx-cloudx-stinger-2-core"
+        : slug === "skullcandy-jib" || slug === "skullcandy-jib-wired" || slug === "s2duyk-343"
+          ? "skullcandy-jib-wired-in-ear-earphones-with-mic"
+          : slug;
     let p = this.products.get(targetSlug) || this.products.get(slug) || sampleCatalog.find((x) => x.slug === targetSlug || x.slug === slug);
+    if (!p && (targetSlug.includes("skullcandy") || targetSlug.includes("jib"))) p = skullcandyProductData;
+    if (!p && targetSlug.includes("hyperx")) p = hyperxProductData;
     if (!p) p = { ...initialProductData };
     return normalizeProductData(p);
   }
 
   getProductById(id: string): ProductData | undefined {
-    const targetId = id === "hyperx-cloud-stinger-2-core" ? "hyperx-cloudx-stinger-2-core" : id;
+    const targetId =
+      id === "hyperx-cloud-stinger-2-core"
+        ? "hyperx-cloudx-stinger-2-core"
+        : id === "skullcandy-jib" || id === "skullcandy-jib-wired" || id === "s2duyk-343"
+          ? "skullcandy-jib-wired-in-ear-earphones-with-mic"
+          : id;
     for (const p of this.products.values()) {
       if (p.id === id || p.slug === id || p.productId === id || p.slug === targetId || p.id === targetId) {
         return normalizeProductData(p);
       }
+    }
+    if (targetId.includes("skullcandy") || targetId.includes("jib") || id === "SKULLCANDY-JIB-S2DUYK343") {
+      return normalizeProductData(skullcandyProductData);
+    }
+    if (targetId.includes("hyperx") || id === "HYPERX-CLOUDX-STINGER2-CORE") {
+      return normalizeProductData(hyperxProductData);
     }
     const fromSample = sampleCatalog.find((p) => p.id === id || p.slug === id || p.productId === id || p.slug === targetId || p.id === targetId);
     if (fromSample) return normalizeProductData(fromSample);
@@ -1411,10 +1670,21 @@ class AncWaveStore {
   }
 
   getProductBySlug(slug: string): ProductData | undefined {
-    const targetSlug = slug === "hyperx-cloud-stinger-2-core" ? "hyperx-cloudx-stinger-2-core" : slug;
+    const targetSlug =
+      slug === "hyperx-cloud-stinger-2-core"
+        ? "hyperx-cloudx-stinger-2-core"
+        : slug === "skullcandy-jib" || slug === "skullcandy-jib-wired" || slug === "s2duyk-343"
+          ? "skullcandy-jib-wired-in-ear-earphones-with-mic"
+          : slug;
     const p = this.products.get(targetSlug) || this.products.get(slug) || sampleCatalog.find((x) => x.slug === targetSlug || x.slug === slug);
-    if (!p) return undefined;
-    return normalizeProductData(p);
+    if (p) return normalizeProductData(p);
+    if (targetSlug.includes("skullcandy") || targetSlug.includes("jib")) {
+      return normalizeProductData(skullcandyProductData);
+    }
+    if (targetSlug.includes("hyperx")) {
+      return normalizeProductData(hyperxProductData);
+    }
+    return undefined;
   }
 
   getAllProducts(): ProductData[] {

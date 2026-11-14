@@ -15,7 +15,12 @@ interface PageProps {
 }
 
 async function fetchProduct(slug: string): Promise<ProductData | null> {
-  const targetSlug = slug === "hyperx-cloud-stinger-2-core" ? "hyperx-cloudx-stinger-2-core" : slug;
+  const targetSlug =
+    slug === "hyperx-cloud-stinger-2-core"
+      ? "hyperx-cloudx-stinger-2-core"
+      : slug === "skullcandy-jib" || slug === "skullcandy-jib-wired" || slug === "s2duyk-343"
+        ? "skullcandy-jib-wired-in-ear-earphones-with-mic"
+        : slug;
   try {
     const db = await connectDB();
     if (db) {

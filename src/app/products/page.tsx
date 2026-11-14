@@ -944,6 +944,7 @@ function ProductCatalogCard({
     if (product.slug === "form-air-tws") return "Everyday essential";
     if (product.slug === "form-pulse-iem") return "Built to move";
     if (product.slug?.includes("hyperx")) return "Xbox Licensed";
+    if (product.slug?.includes("skullcandy") || product.slug?.includes("jib")) return "10mm Bass";
     if (product.categorySlug?.includes("smartphone")) return "Flagship 5G";
     if (product.categorySlug?.includes("apparel")) return "Organic 450 GSM";
     return product.model || "Official Release";
@@ -957,6 +958,15 @@ function ProductCatalogCard({
         { label: "DRIVERS", value: "40 mm" },
         { label: "WEIGHT", value: "275 g" },
         { label: "MIC", value: "Swivel-Mute" },
+      ];
+    }
+
+    // 2. Skullcandy Jib In-Ear Earphones
+    if (product.slug?.includes("skullcandy") || product.slug?.includes("jib")) {
+      return [
+        { label: "DRIVERS", value: "10 mm" },
+        { label: "WEIGHT", value: "13 g" },
+        { label: "MIC", value: "In-Line" },
       ];
     }
 
@@ -1085,6 +1095,7 @@ function ProductCatalogCard({
     if (product.slug === "form-air-tws") return "Qi wireless fast-charging case";
     if (product.slug === "form-pulse-iem") return "Ergonomic secure-fit wings";
     if (product.slug?.includes("hyperx")) return "Swivel-to-mute noise-cancelling boom mic";
+    if (product.slug?.includes("skullcandy") || product.slug?.includes("jib")) return "In-line call control mic with 10mm deep bass drivers";
     if (product.categorySlug?.includes("smartphone")) return "Corning Gorilla Glass Victus & 65W charging";
     if (product.categorySlug?.includes("apparel")) return "Double-stitched ergonomic raglan sleeves";
 

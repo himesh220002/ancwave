@@ -38,6 +38,14 @@ const nextConfig: NextConfig = {
         hostname: "images.unsplash.com",
       },
       {
+        protocol: "https",
+        hostname: "m.media-amazon.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.media-amazon.com",
+      },
+      {
         protocol: "http",
         hostname: "localhost",
       },

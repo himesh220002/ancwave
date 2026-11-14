@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ShoppingBag,
   Menu,
@@ -29,6 +30,8 @@ interface NavbarProps {
 }
 
 export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
+  const pathname = usePathname();
+  const isProductsActive = pathname === "/products";
   const { totalItemsCount, setIsCartOpen } = useCart();
   const { user, isAdmin, isOwner, setIsAuthModalOpen, logout } = useAuth();
   const { currency, toggleCurrency } = useCurrency();
@@ -78,13 +81,6 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
 
         {/* Center: Desktop Navigation Links */}
         <nav className="hidden md:flex items-center gap-7 text-[13px] font-medium text-zinc-600">
-          <Link
-            href="/products"
-            className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-semibold transition-colors"
-          >
-            <Grid className="w-3.5 h-3.5" />
-            <span>Audio Catalog</span>
-          </Link>
           <a
             href="/#features"
             className="hover:text-black transition-colors"
@@ -97,6 +93,17 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
           >
             Specs
           </a>
+          <Link
+            href="/products"
+            className={`flex items-center gap-1.5 transition-colors ${
+              isProductsActive
+                ? "text-blue-600 font-semibold"
+                : "text-zinc-600 hover:text-black font-medium"
+            }`}
+          >
+            <Grid className={`w-3.5 h-3.5 ${isProductsActive ? "text-blue-600" : "text-zinc-400 group-hover:text-black"}`} />
+            <span>Audio Catalog</span>
+          </Link>
           <a
             href="/#reviews"
             className="hover:text-black transition-colors"
@@ -105,7 +112,11 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
           </a>
           <Link
             href="/orders"
-            className="hover:text-black transition-colors"
+            className={`transition-colors ${
+              pathname === "/orders"
+                ? "text-blue-600 font-semibold"
+                : "hover:text-black"
+            }`}
           >
             Orders
           </Link>
@@ -351,19 +362,6 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
           </div>
 
           <nav className="flex flex-col space-y-4 text-base font-semibold text-zinc-800">
-            <Link
-              href="/products"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="py-1 text-blue-600 hover:text-blue-700 transition-colors flex items-center justify-between"
-            >
-              <div className="flex items-center gap-2">
-                <Grid className="w-4 h-4" />
-                <span>All Audio Products</span>
-              </div>
-              <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-normal">
-                3 Models
-              </span>
-            </Link>
             <a
               href="/#features"
               onClick={() => setIsMobileMenuOpen(false)}
@@ -380,6 +378,29 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
               <span>Specs</span>
               <span className="text-xs font-mono text-zinc-400 font-normal">Technical Matrix</span>
             </a>
+            <Link
+              href="/products"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`py-1 transition-colors flex items-center justify-between ${
+                isProductsActive
+                  ? "text-blue-600 font-bold"
+                  : "text-zinc-800 hover:text-blue-600"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Grid className={`w-4 h-4 ${isProductsActive ? "text-blue-600" : "text-zinc-500"}`} />
+                <span>Audio Catalog</span>
+              </div>
+              <span
+                className={`text-xs font-mono px-2 py-0.5 rounded font-normal ${
+                  isProductsActive
+                    ? "bg-blue-50 text-blue-700"
+                    : "bg-zinc-100 text-zinc-600"
+                }`}
+              >
+                Catalog
+              </span>
+            </Link>
             <a
               href="/#reviews"
               onClick={() => setIsMobileMenuOpen(false)}
@@ -391,7 +412,11 @@ export function Navbar({ subtitle = "/ AUDIO LINEUP" }: NavbarProps = {}) {
             <Link
               href="/orders"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="py-1 hover:text-blue-600 transition-colors flex items-center justify-between"
+              className={`py-1 transition-colors flex items-center justify-between ${
+                pathname === "/orders"
+                  ? "text-blue-600 font-bold"
+                  : "text-zinc-800 hover:text-blue-600"
+              }`}
             >
               <div className="flex items-center gap-2">
                 <Package className="w-4 h-4 text-blue-600" />
