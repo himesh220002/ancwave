@@ -629,7 +629,7 @@ export function ProductDetailView({
               {/* Main Showcase Viewport: Pure Rectangle Architectural Frame */}
               <div
                 onClick={() => setActiveLightboxImage(mediaGallery[activeMediaIndex]?.url || currentVariant.image)}
-                className="relative aspect-4/3 sm:aspect-4/3 rounded-none bg-black overflow-hidden flex items-center justify-center border border-zinc-200/90 group cursor-zoom-in shadow-2xs"
+                className="relative aspect-4/3 sm:aspect-4/3 rounded-none bg-zinc-900 skeleton-shimmer overflow-hidden flex items-center justify-center border border-zinc-200/90 group cursor-zoom-in shadow-2xs"
               >
                 <Image
                   src={mediaGallery[activeMediaIndex]?.url || currentVariant.image}
@@ -712,7 +712,7 @@ export function ProductDetailView({
                     key={`thumb-${media.id || idx}-${idx}`}
                     type="button"
                     onClick={() => setActiveMediaIndex(idx)}
-                    className={`relative shrink-0 w-16 h-16 sm:w-20 sm:h-20 aspect-square rounded-none bg-black overflow-hidden border transition-all cursor-pointer group/thumb ${activeMediaIndex === idx
+                    className={`relative shrink-0 w-16 h-16 sm:w-20 sm:h-20 aspect-square rounded-none bg-zinc-900 skeleton-shimmer overflow-hidden border transition-all cursor-pointer group/thumb ${activeMediaIndex === idx
                       ? "border-2 border-blue-600 shadow-sm ring-1 ring-blue-600/30"
                       : "border border-zinc-300 hover:border-zinc-500 opacity-75 hover:opacity-100"
                       }`}

@@ -202,7 +202,7 @@ export function GeneralProductView({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start">
             <div className="lg:col-span-7 space-y-4">
               {/* Main Showcase Viewport: Pure Rectangle Architectural Frame */}
-              <div className="relative aspect-4/3 sm:aspect-4/3 rounded-none bg-black overflow-hidden flex items-center justify-center border border-zinc-200/90 shadow-2xs">
+              <div className="relative aspect-4/3 sm:aspect-4/3 rounded-none bg-zinc-900 skeleton-shimmer overflow-hidden flex items-center justify-center border border-zinc-200/90 shadow-2xs">
                 <Image
                   key={images[activeImageIndex] || images[0]}
                   src={images[activeImageIndex] || images[0]}
@@ -235,7 +235,7 @@ export function GeneralProductView({
                     key={`${image}-${index}`}
                     type="button"
                     onClick={() => setActiveImageIndex(index)}
-                    className={`relative shrink-0 w-16 h-16 sm:w-20 sm:h-20 aspect-square rounded-none bg-black overflow-hidden border transition-all cursor-pointer group/thumb ${
+                    className={`relative shrink-0 w-16 h-16 sm:w-20 sm:h-20 aspect-square rounded-none bg-zinc-900 skeleton-shimmer overflow-hidden border transition-all cursor-pointer group/thumb ${
                       activeImageIndex === index
                         ? "border-2 border-blue-600 shadow-sm ring-1 ring-blue-600/30"
                         : "border border-zinc-300 hover:border-zinc-500 opacity-75 hover:opacity-100"

@@ -1124,7 +1124,7 @@ function ProductCatalogCard({
   return (
     <div className="group flex flex-col rounded-2xl bg-white border border-[#EAEAE5] overflow-hidden hover:border-zinc-400 transition-all duration-300 hover:shadow-xl">
       {/* Top Media Image Container */}
-      <div className="relative aspect-4/3 bg-[#F0EFEA] overflow-hidden">
+      <div className="relative aspect-4/3 bg-[#F0EFEA] skeleton-shimmer overflow-hidden">
         <Link href={configureHref} className="relative w-full h-full block">
           <Image
             src={displayImage}

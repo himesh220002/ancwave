@@ -132,7 +132,7 @@ export function HeroSection({
           <div className="lg:col-span-6">
             <div className="relative rounded-3xl bg-[#F0EFEA] border border-[#E8E7E2] overflow-hidden shadow-xs">
               {/* Headphone Studio Photography: fills full width and height */}
-              <div className="relative w-full aspect-4/3 overflow-hidden">
+              <div className="relative w-full aspect-4/3 bg-[#F0EFEA] skeleton-shimmer overflow-hidden">
                 {/* Card Label: DESIGNED TO DISAPPEAR. */}
                 <div className="absolute top-4 left-4 sm:top-5 sm:left-6 z-10">
                   <span className="text-[10px] font-mono tracking-[0.2em] text-zinc-700 uppercase bg-white/85 backdrop-blur-md px-2.5 py-1 rounded-md shadow-2xs">
