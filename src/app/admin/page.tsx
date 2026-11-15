@@ -118,6 +118,13 @@ import {
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/components/Toaster";
+import {
+  FinalDestinationHoverCard,
+  PackageRouteWaypointRibbon,
+  PackageTransportLogsDrawer,
+  SortingRerouteBar,
+  IndiaLogisticsGraphMap,
+} from "@/components/admin/LogisticsTrackingHelper";
 
 const DEFAULT_REVALIDATE_SECRET = "ancwave_revalidation_secret_token_2026";
 
@@ -209,6 +216,10 @@ export default function AdminPage() {
   // Sorting Dock: Address Close to Hub Logic (Default: FALSE)
   const [isAddressCloseToHub, setIsAddressCloseToHub] = useState<boolean>(false);
   const [perOrderAddressClose, setPerOrderAddressClose] = useState<Record<string, boolean>>({});
+  const [perOrderTargetHub, setPerOrderTargetHub] = useState<Record<string, string>>({});
+  const [perOrderTransitMode, setPerOrderTransitMode] = useState<Record<string, TransportMode>>({});
+  const [perOrderVehicleNo, setPerOrderVehicleNo] = useState<Record<string, string>>({});
+  const [showGlobalIndiaGraph, setShowGlobalIndiaGraph] = useState<boolean>(false);
 
   // Gate Handover: Condition 1 (Acceptance) vs Condition 2 (Refusal/Exception RTO)
   const [selectedGateCondition, setSelectedGateCondition] = useState<"condition_1_acceptance" | "condition_2_refusal">("condition_1_acceptance");
@@ -3320,23 +3331,26 @@ export default function AdminPage() {
     }
   }, [deliverySelectedOrderId, orders]);
 
-  // Enterprise Hub Queue Transition Handler (Scan & Receive, Move to Sorting, Loading Bay, Outbound Dispatch, Deny Loading)
+  // Enterprise Hub Queue Transition Handler (Scan & Receive, Move to Sorting, Loading Bay, Outbound Dispatch, Deny Loading, Reroute)
   const handleHubQueueAction = async (
     orderNumber: string,
-    queueAction: "receive" | "to_sorting" | "to_loading" | "dispatch" | "container_dispatch" | "deny_loading",
+    queueAction: "receive" | "to_sorting" | "to_loading" | "dispatch" | "container_dispatch" | "deny_loading" | "reroute",
     customDestHubId?: string,
     customTransitMode?: TransportMode,
     customVehicleNo?: string,
     customContainerId?: string,
     denialReason?: string
   ) => {
-    const modeToUse = customTransitMode || transitMode;
+    const modeToUse = customTransitMode || perOrderTransitMode[orderNumber] || transitMode;
     const containerToUse = customContainerId !== undefined ? customContainerId : activeContainerId;
+    const destToUse = customDestHubId || perOrderTargetHub[orderNumber] || targetDestinationHubId;
 
     // Resolve active vehicle number based on the selected mode
-    const resolvedRoadPlate = deliveryVehiclePlate.trim() || vehicleNo.trim();
+    const orderSpecificPlate = perOrderVehicleNo[orderNumber]?.trim();
+    const resolvedRoadPlate = orderSpecificPlate || deliveryVehiclePlate.trim() || vehicleNo.trim();
     const resolvedVehicleNo =
       customVehicleNo ||
+      orderSpecificPlate ||
       (modeToUse === "train"
         ? (trainNumber.trim() ? `IR-${trainNumber.trim()}` : "IR-12302")
         : modeToUse === "plane"
@@ -3445,7 +3459,7 @@ export default function AdminPage() {
           transitMode: modeToUse,
           vehicleNo: resolvedVehicleNo,
           containerId: modeToUse === "train" ? (trainNumber.trim() ? `TRN-${trainNumber.trim()}-${trainDate}` : "TRN-RAIL-01") : modeToUse === "plane" ? (airUldId.trim() || "AKE-AIR-01") : modeToUse === "ship" ? (shipContainerId.trim() || "MSKU-982104") : containerToUse,
-          destinationHubId: customDestHubId || targetDestinationHubId,
+          destinationHubId: destToUse,
           manifestVerified,
           dispatchCategory: (modeToUse === "train" || modeToUse === "plane" || modeToUse === "ship") ? "b2b_bulk_freight" : "b2c_individual_courier",
           railFreight: modeToUse === "train" ? railFreightPayload : undefined,
@@ -3466,6 +3480,7 @@ export default function AdminPage() {
         const actionLabels: Record<string, string> = {
           receive: "Dock Scanned & Received",
           to_sorting: "Staged in Sorting Dock",
+          reroute: "Route Assigned / Rerouted",
           to_loading: (perOrderAddressClose[orderNumber] ?? isAddressCloseToHub) ? "Sorted for Doorstep Loading" : "Sorted & Moved to Vehicle Loading Bay",
           dispatch: (perOrderAddressClose[orderNumber] ?? isAddressCloseToHub) ? "Out for Delivery [Arrives Afternoon/Evening]" : "Marked Loaded & Dispatched [On The Way]",
           container_dispatch: "Container Dispatched",
@@ -3478,6 +3493,12 @@ export default function AdminPage() {
             type: "info",
             title: "Loading Denied ➔ Returned to Sorting",
             description: `Consignment ${orderNumber} reverted to Sorting Dock for re-labeling and destination correction.`,
+          });
+        } else if (queueAction === "reroute") {
+          toast({
+            type: "success",
+            title: "Route Assigned / Rerouted",
+            description: `Consignment ${orderNumber} routing updated at ${hubQueue.hub.name}.`,
           });
         } else {
           toast({
@@ -3502,6 +3523,15 @@ export default function AdminPage() {
     } finally {
       setHubActionLoading(null);
     }
+  };
+
+  const handleRerouteOrder = async (
+    orderNumber: string,
+    nextHubId: string,
+    mode: TransportMode,
+    plate: string
+  ) => {
+    await handleHubQueueAction(orderNumber, "reroute", nextHubId, mode, plate);
   };
 
   const handleGateExceptionRto = async (
@@ -6187,41 +6217,77 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  {/* Active Station Status Indicator */}
-                  <div className={`flex items-center gap-2.5 p-2.5 px-3 rounded-2xl shrink-0 backdrop-blur-sm shadow-sm border transition-all ${
-                    isCentralPackingActive
-                      ? "bg-amber-950/40 border-amber-500/50 shadow-amber-500/10"
-                      : "bg-zinc-900/90 border-purple-500/30"
-                  }`}>
-                    <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
-                      <span className={`w-2 h-2 rounded-full animate-pulse ${
-                        isCentralPackingActive ? "bg-amber-400" : "bg-emerald-400"
-                      }`} />
-                      <span className="text-zinc-400">Current Station:</span>
-                      <span className={`font-mono font-bold px-2.5 py-1 rounded-xl border ${
-                        isCentralPackingActive
-                          ? "text-amber-200 bg-amber-950/70 border-amber-500/40"
-                          : "text-white bg-zinc-950 border-zinc-700/80"
-                      }`}>
-                        {activeHubStats.hub.code} · {activeHubStats.hub.name}
-                      </span>
-                      {isCentralPackingActive && (
-                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                          ORIGIN PACKING
+                  <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                    {/* India Logistics Graph Modal / Panel Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setShowGlobalIndiaGraph(!showGlobalIndiaGraph)}
+                      className={`px-3.5 py-2.5 rounded-2xl border font-bold text-xs flex items-center gap-2 transition cursor-pointer active:scale-95 shadow-md ${
+                        showGlobalIndiaGraph
+                          ? "bg-purple-600 text-white border-purple-400 shadow-purple-600/30"
+                          : "bg-purple-950/40 text-purple-300 border-purple-500/40 hover:bg-purple-900/40 hover:border-purple-400"
+                      }`}
+                      title="Open interactive 29-city India logistics node graph map"
+                    >
+                      <Compass className="w-4 h-4 text-amber-400" />
+                      <span>{showGlobalIndiaGraph ? "Close India Map" : "🗺️ India Logistics Graph (29 Nodes)"}</span>
+                    </button>
+
+                    {/* Active Station Status Indicator */}
+                    <div className={`flex items-center gap-2.5 p-2.5 px-3 rounded-2xl shrink-0 backdrop-blur-sm shadow-sm border transition-all ${
+                      isCentralPackingActive
+                        ? "bg-amber-950/40 border-amber-500/50 shadow-amber-500/10"
+                        : "bg-zinc-900/90 border-purple-500/30"
+                    }`}>
+                      <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
+                        <span className={`w-2 h-2 rounded-full animate-pulse ${
+                          isCentralPackingActive ? "bg-amber-400" : "bg-emerald-400"
+                        }`} />
+                        <span className="text-zinc-400">Current Station:</span>
+                        <span className={`font-mono font-bold px-2.5 py-1 rounded-xl border ${
+                          isCentralPackingActive
+                            ? "text-amber-200 bg-amber-950/70 border-amber-500/40"
+                            : "text-white bg-zinc-950 border-zinc-700/80"
+                        }`}>
+                          {activeHubStats.hub.code} · {activeHubStats.hub.name}
                         </span>
-                      )}
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold border ${
-                        isCentralPackingActive
-                          ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                          : "bg-purple-500/20 text-purple-300 border-purple-500/30"
-                      }`}>
-                        <span>{activeHubStats.sum5} ops</span>
-                        <span className="text-zinc-600">·</span>
-                        <span className="text-zinc-300 font-mono">{activeHubStats.formattedArray}</span>
-                      </span>
+                        {isCentralPackingActive && (
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                            ORIGIN PACKING
+                          </span>
+                        )}
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold border ${
+                          isCentralPackingActive
+                            ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                            : "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                        }`}>
+                          <span>{activeHubStats.sum5} ops</span>
+                          <span className="text-zinc-600">·</span>
+                          <span className="text-zinc-300 font-mono">{activeHubStats.formattedArray}</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                {/* Expandable Global India Logistics Graph (29 Nodes & Multi-Modal Corridors) */}
+                {showGlobalIndiaGraph && (
+                  <div className="animate-in fade-in duration-200">
+                    <IndiaLogisticsGraphMap
+                      activeHubId={activeHubId}
+                      selectedNextHubId={targetDestinationHubId}
+                      onSelectNextHub={(hubId) => {
+                        setActiveHubId(hubId);
+                        setTargetDestinationHubId(hubId);
+                        toast({
+                          type: "info",
+                          title: "Operational Station Switched",
+                          description: `Switched active logistics station to ${hubId}`,
+                        });
+                      }}
+                    />
+                  </div>
+                )}
 
                 {/* CENTRAL PACKING STATION CONTROL UNIT (ORIGIN FULFILLMENT CENTER) - JUST ABOVE ACTIVE HUB DIRECTORY */}
                 <div
@@ -6812,69 +6878,86 @@ export default function AdminPage() {
                         .map((ord) => (
                           <div
                             key={ord.id}
-                            className={`p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                            className={`p-4 rounded-2xl border transition flex flex-col gap-3.5 ${
                               isCentralPackingActive
                                 ? "bg-amber-950/10 border-amber-500/30 hover:border-amber-500/60"
                                 : "bg-zinc-900/80 border-zinc-800 hover:border-zinc-700"
                             }`}
                           >
-                            <div className="space-y-1.5 min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className={`font-mono text-xs font-bold px-2.5 py-0.5 rounded border ${
-                                  isCentralPackingActive
-                                    ? "text-amber-300 bg-amber-500/15 border-amber-500/30"
-                                    : "text-blue-400 bg-blue-500/10 border-blue-500/20"
-                                }`}>
-                                  {ord.orderNumber}
-                                </span>
-                                <span className="text-xs font-semibold text-zinc-200">
-                                  {ord.customer?.fullName || "Customer"} · {ord.customer?.city || "Destination"}
-                                </span>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 uppercase">
-                                  {isCentralPackingActive ? "Origin Strategy: Direct Corridor" : `Fleet: ${ord.transitMode || "Truck"} [${ord.vehicleNo || "OR-TRK-5555"}]`}
-                                </span>
-                                {ord.containerId && (
-                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
-                                    Container: {ord.containerId}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="space-y-1.5 min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className={`font-mono text-xs font-bold px-2.5 py-0.5 rounded border ${
+                                    isCentralPackingActive
+                                      ? "text-amber-300 bg-amber-500/15 border-amber-500/30"
+                                      : "text-blue-400 bg-blue-500/10 border-blue-500/20"
+                                  }`}>
+                                    {ord.orderNumber}
                                   </span>
-                                )}
+                                  <FinalDestinationHoverCard order={ord}>
+                                    <span className="text-xs font-semibold text-zinc-200 hover:text-white cursor-pointer underline decoration-dotted decoration-zinc-600">
+                                      {ord.customer?.fullName || "Customer"} · {ord.customer?.city || "Destination"}
+                                    </span>
+                                  </FinalDestinationHoverCard>
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 uppercase">
+                                    {isCentralPackingActive ? "Origin Strategy: Direct Corridor" : `Fleet: ${ord.transitMode || "Truck"} [${ord.vehicleNo || "OR-TRK-5555"}]`}
+                                  </span>
+                                  {ord.containerId && (
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
+                                      Container: {ord.containerId}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                  <span>
+                                    Items: <strong className="text-zinc-300">{ord.items?.[0]?.name || "Form 01"}</strong> (x{ord.items?.[0]?.quantity || 1})
+                                  </span>
+                                  <span>•</span>
+                                  <span>
+                                    Origin: <strong className="text-zinc-300">{ord.currentHub || "Central Stock Center"}</strong>
+                                  </span>
+                                  <span>➔</span>
+                                  <span>
+                                    Target Route: <strong className="text-purple-300">{ord.nextHub || "Regional Transit Gateway"}</strong>
+                                  </span>
+                                </div>
                               </div>
-                              <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                <span>
-                                  Items: <strong className="text-zinc-300">{ord.items?.[0]?.name || "Form 01"}</strong> (x{ord.items?.[0]?.quantity || 1})
-                                </span>
-                                <span>•</span>
-                                <span>
-                                  Origin: <strong className="text-zinc-300">{ord.currentHub || "Central Stock Center"}</strong>
-                                </span>
-                                <span>➔</span>
-                                <span>
-                                  Target Route: <strong className="text-purple-300">{ord.nextHub || "Regional Transit Gateway"}</strong>
-                                </span>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={hubActionLoading === ord.orderNumber}
+                                  onClick={() => handleHubQueueAction(ord.orderNumber, "receive")}
+                                  className={`px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50 ${
+                                    isCentralPackingActive
+                                      ? "bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold"
+                                      : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                                  }`}
+                                >
+                                  {hubActionLoading === ord.orderNumber ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  ) : isCentralPackingActive ? (
+                                    <Boxes className="w-4 h-4" />
+                                  ) : (
+                                    <ArrowDownLeft className="w-4 h-4" />
+                                  )}
+                                  <span>{isCentralPackingActive ? "Verify QC & Pack at Dock" : "Scan & Receive at Dock"}</span>
+                                </button>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                type="button"
-                                disabled={hubActionLoading === ord.orderNumber}
-                                onClick={() => handleHubQueueAction(ord.orderNumber, "receive")}
-                                className={`px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50 ${
-                                  isCentralPackingActive
-                                    ? "bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold"
-                                    : "bg-emerald-600 hover:bg-emerald-500 text-white"
-                                }`}
-                              >
-                                {hubActionLoading === ord.orderNumber ? (
-                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                ) : isCentralPackingActive ? (
-                                  <Boxes className="w-4 h-4" />
-                                ) : (
-                                  <ArrowDownLeft className="w-4 h-4" />
-                                )}
-                                <span>{isCentralPackingActive ? "Verify QC & Pack at Dock" : "Scan & Receive at Dock"}</span>
-                              </button>
-                            </div>
+                            {/* Waypoint ribbon: Origin ➔ History ➔ Active Station ➔ Next Hop ➔ Final Doorstep */}
+                            <PackageRouteWaypointRibbon
+                              order={ord}
+                              activeHubId={activeHubId}
+                              onOpenAuditModal={setAuditWaybillModalOrder}
+                            />
+
+                            {/* Collapsible chronological transport logs drawer */}
+                            <PackageTransportLogsDrawer
+                              order={ord}
+                              onOpenAuditModal={setAuditWaybillModalOrder}
+                            />
                           </div>
                         ))}
                     </div>
@@ -6927,44 +7010,61 @@ export default function AdminPage() {
                         .map((ord) => (
                           <div
                             key={ord.id}
-                            className={`p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                            className={`p-4 rounded-2xl border transition flex flex-col gap-3.5 ${
                               isCentralPackingActive
                                 ? "bg-amber-950/10 border-amber-500/30 hover:border-amber-500/60"
                                 : "bg-zinc-900/80 border-zinc-800 hover:border-zinc-700"
                             }`}
                           >
-                            <div className="space-y-1.5 min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20">
-                                  {ord.orderNumber}
-                                </span>
-                                <span className="text-xs font-semibold text-zinc-200">
-                                  {ord.customer?.fullName} ({ord.customer?.city})
-                                </span>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700 font-semibold">
-                                  {isCentralPackingActive ? "Tamper-Proof Box Sealed ✓" : "Dock Scanned ✓"}
-                                </span>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="space-y-1.5 min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20">
+                                    {ord.orderNumber}
+                                  </span>
+                                  <FinalDestinationHoverCard order={ord}>
+                                    <span className="text-xs font-semibold text-zinc-200 hover:text-white cursor-pointer underline decoration-dotted decoration-zinc-600">
+                                      {ord.customer?.fullName} ({ord.customer?.city})
+                                    </span>
+                                  </FinalDestinationHoverCard>
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700 font-semibold">
+                                    {isCentralPackingActive ? "Tamper-Proof Box Sealed ✓" : "Dock Scanned ✓"}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-zinc-400">
+                                  Destination Gateway: <strong className="text-purple-300">{ord.nextHub || "Regional Hub"}</strong> · Items: {ord.items?.[0]?.name || "Package"} (x{ord.items?.[0]?.quantity || 1})
+                                </div>
                               </div>
-                              <div className="text-xs text-zinc-400">
-                                Destination Gateway: <strong className="text-purple-300">{ord.nextHub || "Regional Hub"}</strong> · Items: {ord.items?.[0]?.name || "Package"} (x{ord.items?.[0]?.quantity || 1})
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={hubActionLoading === ord.orderNumber}
+                                  onClick={() => handleHubQueueAction(ord.orderNumber, "to_sorting")}
+                                  className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50"
+                                >
+                                  {hubActionLoading === ord.orderNumber ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Boxes className="w-4 h-4" />
+                                  )}
+                                  <span>{isCentralPackingActive ? "Send to Origin Sorting Bay" : "Move to Sorting Dock"}</span>
+                                </button>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                type="button"
-                                disabled={hubActionLoading === ord.orderNumber}
-                                onClick={() => handleHubQueueAction(ord.orderNumber, "to_sorting")}
-                                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50"
-                              >
-                                {hubActionLoading === ord.orderNumber ? (
-                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                  <Boxes className="w-4 h-4" />
-                                )}
-                                <span>{isCentralPackingActive ? "Send to Origin Sorting Bay" : "Move to Sorting Dock"}</span>
-                              </button>
-                            </div>
+                            {/* Waypoint ribbon: Origin ➔ History ➔ Active Station ➔ Next Hop ➔ Final Doorstep */}
+                            <PackageRouteWaypointRibbon
+                              order={ord}
+                              activeHubId={activeHubId}
+                              onOpenAuditModal={setAuditWaybillModalOrder}
+                            />
+
+                            {/* Collapsible chronological transport logs drawer */}
+                            <PackageTransportLogsDrawer
+                              order={ord}
+                              onOpenAuditModal={setAuditWaybillModalOrder}
+                            />
                           </div>
                         ))}
                     </div>
@@ -7973,7 +8073,7 @@ export default function AdminPage() {
                             return (
                               <div
                                 key={ord.id}
-                                className={`p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                                className={`p-4 rounded-2xl border transition flex flex-col gap-4 ${
                                   wasLoadingDenied
                                     ? "bg-rose-950/20 border-rose-500/40 hover:border-rose-500/70"
                                     : isClose
@@ -7981,14 +8081,17 @@ export default function AdminPage() {
                                     : "bg-zinc-900/80 border-zinc-800 hover:border-zinc-700"
                                 }`}
                               >
-                                <div className="space-y-2 min-w-0 flex-1">
+                                {/* Header Row */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/20">
                                       {ord.orderNumber}
                                     </span>
-                                    <span className="text-xs font-semibold text-zinc-200">
-                                      {ord.customer?.fullName} ({ord.customer?.city})
-                                    </span>
+                                    <FinalDestinationHoverCard order={ord} isCloseToHub={isClose}>
+                                      <span className="text-xs font-semibold text-zinc-200 hover:text-white cursor-pointer underline decoration-dotted decoration-zinc-600">
+                                        {ord.customer?.fullName} ({ord.customer?.city})
+                                      </span>
+                                    </FinalDestinationHoverCard>
                                     {wasLoadingDenied && (
                                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold flex items-center gap-1">
                                         <RotateCcw className="w-2.5 h-2.5" />
@@ -8001,146 +8104,68 @@ export default function AdminPage() {
                                       </span>
                                     ) : (
                                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-semibold">
-                                        Next Hub: {getHubById(targetDestinationHubId)?.name || ord.nextHub}
+                                        Next Hub: {getHubById(perOrderTargetHub[ord.orderNumber] || ord.nextHubId || targetDestinationHubId)?.name || ord.nextHub}
                                       </span>
                                     )}
-
-                                    {/* Whiteboard requirement: Per-order toggle for address close to hub */}
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setPerOrderAddressClose((prev) => ({
-                                          ...prev,
-                                          [ord.orderNumber]: !isClose,
-                                        }))
-                                      }
-                                      className={`text-[10px] font-mono px-2 py-0.5 rounded border transition cursor-pointer font-bold ${
-                                        isClose
-                                          ? "bg-emerald-600 text-white border-emerald-500 shadow-sm"
-                                          : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200"
-                                      }`}
-                                      title="Toggle whether destination address is close to this hub"
-                                    >
-                                      address close to hub [{isClose ? "true" : "false"}]
-                                    </button>
                                   </div>
 
-                                  {/* Current Physical Location Banner */}
-                                  <div className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800/90 flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                      <div
-                                        className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
-                                          isAtCentralPackingStation
-                                            ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
-                                            : "bg-blue-500/15 text-blue-400 border border-blue-500/30"
-                                        }`}
-                                      >
-                                        <MapPin className="w-4 h-4" />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-[10px] uppercase font-mono tracking-wider text-zinc-400 font-bold">
-                                            Current Physical Location:
-                                          </span>
-                                          <span
-                                            className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold border ${
-                                              isAtCentralPackingStation
-                                                ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                                                : "bg-blue-500/15 text-blue-300 border-blue-500/30"
-                                            }`}
-                                          >
-                                            {isAtCentralPackingStation ? "Origin Packing Station" : "Transit Hub Location"}
-                                          </span>
-                                        </div>
-                                        <span className="text-zinc-100 font-bold text-xs flex flex-wrap items-baseline gap-1.5 mt-0.5">
-                                          <span className={isAtCentralPackingStation ? "text-amber-300" : "text-blue-300"}>
-                                            {currentLocationName}
-                                          </span>
-                                          <span className="text-zinc-400 text-[11px] font-normal">
-                                            ({currentLocationRegion})
-                                          </span>
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <span
-                                      className={`text-[10px] font-mono px-2.5 py-1 rounded-xl font-bold border shrink-0 ${
-                                        isAtCentralPackingStation
-                                          ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                                          : "bg-blue-500/15 text-blue-300 border-blue-500/30"
-                                      }`}
-                                    >
-                                      📍 {locationTypeBadge}
-                                    </span>
-                                  </div>
-
-                                  <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                    <span>
-                                      Location: <strong className={isAtCentralPackingStation ? "text-amber-300 font-semibold" : "text-blue-300 font-semibold"}>{currentLocationName} ({currentLocationRegion})</strong>
-                                    </span>
-                                    <span>•</span>
-                                    <span>
-                                      Assigned Mode: <strong className="text-zinc-200 uppercase">{transitMode}</strong>
-                                    </span>
-                                    <span>•</span>
-                                    {transitMode === "train" ? (
-                                      <span>
-                                        Train: <strong className="text-amber-400 font-mono font-bold">#{trainNumber.trim() || "Scheduled Rake"} · {trainDateTime.replace("T", " ")}</strong>
-                                        {railSpaceAllocation && <span className="text-zinc-400 text-[10px] ml-1">[{railSpaceAllocation} · {railFreightScale}]</span>}
-                                      </span>
-                                    ) : transitMode === "plane" ? (
-                                      <span>
-                                        Flight: <strong className="text-cyan-400 font-mono font-bold">#{flightNumber.trim() || "Scheduled Cargo"} · {flightDateTime.replace("T", " ")}</strong>
-                                        {airBayLocation && <span className="text-zinc-400 text-[10px] ml-1">[{airBayLocation.split(" ")[0]}]</span>}
-                                      </span>
-                                    ) : transitMode === "ship" ? (
-                                      <span>
-                                        Vessel: <strong className="text-sky-400 font-mono font-bold">{vesselName.trim() || "Scheduled Ocean Vessel"}</strong>
-                                        {vesselImo.trim() ? ` [${vesselImo.trim()}]` : ""}
-                                        {shipContainerId.trim() ? <> · Container: <strong className="text-zinc-300 font-mono">{shipContainerId.trim()}</strong></> : ""}
-                                      </span>
-                                    ) : (
-                                      <span>
-                                        Fleet: <strong className="text-emerald-400 font-mono font-bold">{deliveryVehiclePlate.trim() || vehicleNo.trim() || (transitMode === "bike" ? "Express Bike" : transitMode === "van" ? "Delivery Van" : "Heavy Road Truck")}</strong>
-                                        {deliveryDriverName.trim() && (
-                                          <>
-                                            {" "}· Rider: <strong className="text-zinc-300">{deliveryDriverName.trim()}</strong>
-                                          </>
-                                        )}
-                                        {deliveryDriverContact.trim() && (
-                                          <span className="text-zinc-500 font-mono text-[10px] ml-1">({deliveryDriverContact.trim()})</span>
-                                        )}
-                                      </span>
-                                    )}
-                                    <span>•</span>
-                                    <span>
-                                      Destination: <strong className="text-zinc-200">{ord.customer?.city}, {ord.customer?.state}</strong>
-                                    </span>
+                                  <div className="text-xs text-zinc-400 flex items-center gap-2">
+                                    <span>Items: <strong className="text-zinc-200">{ord.items?.[0]?.name || "Package"}</strong> (x{ord.items?.[0]?.quantity || 1})</span>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button
-                                    type="button"
-                                    disabled={hubActionLoading === ord.orderNumber}
-                                    onClick={() => handleHubQueueAction(ord.orderNumber, "to_loading")}
-                                    className={`px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer disabled:opacity-50 text-white ${
-                                      isClose
-                                        ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20"
-                                        : "bg-purple-600 hover:bg-purple-500 shadow-purple-600/20"
-                                    }`}
-                                  >
-                                    {hubActionLoading === ord.orderNumber ? (
-                                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                      <PackagePlus className="w-4 h-4" />
-                                    )}
-                                    <span>
-                                      {isClose
-                                        ? "Stage for Last-Mile Loading ➔"
-                                        : "Complete Sorting ➔ Move to Loading Bay"}
-                                    </span>
-                                  </button>
-                                </div>
+                                {/* 1. Waypoint Ribbon (Origin ➔ History ➔ Current Hub ➔ Next Hop ➔ Final Doorstep) */}
+                                <PackageRouteWaypointRibbon
+                                  order={ord}
+                                  activeHubId={activeHubId}
+                                  isAddressClose={isClose}
+                                  onOpenAuditModal={setAuditWaybillModalOrder}
+                                />
+
+                                {/* 2. Interactive Routing & Rerouting Bay Controller */}
+                                <SortingRerouteBar
+                                  order={ord}
+                                  activeHubId={activeHubId}
+                                  allHubs={STANDARD_HUBS}
+                                  targetHubId={perOrderTargetHub[ord.orderNumber] || ord.nextHubId || targetDestinationHubId}
+                                  onTargetHubChange={(orderNum, newHubId) =>
+                                    setPerOrderTargetHub((prev) => ({ ...prev, [orderNum]: newHubId }))
+                                  }
+                                  transitMode={perOrderTransitMode[ord.orderNumber] || (ord.transitMode as TransportMode) || transitMode}
+                                  onTransitModeChange={(orderNum, newMode) =>
+                                    setPerOrderTransitMode((prev) => ({ ...prev, [orderNum]: newMode }))
+                                  }
+                                  vehicleNo={perOrderVehicleNo[ord.orderNumber] ?? ord.vehicleNo ?? vehicleNo}
+                                  onVehicleNoChange={(orderNum, newPlate) =>
+                                    setPerOrderVehicleNo((prev) => ({ ...prev, [orderNum]: newPlate }))
+                                  }
+                                  isAddressClose={isClose}
+                                  onToggleAddressClose={(orderNum) =>
+                                    setPerOrderAddressClose((prev) => ({
+                                      ...prev,
+                                      [orderNum]: !(prev[orderNum] ?? isAddressCloseToHub),
+                                    }))
+                                  }
+                                  onRerouteOnly={(orderNum, nextHub, mode, plate) =>
+                                    handleRerouteOrder(orderNum, nextHub, mode, plate)
+                                  }
+                                  onConfirmSorting={(orderNum) =>
+                                    handleHubQueueAction(
+                                      orderNum,
+                                      "to_loading",
+                                      perOrderTargetHub[orderNum],
+                                      perOrderTransitMode[orderNum],
+                                      perOrderVehicleNo[orderNum]
+                                    )
+                                  }
+                                  isLoading={hubActionLoading === ord.orderNumber}
+                                />
+
+                                {/* 3. Collapsible Transport Logs & Route History Drawer */}
+                                <PackageTransportLogsDrawer
+                                  order={ord}
+                                  onOpenAuditModal={setAuditWaybillModalOrder}
+                                />
                               </div>
                             );
                           })}
@@ -8204,16 +8229,19 @@ export default function AdminPage() {
                         {hubQueue.loading.map((ord) => (
                           <div
                             key={ord.id}
-                            className="p-4 rounded-2xl bg-zinc-900/80 border border-cyan-500/30 hover:border-cyan-500/60 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                            className="p-4 rounded-2xl bg-zinc-900/80 border border-cyan-500/30 hover:border-cyan-500/60 transition flex flex-col gap-3.5"
                           >
-                            <div className="space-y-1.5 min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono text-xs font-bold text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded border border-cyan-500/20">
-                                  {ord.orderNumber}
-                                </span>
-                                <span className="text-xs font-semibold text-zinc-200">
-                                  {ord.customer?.fullName} ({ord.customer?.city})
-                                </span>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="space-y-1.5 min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-mono text-xs font-bold text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded border border-cyan-500/20">
+                                    {ord.orderNumber}
+                                  </span>
+                                  <FinalDestinationHoverCard order={ord}>
+                                    <span className="text-xs font-semibold text-zinc-200 hover:text-white cursor-pointer underline decoration-dotted decoration-zinc-600">
+                                      {ord.customer?.fullName} ({ord.customer?.city})
+                                    </span>
+                                  </FinalDestinationHoverCard>
                                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-cyan-300 border border-zinc-700 font-semibold uppercase">
                                   Loading Bay Staged · {ord.transitMode || "Truck"}
                                 </span>
@@ -8295,6 +8323,20 @@ export default function AdminPage() {
                                 );
                               })()}
                             </div>
+
+                            {/* Waypoint ribbon: Origin ➔ History ➔ Active Station ➔ Next Hop ➔ Final Doorstep */}
+                            <PackageRouteWaypointRibbon
+                              order={ord}
+                              activeHubId={activeHubId}
+                              onOpenAuditModal={setAuditWaybillModalOrder}
+                            />
+
+                            {/* Collapsible chronological transport logs drawer */}
+                            <PackageTransportLogsDrawer
+                              order={ord}
+                              onOpenAuditModal={setAuditWaybillModalOrder}
+                            />
+                          </div>
                           ))}
                       </div>
                     </div>
@@ -8347,47 +8389,64 @@ export default function AdminPage() {
                         return (
                           <div
                             key={ord.id}
-                            className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                            className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 flex flex-col gap-3.5"
                           >
-                            <div className="space-y-1.5 min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono text-xs font-bold text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded border border-purple-500/20">
-                                  {ord.orderNumber}
-                                </span>
-                                <span className="text-xs font-semibold text-zinc-200">
-                                  {ord.customer?.fullName} ({ord.customer?.city})
-                                </span>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                                  <span>{telematicsLabel}</span>
-                                </span>
-                                {isRailOrShip && ord.containerId && (
-                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
-                                    Container: {ord.containerId}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="space-y-1.5 min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-mono text-xs font-bold text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded border border-purple-500/20">
+                                    {ord.orderNumber}
                                   </span>
-                                )}
+                                  <FinalDestinationHoverCard order={ord}>
+                                    <span className="text-xs font-semibold text-zinc-200 hover:text-white cursor-pointer underline decoration-dotted decoration-zinc-600">
+                                      {ord.customer?.fullName} ({ord.customer?.city})
+                                    </span>
+                                  </FinalDestinationHoverCard>
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                                    <span>{telematicsLabel}</span>
+                                  </span>
+                                  {isRailOrShip && ord.containerId && (
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
+                                      Container: {ord.containerId}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                  <span>
+                                    Fleet: <strong className="text-zinc-200 uppercase">{ord.transitMode || "Truck"}</strong> [{ord.vehicleNo || "DL-01-TRK-8812"}]
+                                  </span>
+                                  <span>•</span>
+                                  <span>
+                                    Next Station: <strong className="text-purple-300">{ord.nextHub}</strong> ({ord.nextRegion})
+                                  </span>
+                                </div>
                               </div>
-                              <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                <span>
-                                  Fleet: <strong className="text-zinc-200 uppercase">{ord.transitMode || "Truck"}</strong> [{ord.vehicleNo || "DL-01-TRK-8812"}]
-                                </span>
-                                <span>•</span>
-                                <span>
-                                  Next Station: <strong className="text-purple-300">{ord.nextHub}</strong> ({ord.nextRegion})
-                                </span>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setAuditWaybillModalOrder(ord)}
+                                  className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold cursor-pointer transition flex items-center gap-1.5"
+                                >
+                                  <Navigation className="w-3.5 h-3.5 text-purple-400" />
+                                  <span>View Audit Waybill & Telematics</span>
+                                </button>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => setAuditWaybillModalOrder(ord)}
-                                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold cursor-pointer transition flex items-center gap-1.5"
-                              >
-                                <Navigation className="w-3.5 h-3.5 text-purple-400" />
-                                <span>View Audit Waybill & Telematics</span>
-                              </button>
-                            </div>
+                            {/* Waypoint ribbon: Origin ➔ History ➔ Active Station ➔ Next Hop ➔ Final Doorstep */}
+                            <PackageRouteWaypointRibbon
+                              order={ord}
+                              activeHubId={activeHubId}
+                              onOpenAuditModal={setAuditWaybillModalOrder}
+                            />
+
+                            {/* Collapsible chronological transport logs drawer */}
+                            <PackageTransportLogsDrawer
+                              order={ord}
+                              onOpenAuditModal={setAuditWaybillModalOrder}
+                            />
                           </div>
                         );
                       })}

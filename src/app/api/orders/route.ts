@@ -669,6 +669,53 @@ export async function POST(req: NextRequest) {
           ? `Consignment #${targetOrder.orderNumber} staged in origin sorting bay at ${targetHub.name}. Destination routing and trunk fleet assignment initialized.`
           : `Consignment #${targetOrder.orderNumber} staged in sorting bay at ${targetHub.name}. Destination routing analysis initialized.`;
         deliveryStatus = "in_transit";
+      } else if (queueAction === "reroute") {
+        newQueueStatus = "sorting";
+        const destHub = destinationHubId ? getHubById(destinationHubId) : undefined;
+        const destName = isDestinationClose
+          ? "Customer Doorstep (Last-Mile)"
+          : (destHub ? `${destHub.name} (${destHub.region})` : "Next Transit Hub");
+
+        if (legIndex !== -1) {
+          route[legIndex] = {
+            ...route[legIndex],
+            status: "sorting",
+            transportMode: transitMode || route[legIndex].transportMode,
+            vehicleNo: vehicleNo || route[legIndex].vehicleNo,
+            isFinalDeliveryHub: isDestinationClose,
+          };
+
+          if (!isDestinationClose && destHub) {
+            const existingDestIdx = route.findIndex((l) => l.hubId.toLowerCase() === destHub.id.toLowerCase());
+            if (existingDestIdx !== -1) {
+              const [item] = route.splice(existingDestIdx, 1);
+              route.splice(legIndex + 1, 0, {
+                ...item,
+                status: "pending",
+                transportMode: transitMode,
+                vehicleNo,
+              });
+            } else {
+              route.splice(legIndex + 1, 0, {
+                sequence: legIndex + 2,
+                hubId: destHub.id,
+                hubCode: destHub.code,
+                hubName: destHub.name,
+                region: destHub.region,
+                status: "pending",
+                transportMode: transitMode,
+                vehicleNo,
+              });
+            }
+            for (let s = 0; s < route.length; s++) {
+              route[s].sequence = s + 1;
+            }
+          }
+        }
+
+        eventTitle = `Route Changed / Rerouted at ${targetHub.name} ➔ ${destName}`;
+        eventDesc = `Consignment #${targetOrder.orderNumber} rerouted by logistics sorting operator at ${targetHub.name}. Next destination corridor reassigned to ${destName} via ${String(transitMode).toUpperCase()} [${vehicleNo || "FLEET"}]. Waybill manifest updated.`;
+        deliveryStatus = "in_transit";
       } else if (queueAction === "to_loading") {
         newQueueStatus = "loading";
         const nextLeg = legIndex !== -1 ? route[legIndex + 1] : undefined;
